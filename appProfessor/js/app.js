@@ -1,6 +1,7 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js";
 import { DEFAULT_BRAND_THEME, applyThemeTokens, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js";
+import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, studentKeyFromName, workoutRepository } from "../../appAluno/js/data/repositories/workout-repository.js";
 import { activities, messages, students as mockStudents, tasks, workouts as mockWorkouts } from "./data/mock-data.js";
 
 const pages = [...document.querySelectorAll("[data-page]")];
@@ -17,7 +18,7 @@ const themeStatus = document.querySelector("[data-theme-status]");
 let toastTimer;
 let themeSaveTimer;
 let students = [...mockStudents];
-let workouts = [...mockWorkouts];
+let workouts = [...workoutRepository.listPublishedWorkouts(), ...mockWorkouts];
 
 const readTheme = () => ({
   brandName: brandInput.value.trim() || "FlowFit",
@@ -76,6 +77,39 @@ const initialsFromName = (name) => String(name)
   .join("")
   .toUpperCase() || "AL";
 
+const escapeHtml = (value) => String(value ?? "")
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;")
+  .replace(/'/g, "&#039;");
+
+const getWorkoutBlocks = (workout) => {
+  if (Array.isArray(workout.blocks) && workout.blocks.length) return workout.blocks;
+  if (Array.isArray(workout.exercises) && workout.exercises.length) {
+    return workout.exercises.map((exercise) => `${exercise.name} ${exercise.prescription}`).slice(0, 6);
+  }
+  return ["Sem exercicios cadastrados"];
+};
+
+const formatUpdatedAt = (value) => {
+  if (!value || value === "Agora") return "Agora";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
+};
+
+const syncStudentWorkout = (workout) => {
+  students = students.map((student) => {
+    if (studentKeyFromName(student.name) !== workout.studentKey) return student;
+    return {
+      ...student,
+      workout: `Treino ${workout.code} - ${workout.title}`,
+      nextAction: "Ver treino publicado"
+    };
+  });
+};
+
 const showToast = (message) => {
   clearTimeout(toastTimer);
   toast.textContent = message;
@@ -129,27 +163,27 @@ const renderDashboard = () => {
 
 const renderStudentOptions = () => {
   const select = document.querySelector("[data-student-options]");
-  select.innerHTML = students.map((student) => `<option>${student.name}</option>`).join("");
+  select.innerHTML = students.map((student) => `<option>${escapeHtml(student.name)}</option>`).join("");
 };
 
 const renderStudents = () => {
   document.querySelector("[data-student-list]").innerHTML = students.map((student) => `
     <article class="student-card card">
-      <span class="avatar">${student.initials}</span>
+      <span class="avatar">${escapeHtml(student.initials)}</span>
       <div class="student-card__main">
         <div>
-          <h2>${student.name}</h2>
-          <p>${student.goal} - ${student.plan}</p>
+          <h2>${escapeHtml(student.name)}</h2>
+          <p>${escapeHtml(student.goal)} - ${escapeHtml(student.plan)}</p>
         </div>
-        <span class="chip">${student.status}</span>
+        <span class="chip">${escapeHtml(student.status)}</span>
       </div>
       <div class="student-card__meta">
-        <span>${student.workout}</span>
+        <span>${escapeHtml(student.workout)}</span>
         <span>${student.adherence}% aderencia</span>
       </div>
       <div class="progress-track" aria-label="${student.adherence} por cento de aderencia"><span style="--progress: ${student.adherence}%"></span></div>
       <button class="button button--quiet button--block" type="button" data-student-action="${student.id}">
-        ${student.nextAction} ${svgIcon("arrow-right")}
+        ${escapeHtml(student.nextAction)} ${svgIcon("arrow-right")}
       </button>
     </article>
   `).join("");
@@ -159,20 +193,27 @@ const renderStudents = () => {
 
 const renderWorkouts = () => {
   document.querySelector("[data-workout-count]").textContent = `${workouts.length} itens`;
-  document.querySelector("[data-workout-list]").innerHTML = workouts.map((workout) => `
-    <article class="workout-card card">
-      <span class="surface-icon">${svgIcon("dumbbell")}</span>
-      <div>
-        <span class="eyebrow">${workout.owner}</span>
-        <h2>${workout.title}</h2>
-        <p>${workout.blocks.join(" - ")}</p>
-        <small>Atualizado: ${workout.updatedAt}</small>
-      </div>
-      <button class="icon-button" type="button" aria-label="Editar ${workout.title}" data-workout-action="${workout.id}">
-        ${svgIcon("chevron-right")}
-      </button>
-    </article>
-  `).join("");
+  document.querySelector("[data-workout-list]").innerHTML = workouts.map((workout) => {
+    const blocks = getWorkoutBlocks(workout).map(escapeHtml).join(" - ");
+    const isPublished = workout.status === "published";
+    return `
+      <article class="workout-card card ${isPublished ? "workout-card--published" : ""}">
+        <span class="surface-icon">${svgIcon("dumbbell")}</span>
+        <div>
+          <div class="workout-card__meta-line">
+            <span class="eyebrow">${escapeHtml(workout.owner || "Modelo")}</span>
+            ${isPublished ? `<span class="chip">Publicado no app do aluno</span>` : ""}
+          </div>
+          <h2>${escapeHtml(workout.title)}</h2>
+          <p>${blocks}</p>
+          <small>Atualizado: ${escapeHtml(formatUpdatedAt(workout.updatedAt))}</small>
+        </div>
+        <button class="icon-button" type="button" aria-label="Editar ${escapeHtml(workout.title)}" data-workout-action="${escapeHtml(workout.id)}">
+          ${svgIcon("chevron-right")}
+        </button>
+      </article>
+    `;
+  }).join("");
   renderDashboard();
 };
 
@@ -252,22 +293,18 @@ document.querySelector("[data-student-form]").addEventListener("submit", (event)
 document.querySelector("[data-workout-form]").addEventListener("submit", (event) => {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
-  workouts = [
-    {
-      id: `workout-${Date.now()}`,
-      title: String(data.get("title") || "Novo treino"),
-      owner: String(data.get("student") || "Aluno"),
-      blocks: String(data.get("blocks") || data.get("template") || "Modelo")
-        .split(/\r?\n/)
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .slice(0, 6),
-      updatedAt: "Agora"
-    },
-    ...workouts
-  ];
+  const workout = createWorkoutFromProfessorForm({
+    studentName: data.get("student"),
+    title: data.get("title"),
+    template: data.get("template"),
+    blocks: data.get("blocks")
+  });
+  workoutRepository.savePublishedWorkout(workout);
+  workouts = [workout, ...workouts.filter((item) => item.id !== workout.id)];
+  syncStudentWorkout(workout);
+  renderStudents();
   renderWorkouts();
-  showToast("Treino mockado criado.");
+  showToast("Treino publicado localmente para o app do aluno.");
 });
 
 document.querySelector("[data-broadcast-form]").addEventListener("submit", (event) => {
@@ -293,7 +330,16 @@ document.addEventListener("click", (event) => {
 });
 
 window.addEventListener("hashchange", () => navigate(location.hash.slice(1), false));
+window.addEventListener("storage", (event) => {
+  if (event.key !== PUBLISHED_WORKOUTS_KEY) return;
+  const publishedWorkouts = workoutRepository.listPublishedWorkouts();
+  publishedWorkouts.forEach(syncStudentWorkout);
+  workouts = [...publishedWorkouts, ...mockWorkouts];
+  renderStudents();
+  renderWorkouts();
+});
 
+workoutRepository.listPublishedWorkouts().forEach(syncStudentWorkout);
 renderAll();
 navigate(location.hash.slice(1) || "dashboard", false);
 

@@ -424,6 +424,17 @@ button {
   align-items: center;
 }
 
+.workout-card--published {
+  border-color: var(--color-accent-line);
+}
+
+.workout-card__meta-line {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .workout-card p {
   display: -webkit-box;
   overflow: hidden;

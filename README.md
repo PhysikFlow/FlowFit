@@ -18,6 +18,7 @@ Base web, mobile-first e sem dependencias de framework para um produto de treino
 - Central de notificacoes mockadas com lido/nao lido persistido localmente.
 - Agenda com filtros, status pendente/concluido e criacao local de lembretes.
 - Treino do aluno renderizado a partir de dados mockados.
+- Treino publicado pelo professor salvo localmente e consumido pelo app do aluno quando a origem HTTP e a mesma.
 - Registro de series, carga e repeticoes com persistencia local no navegador.
 - Cronometro simples de descanso durante a execucao do treino.
 - Conclusao de treino gerando historico local.
@@ -66,3 +67,16 @@ Sem Supabase, tudo continua funcionando no mesmo navegador e mesma origem HTTP. 
 6. Abra `appAluno/` para ver o tema aplicado.
 
 > O `DEMO_COACH_ID` (`coach-demo`) isola o tenant enquanto nao existe login. Quando a autenticacao chegar, as policies de RLS devem ser trocadas por `auth.uid()` ou claims do JWT.
+
+## Publicacao local de treinos
+
+Sem backend, o painel do professor ja consegue publicar um treino no `localStorage` usando `flowfit.published-workouts`. O app do aluno tenta carregar o treino mais recente do aluno atual; se nao encontrar, usa o treino mockado original.
+
+Para testar:
+
+1. Sirva o projeto por HTTP.
+2. Abra `http://localhost:8080/appProfessor/#workouts`.
+3. Publique um treino para `Lucas Andrade`.
+4. Abra ou recarregue `http://localhost:8080/appAluno/#workout`.
+
+Isso e uma ponte temporaria de prototipo. No produto real, o mesmo contrato deve ser implementado por API/Supabase/Firebase.

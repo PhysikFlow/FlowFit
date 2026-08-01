@@ -9,13 +9,14 @@ Esqueleto do painel usado pelo personal para administrar alunos, treinos, comuni
 - Navegacao por hash.
 - Sem login, pagamentos ou banco de dados obrigatorio.
 - Marca branca salva localmente e, se Supabase estiver configurado, sincronizada na nuvem.
+- Publicacao local de treinos para o app do aluno via `flowfit.published-workouts`.
 - Reaproveita tokens, componentes e icones compartilhados do `appAluno`.
 
 ## Telas criadas
 
 - Dashboard: KPIs, prioridades e atividade recente.
 - Alunos: lista mockada, aderencia, objetivo, status e cadastro local em memoria.
-- Treinos: modelos, treinos cadastrados e criacao mockada pelo bloco `Adicionar treino`.
+- Treinos: modelos, treinos cadastrados e publicacao local pelo bloco `Adicionar treino`.
 - Comunicacao: caixa de entrada e aviso em massa mockado.
 - Negocio: agenda, financeiro e retencao como blocos reservados.
 - Aparencia: preview de marca branca com nome, frase, cor de destaque, modo claro/escuro e botao `Salvar e aplicar no app do aluno`.
@@ -25,5 +26,5 @@ Esqueleto do painel usado pelo personal para administrar alunos, treinos, comuni
 1. Criar detalhe do aluno.
 2. Criar builder real de treino.
 3. Trocar o tenant demo por login real do personal.
-4. Adicionar persistencia local primeiro e depois backend.
+4. Trocar a publicacao local de treinos por repositorio com backend.
 5. Separar dados por personal/tenant para marca branca.

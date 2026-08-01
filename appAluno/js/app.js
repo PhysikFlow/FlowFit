@@ -5,6 +5,7 @@ import { svgIcon } from "./core/icons.js";
 import { LEGACY_REMOTE_THEME_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js";
 import { activeWorkout, mockStudent, notificationItems, progressData, scheduleItems, weeklySummary } from "./data/mock-data.js";
 import { themeRepository } from "./data/repositories/theme-repository.js";
+import { PUBLISHED_WORKOUTS_KEY, workoutRepository } from "./data/repositories/workout-repository.js";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -22,18 +23,38 @@ let restTimerId;
 let restRemaining = 0;
 const SET_CLICK_DEBOUNCE_MS = 2000;
 const setClickLocks = new Set();
+let currentWorkout = workoutRepository.getLatestWorkoutForStudent(mockStudent.name) || activeWorkout;
 
-const totalSets = activeWorkout.exercises.reduce((sum, exercise) => sum + Number(exercise.prescription.split(" x ")[0]), 0);
+const escapeHtml = (value) => String(value ?? "")
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;")
+  .replace(/'/g, "&#039;");
 
-const parseTotalSets = (exercise) => Number(exercise.prescription.split(" x ")[0]);
+const parseTotalSets = (exercise) => {
+  const match = String(exercise.prescription || "").match(/\d+/);
+  return Number.parseInt(match?.[0] || "1", 10) || 1;
+};
 
 const parseRestSeconds = (exercise) => Number.parseInt(exercise.rest, 10) || 45;
 
 const parseLoadKg = (value) => Number.parseFloat(String(value).replace(",", ".").replace(/[^\d.]/g, "")) || 0;
 
 const parseReps = (exercise) => {
-  const [, reps = "10"] = exercise.prescription.split(" x ");
-  return Number.parseInt(reps, 10) || 10;
+  const match = String(exercise.prescription || "").match(/x\s*(\d+)/i);
+  return Number.parseInt(match?.[1] || "10", 10) || 10;
+};
+
+const getCurrentExercises = () => Array.isArray(currentWorkout.exercises) ? currentWorkout.exercises : [];
+
+const getTotalSets = () => getCurrentExercises().reduce((sum, exercise) => sum + parseTotalSets(exercise), 0);
+
+const resolveCurrentWorkout = () => {
+  const student = Store.getStudent(mockStudent);
+  return workoutRepository.getLatestWorkoutForStudent(student.name)
+    || workoutRepository.getLatestWorkoutForStudent(mockStudent.name)
+    || activeWorkout;
 };
 
 const formatVolume = (value) => `${(value / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}t`;
@@ -137,9 +158,9 @@ const renderStudent = () => {
 };
 
 const renderHome = () => {
-  document.querySelector("[data-home-workout]").textContent = `Treino ${activeWorkout.code}`;
+  document.querySelector("[data-home-workout]").textContent = `Treino ${currentWorkout.code}`;
   document.querySelector("[data-home-summary]").textContent =
-    `${activeWorkout.title} - ${activeWorkout.exercises.length} exercicios - cerca de ${activeWorkout.estimatedMinutes} minutos.`;
+    `${currentWorkout.title} - ${getCurrentExercises().length} exercicios - cerca de ${currentWorkout.estimatedMinutes} minutos.`;
   document.querySelector("[data-stat-done]").textContent = `${weeklySummary.doneWorkouts}/${weeklySummary.targetWorkouts}`;
   document.querySelector("[data-stat-volume]").textContent = formatVolume(weeklySummary.volumeKg);
   document.querySelector("[data-stat-streak]").textContent = `${weeklySummary.streakDays} dias`;
@@ -148,14 +169,15 @@ const renderHome = () => {
 };
 
 const renderWorkoutProgress = () => {
-  const done = activeWorkout.exercises.reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
-  const percent = Math.round((done / totalSets) * 100);
+  const totalSets = getTotalSets();
+  const done = getCurrentExercises().reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
+  const percent = totalSets > 0 ? Math.round((done / totalSets) * 100) : 0;
   document.querySelector("[data-session-count]").textContent = `${done}/${totalSets} series`;
   document.querySelector("[data-session-progress]").style.setProperty("--progress", `${percent}%`);
-  document.querySelector("[data-finish]").disabled = done < totalSets;
+  document.querySelector("[data-finish]").disabled = totalSets === 0 || done < totalSets;
 };
 
-const getWorkoutVolume = () => activeWorkout.exercises.reduce((sum, exercise) => {
+const getWorkoutVolume = () => getCurrentExercises().reduce((sum, exercise) => {
   const done = Store.getExerciseDone(exercise.id);
   const log = Store.getExerciseLog(exercise.id, {
     load: parseLoadKg(exercise.load),
@@ -222,7 +244,13 @@ const playSetFeedback = (button) => {
 
 const renderExercises = () => {
   const list = document.querySelector("[data-exercise-list]");
-  list.innerHTML = activeWorkout.exercises.map((exercise, index) => {
+  const exercises = getCurrentExercises();
+  if (!exercises.length) {
+    list.innerHTML = `<article class="empty-state card"><strong>Nenhum exercicio publicado.</strong><small>Peça ao personal para revisar este treino.</small></article>`;
+    renderWorkoutProgress();
+    return;
+  }
+  list.innerHTML = exercises.map((exercise, index) => {
     const total = parseTotalSets(exercise);
     const done = Store.getExerciseDone(exercise.id);
     const log = Store.getExerciseLog(exercise.id, {
@@ -235,20 +263,20 @@ const renderExercises = () => {
       <article class="exercise card">
         <span class="exercise__number">${String(index + 1).padStart(2, "0")}</span>
         <div>
-          <h3>${exercise.name}</h3>
-          <p>${exercise.prescription} - ${exercise.load} - descanso ${exercise.rest}</p>
+          <h3>${escapeHtml(exercise.name)}</h3>
+          <p>${escapeHtml(exercise.prescription)} - ${escapeHtml(exercise.load)} - descanso ${escapeHtml(exercise.rest)}</p>
           <div class="exercise__meta">
-            <span>${exercise.target}</span>
-            <span>RIR ${exercise.rir}</span>
-            <span>${exercise.tempo}</span>
+            <span>${escapeHtml(exercise.target)}</span>
+            <span>RIR ${escapeHtml(exercise.rir)}</span>
+            <span>${escapeHtml(exercise.tempo)}</span>
           </div>
-          <div class="set-log" aria-label="Registro rapido de ${exercise.name}">
-            <label>Carga <input type="number" inputmode="decimal" min="0" step="0.5" value="${log.load}" data-log-load="${exercise.id}" aria-label="Carga usada em ${exercise.name}" /></label>
-            <label>Reps <input type="number" inputmode="numeric" min="1" step="1" value="${log.reps}" data-log-reps="${exercise.id}" aria-label="Repeticoes por serie em ${exercise.name}" /></label>
+          <div class="set-log" aria-label="Registro rapido de ${escapeHtml(exercise.name)}">
+            <label>Carga <input type="number" inputmode="decimal" min="0" step="0.5" value="${escapeHtml(log.load)}" data-log-load="${escapeHtml(exercise.id)}" aria-label="Carga usada em ${escapeHtml(exercise.name)}" /></label>
+            <label>Reps <input type="number" inputmode="numeric" min="1" step="1" value="${escapeHtml(log.reps)}" data-log-reps="${escapeHtml(exercise.id)}" aria-label="Repeticoes por serie em ${escapeHtml(exercise.name)}" /></label>
           </div>
-          <small>${exercise.notes}</small>
+          <small>${escapeHtml(exercise.notes)}</small>
         </div>
-        <button class="set-button ${done >= total ? "is-done" : ""} ${locked ? "is-locked" : ""}" type="button" data-set="${exercise.id}" data-total="${total}" aria-label="Registrar serie de ${exercise.name}" ${locked ? "disabled" : ""}>
+        <button class="set-button ${done >= total ? "is-done" : ""} ${locked ? "is-locked" : ""}" type="button" data-set="${escapeHtml(exercise.id)}" data-total="${total}" aria-label="Registrar serie de ${escapeHtml(exercise.name)}" ${locked ? "disabled" : ""}>
           ${label}
         </button>
       </article>
@@ -362,7 +390,7 @@ const renderHistory = () => {
   target.innerHTML = sessions.map((session) => `
     <article class="history-row card">
       <span class="surface-icon">${svgIcon("trophy")}</span>
-      <div><strong>${session.title}</strong><small>${session.finishedAt}</small></div>
+      <div><strong>${escapeHtml(session.title)}</strong><small>${escapeHtml(session.finishedAt)}</small></div>
       <span class="chip">${session.sets}/${session.totalSets} series</span>
       <small>${formatVolume(session.volume || 0)} de volume</small>
     </article>
@@ -397,7 +425,7 @@ document.addEventListener("click", (event) => {
   if (setButton) {
     const exerciseId = setButton.dataset.set;
     if (setClickLocks.has(exerciseId)) return;
-    const exercise = activeWorkout.exercises.find((item) => item.id === exerciseId);
+    const exercise = getCurrentExercises().find((item) => item.id === exerciseId);
     if (!exercise) return;
     const total = parseTotalSets(exercise);
     const current = Store.getExerciseDone(exercise.id);
@@ -470,14 +498,15 @@ document.querySelector("[data-schedule-form]")?.addEventListener("submit", (even
 });
 
 document.querySelector("[data-finish]")?.addEventListener("click", () => {
-  const done = activeWorkout.exercises.reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
+  const totalSets = getTotalSets();
+  const done = getCurrentExercises().reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
   if (done < totalSets) {
     Platform.notify("Registre todas as series antes de finalizar.");
     return;
   }
   Store.addSession({
     id: `session-${Date.now()}`,
-    title: activeWorkout.title,
+    title: currentWorkout.title,
     sets: done,
     totalSets,
     volume: Math.round(getWorkoutVolume()),
@@ -490,7 +519,7 @@ document.querySelector("[data-finish]")?.addEventListener("click", () => {
 });
 
 document.querySelector("[data-reset-workout]")?.addEventListener("click", () => {
-  Store.resetWorkout(activeWorkout.id);
+  Store.resetWorkout(currentWorkout.id);
   renderExercises();
   Platform.notify("Registro do treino atual reiniciado.");
 });
@@ -508,7 +537,8 @@ onboardingForm?.addEventListener("submit", (event) => {
     goal: String(data.get("goal") || "Hipertrofia"),
     frequency: String(data.get("frequency") || "4 treinos por semana")
   });
-  renderStudent();
+  currentWorkout = resolveCurrentWorkout();
+  renderAll();
   syncOnboarding();
   Platform.notify("Entrada salva. Bem-vindo ao app.");
   navigate("home");
@@ -541,10 +571,21 @@ window.addEventListener("app:notify", (event) => showToast(event.detail));
 window.addEventListener("app:theme", syncThemeControls);
 window.addEventListener("storage", (event) => {
   if ([REMOTE_THEME_KEY, LEGACY_REMOTE_THEME_KEY].includes(event.key)) applyPublishedBrandTheme();
+  if (event.key === PUBLISHED_WORKOUTS_KEY) {
+    const previousWorkoutId = currentWorkout.id;
+    currentWorkout = resolveCurrentWorkout();
+    if (currentWorkout.id !== previousWorkoutId) {
+      setClickLocks.clear();
+      stopRestTimer();
+      Platform.notify("Seu personal publicou um novo treino.");
+    }
+    renderAll();
+  }
 });
 
 Theme.apply();
 syncThemeControls();
+currentWorkout = resolveCurrentWorkout();
 renderAll();
 renderRestTimer();
 syncOnboarding();

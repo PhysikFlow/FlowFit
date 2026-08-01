@@ -27,7 +27,7 @@ FlowFit/
 |   |-- css/                 # tokens, componentes e composicao das telas
 |   |-- js/
 |   |   |-- core/            # plataforma, tema, estado e futuramente API
-|   |   |-- data/            # dados mockados realistas da demonstracao
+|   |   |-- data/            # dados mockados e repositorios locais/Supabase
 |   |   `-- app.js           # navegacao e interacoes da demonstracao
 |   |-- index.html
 |   |-- manifest.webmanifest
@@ -80,6 +80,8 @@ O painel do professor futuramente controlara logo, nome, acento, modo claro/escu
 - perfil com objetivo/frequencia locais e identidade de marca configuravel;
 - ajustes de responsividade, foco visivel e limpeza de textos para o prototipo mobile;
 - adaptador navegador/WebView;
+- painel do professor com publicacao local de treino para o app do aluno;
+- repositorio local `flowfit.published-workouts` como contrato temporario entre professor e aluno;
 - manifest e Service Worker basicos.
 
 ### Fase 1 - MVP de treino
@@ -143,6 +145,6 @@ Toda entidade sincronizavel deve ter identificador estavel, `createdAt`, `update
 - tratar dieta, dor e lesao como fluxos que exigem responsabilidade profissional;
 - manter logs de alteracoes em prescricoes e sugestoes de IA.
 
-## Criterio para iniciar o appProfessor
+## Criterio para evoluir o appProfessor
 
-Comecar a interface administrativa quando o fluxo de execucao do aluno e o modelo de `WorkoutPlan` estiverem validados. Assim, o painel nasce em torno de dados reais e nao de telas especulativas.
+O painel ja existe como esqueleto. A proxima evolucao deve priorizar fluxos verticais pequenos: detalhe do aluno, builder de treino, publicacao/sincronizacao e historico de alteracoes. Assim, ele cresce em torno de dados reutilizaveis e nao de telas soltas.
