@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="pt-BR" data-mode="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#7667ff" />
+    <meta name="description" content="Painel do personal para gerenciar alunos, treinos e marca do aplicativo." />
+    <title>FlowFit - Professor</title>
+    <link rel="icon" type="image/svg+xml" href="../appAluno/assets/icons/app-icon.svg" />
+    <link rel="stylesheet" href="../appAluno/css/tokens.css" />
+    <link rel="stylesheet" href="../appAluno/css/components.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <script type="module" src="js/app.js"></script>
+  </head>
+  <body>
+    <aside class="sidebar" aria-label="Navegacao do professor">
+      <div class="sidebar__brand">
+        <span class="surface-icon" aria-hidden="true" data-brand-icon></span>
+        <div>
+          <strong data-brand-name>FlowFit</strong>
+          <small>Painel do personal</small>
+        </div>
+      </div>
+
+      <nav class="side-nav">
+        <a class="is-active" href="#dashboard" data-nav="dashboard" aria-current="page"><span data-icon="chart"></span>Dashboard</a>
+        <a href="#students" data-nav="students"><span data-icon="users"></span>Alunos</a>
+        <a href="#workouts" data-nav="workouts"><span data-icon="dumbbell"></span>Treinos</a>
+        <a href="#messages" data-nav="messages"><span data-icon="message"></span>Comunicacao</a>
+        <a href="#business" data-nav="business"><span data-icon="wallet"></span>Negocio</a>
+        <a href="#appearance" data-nav="appearance"><span data-icon="palette"></span>Aparencia</a>
+      </nav>
+    </aside>
+
+    <main class="admin-shell">
+      <header class="topbar">
+        <div>
+          <span class="eyebrow">Piloto com dados mockados</span>
+          <h1 data-page-title>Dashboard</h1>
+        </div>
+        <div class="topbar__actions">
+          <button class="button button--quiet" type="button" data-nav-jump="students">Adicionar aluno</button>
+          <button class="button" type="button" data-nav-jump="workouts" data-focus-workout-form>Novo treino</button>
+        </div>
+      </header>
+
+      <section class="page is-active" data-page="dashboard" aria-labelledby="dashboard-title">
+        <div class="hero card">
+          <div>
+            <span class="eyebrow">Visao geral</span>
+            <h2 id="dashboard-title">Economize tempo montando, copiando e ajustando treinos.</h2>
+            <p>Este esqueleto deixa claro onde vao entrar alunos, prescricoes, agenda, financeiro e marca branca.</p>
+          </div>
+          <div class="hero__stack">
+            <span class="chip">Web primeiro</span>
+            <span class="chip">PWA depois</span>
+            <span class="chip">WebView futuro</span>
+          </div>
+        </div>
+
+        <section class="kpi-grid" aria-label="Indicadores principais">
+          <article class="kpi card"><span class="surface-icon" data-icon="users"></span><div><strong data-kpi-students>0</strong><small>alunos ativos</small></div></article>
+          <article class="kpi card"><span class="surface-icon" data-icon="dumbbell"></span><div><strong data-kpi-workouts>0</strong><small>treinos cadastrados</small></div></article>
+          <article class="kpi card"><span class="surface-icon" data-icon="calendar"></span><div><strong>7</strong><small>itens na semana</small></div></article>
+          <article class="kpi card"><span class="surface-icon" data-icon="wallet"></span><div><strong>R$ 8,4k</strong><small>receita mockada</small></div></article>
+        </section>
+
+        <div class="dashboard-grid">
+          <article class="card panel">
+            <div class="section-title section-title--inline"><h2>Atencao hoje</h2><span>prioridades</span></div>
+            <section class="task-list" data-task-list></section>
+          </article>
+          <article class="card panel">
+            <div class="section-title section-title--inline"><h2>Atividade recente</h2><span>mock</span></div>
+            <section class="activity-list" data-activity-list></section>
+          </article>
+        </div>
+      </section>
+
+      <section class="page" data-page="students" aria-labelledby="students-title">
+        <div class="page-heading">
+          <span class="eyebrow">Gestao de alunos</span>
+          <h1 id="students-title">Alunos e acompanhamento</h1>
+          <p>Cadastro, status, objetivo, treino ativo e proximas acoes. Depois isso vira tabela real com busca e filtros.</p>
+        </div>
+
+        <form class="quick-form card" data-student-form>
+          <label>Nome <input name="name" value="Novo Aluno" required /></label>
+          <label>Objetivo
+            <select name="goal">
+              <option>Hipertrofia</option>
+              <option>Emagrecimento</option>
+              <option>Condicionamento</option>
+              <option>Corrida</option>
+            </select>
+          </label>
+          <label>Status
+            <select name="status">
+              <option>Ativo</option>
+              <option>Aguardando check-in</option>
+              <option>Inadimplente</option>
+            </select>
+          </label>
+          <button class="button" type="submit">Adicionar mock</button>
+        </form>
+
+        <section class="student-list" data-student-list aria-label="Lista de alunos"></section>
+      </section>
+
+      <section class="page" data-page="workouts" aria-labelledby="workouts-title">
+        <div class="page-heading page-heading--with-action">
+          <div>
+            <span class="eyebrow">Prescricao</span>
+            <h1 id="workouts-title">Treinos, modelos e ajustes</h1>
+            <p>Base para criar treinos A/B/C, duplicar modelos, trocar exercicios e futuramente importar planilhas/PDF.</p>
+          </div>
+          <a class="button" href="#add-workout" data-scroll-workout-form>Adicionar treino</a>
+        </div>
+
+        <div class="workout-builder card" id="add-workout">
+          <div>
+            <span class="eyebrow">Adicionar treino</span>
+            <h2>Criar novo treino para um aluno</h2>
+            <p>Este e o ponto de entrada do personal para cadastrar uma prescricao. Por enquanto salva em memoria mockada; depois vira o builder completo.</p>
+          </div>
+          <form class="quick-form quick-form--stack" data-workout-form>
+            <label>Aluno
+              <select name="student" data-student-options></select>
+            </label>
+            <label>Nome do treino <input name="title" value="Treino A - Peito e triceps" required /></label>
+            <label>Modelo
+              <select name="template">
+                <option>Hipertrofia 4x semana</option>
+                <option>Emagrecimento iniciante</option>
+                <option>Forca base</option>
+              </select>
+            </label>
+            <label>Exercicios iniciais
+              <textarea name="blocks">Supino reto 4x10
+Crucifixo 3x12
+Triceps corda 3x15</textarea>
+            </label>
+            <button class="button button--block" type="submit">Adicionar treino ao aluno</button>
+          </form>
+        </div>
+
+        <div class="section-title section-title--spaced"><h2>Treinos cadastrados</h2><span data-workout-count>0 itens</span></div>
+        <section class="workout-list" data-workout-list aria-label="Treinos cadastrados"></section>
+      </section>
+
+      <section class="page" data-page="messages" aria-labelledby="messages-title">
+        <div class="page-heading">
+          <span class="eyebrow">Comunicacao</span>
+          <h1 id="messages-title">Avisos, check-ins e lembretes</h1>
+          <p>Esqueleto para chat, notificacoes, lembretes de treino e respostas rapidas do personal.</p>
+        </div>
+
+        <section class="message-grid">
+          <article class="card panel">
+            <h2>Caixa de entrada</h2>
+            <section class="message-list" data-message-list></section>
+          </article>
+          <article class="card panel">
+            <h2>Enviar aviso em massa</h2>
+            <form class="quick-form quick-form--stack" data-broadcast-form>
+              <label>Publico
+                <select name="audience">
+                  <option>Todos os alunos ativos</option>
+                  <option>Alunos com check-in pendente</option>
+                  <option>Alunos inadimplentes</option>
+                </select>
+              </label>
+              <label>Mensagem <textarea name="message">Nao esqueca de registrar as cargas do treino de hoje.</textarea></label>
+              <button class="button button--block" type="submit">Salvar aviso mock</button>
+            </form>
+          </article>
+        </section>
+      </section>
+
+      <section class="page" data-page="business" aria-labelledby="business-title">
+        <div class="page-heading">
+          <span class="eyebrow">Negocio</span>
+          <h1 id="business-title">Agenda, pagamentos e retencao</h1>
+          <p>Painel reservado para consultas, reavaliacoes, mensalidades, inadimplencia e relatorios.</p>
+        </div>
+
+        <section class="business-grid">
+          <article class="card panel"><span class="surface-icon" data-icon="calendar"></span><h2>Agenda</h2><p>Consultas, reavaliacoes e lembretes recorrentes.</p><span class="chip">Skeleton</span></article>
+          <article class="card panel"><span class="surface-icon" data-icon="wallet"></span><h2>Financeiro</h2><p>PIX, cartao, boleto, assinatura e inadimplencia.</p><span class="chip">Futuro</span></article>
+          <article class="card panel"><span class="surface-icon" data-icon="chart"></span><h2>Retencao</h2><p>Alunos em risco, renovacoes e cancelamentos.</p><span class="chip">IA depois</span></article>
+        </section>
+      </section>
+
+      <section class="page" data-page="appearance" aria-labelledby="appearance-title">
+        <div class="page-heading">
+          <span class="eyebrow">Marca branca</span>
+          <h1 id="appearance-title">Aparencia do app do aluno</h1>
+          <p>Base para o personal mudar nome, frase, cor de destaque e modo claro/escuro.</p>
+        </div>
+
+        <section class="appearance-grid">
+          <form class="theme-editor card" data-theme-form>
+            <label>Nome da marca <input name="brand" value="FlowFit" data-brand-input /></label>
+            <label>Frase curta <input name="tagline" value="Seu treino, no seu ritmo" data-tagline-input /></label>
+            <label>Cor de destaque <input type="color" name="accent" value="#7667ff" data-accent-input /></label>
+            <div class="mode-switch" aria-label="Modo de cor">
+              <button class="is-active" type="button" data-mode-choice="dark">Escuro</button>
+              <button type="button" data-mode-choice="light">Claro</button>
+            </div>
+            <p class="form-status" data-theme-status>Altere a marca e salve para aplicar no app do aluno.</p>
+            <button class="button button--block" type="button" data-save-theme>Salvar e aplicar no app do aluno</button>
+            <button class="button button--quiet button--block" type="button" data-reset-theme>Restaurar preview</button>
+          </form>
+
+          <article class="student-preview card">
+            <span class="eyebrow">Preview aluno</span>
+            <h2 data-preview-brand>FlowFit</h2>
+            <p data-preview-tagline>Seu treino, no seu ritmo</p>
+            <div class="preview-phone">
+              <div class="preview-phone__bar"></div>
+              <strong>Treino B</strong>
+              <small>Costas e biceps - 52 min</small>
+              <div class="progress-track"><span style="--progress: 75%"></span></div>
+              <button class="button button--block" type="button">Comecar treino</button>
+            </div>
+          </article>
+        </section>
+      </section>
+    </main>
+
+    <div class="toast" role="status" aria-live="polite" data-toast></div>
+  </body>
+</html>

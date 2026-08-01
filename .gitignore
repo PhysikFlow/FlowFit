@@ -1,0 +1,57 @@
+# FlowFit: versionar apenas o produto web/site.
+
+# Wrapper Qt/QML e builds nativos ficam fora deste repositorio web.
+qtWebView/
+
+# Dependencias e saidas comuns de projetos web.
+node_modules/
+dist/
+build/
+.vite/
+.next/
+out/
+coverage/
+
+# Arquivos de ambiente e segredos locais.
+.env
+.env.*
+!.env.example
+
+# Logs.
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Binarios/artefatos pesados.
+*.exe
+*.dll
+*.so
+*.dylib
+*.apk
+*.aab
+*.zip
+*.7z
+*.rar
+*.pdb
+*.ilk
+*.lib
+*.exp
+*.obj
+*.o
+
+# Cache/editor/sistema.
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+.qtc_clangd/
+.qt/
+
+# Temporarios.
+*.tmp
+*.temp
+*.bak
+*.swp

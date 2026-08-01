@@ -1,0 +1,17 @@
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "../config.js";
+
+const isConfigured = () => Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+let clientPromise = null;
+
+// Cria o cliente supabase-js de forma lazy via CDN (sem bundler/build step).
+// Retorna null quando o backend nao esta configurado, mantendo os apps 100% locais.
+export const getSupabase = () => {
+  if (!isConfigured()) return null;
+  if (!clientPromise) {
+    clientPromise = import("https://esm.sh/@supabase/supabase-js@2")
+      .then(({ createClient }) => createClient(SUPABASE_URL, SUPABASE_ANON_KEY))
+      .catch(() => null);
+  }
+  return clientPromise;
+};

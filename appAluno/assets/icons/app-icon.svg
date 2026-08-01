@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">FlowFit</title>
+  <desc id="desc">Icone do aplicativo FlowFit Aluno</desc>
+  <defs>
+    <linearGradient id="bg" x1="72" x2="440" y1="56" y2="456" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8f82ff" />
+      <stop offset="1" stop-color="#4e40e8" />
+    </linearGradient>
+    <linearGradient id="shine" x1="156" x2="388" y1="108" y2="408" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff" stop-opacity=".96" />
+      <stop offset="1" stop-color="#dcd8ff" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#090b10" />
+  <rect x="42" y="42" width="428" height="428" rx="96" fill="url(#bg)" />
+  <path fill="#ffffff" fill-opacity=".18" d="M96 116c36-42 112-58 177-40 64 18 121 69 143 130 22 60 10 130-35 171-45 42-123 55-190 30-68-25-126-88-137-153-12-65 6-96 42-138Z" />
+  <path fill="none" stroke="url(#shine)" stroke-linecap="round" stroke-linejoin="round" stroke-width="38" d="M164 322V192c0-23 19-42 42-42h122" />
+  <path fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" stroke-width="38" d="M184 246h116" />
+  <path fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" stroke-width="34" d="M318 150v206" />
+  <path fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" stroke-width="32" d="M260 356h116" />
+</svg>

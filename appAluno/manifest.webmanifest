@@ -1,0 +1,19 @@
+{
+  "name": "FlowFit Aluno",
+  "short_name": "FlowFit",
+  "description": "Treinos, progresso e acompanhamento em um so lugar.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#090b10",
+  "theme_color": "#6d5dfc",
+  "icons": [
+    {
+      "src": "assets/icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
