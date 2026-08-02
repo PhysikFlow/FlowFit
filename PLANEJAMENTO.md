@@ -82,6 +82,7 @@ O painel do professor futuramente controlara logo, nome, acento, modo claro/escu
 - adaptador navegador/WebView;
 - painel do professor com publicacao local de treino para o app do aluno;
 - repositorio local `flowfit.published-workouts` como contrato temporario entre professor e aluno;
+- preview estruturado no painel do professor para conferir exercicios interpretados antes de publicar;
 - manifest e Service Worker basicos.
 
 ### Fase 1 - MVP de treino

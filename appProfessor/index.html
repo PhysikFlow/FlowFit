@@ -118,10 +118,25 @@
         </div>
 
         <div class="workout-builder card" id="add-workout">
-          <div>
+          <div class="workout-builder__intro">
             <span class="eyebrow">Adicionar treino</span>
             <h2>Criar novo treino para um aluno</h2>
             <p>Este e o ponto de entrada do personal para cadastrar uma prescricao. Por enquanto publica no armazenamento local compartilhado com o app do aluno; depois vira o builder completo com backend.</p>
+            <aside class="workout-preview" data-workout-preview aria-live="polite">
+              <div class="workout-preview__head">
+                <span class="surface-icon" aria-hidden="true" data-icon="dumbbell"></span>
+                <div>
+                  <strong>Preview do treino</strong>
+                  <small>Digite ou cole exercicios como “Supino reto 4x10”.</small>
+                </div>
+              </div>
+              <div class="workout-preview__stats">
+                <span><strong data-preview-exercises>0</strong><small>exercicios</small></span>
+                <span><strong data-preview-sets>0</strong><small>series</small></span>
+                <span><strong data-preview-minutes>0</strong><small>min</small></span>
+              </div>
+              <section class="workout-preview__list" data-preview-list aria-label="Exercicios interpretados"></section>
+            </aside>
           </div>
           <form class="quick-form quick-form--stack" data-workout-form>
             <label>Aluno

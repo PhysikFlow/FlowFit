@@ -1,7 +1,7 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js";
 import { DEFAULT_BRAND_THEME, applyThemeTokens, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js";
-import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, studentKeyFromName, workoutRepository } from "../../appAluno/js/data/repositories/workout-repository.js";
+import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, studentKeyFromName, workoutRepository } from "../../appAluno/js/data/repositories/workout-repository.js";
 import { activities, messages, students as mockStudents, tasks, workouts as mockWorkouts } from "./data/mock-data.js";
 
 const pages = [...document.querySelectorAll("[data-page]")];
@@ -14,6 +14,11 @@ const taglineInput = document.querySelector("[data-tagline-input]");
 const accentInput = document.querySelector("[data-accent-input]");
 const modeButtons = [...document.querySelectorAll("[data-mode-choice]")];
 const themeStatus = document.querySelector("[data-theme-status]");
+const workoutForm = document.querySelector("[data-workout-form]");
+const previewExercises = document.querySelector("[data-preview-exercises]");
+const previewSets = document.querySelector("[data-preview-sets]");
+const previewMinutes = document.querySelector("[data-preview-minutes]");
+const previewList = document.querySelector("[data-preview-list]");
 
 let toastTimer;
 let themeSaveTimer;
@@ -90,6 +95,37 @@ const getWorkoutBlocks = (workout) => {
     return workout.exercises.map((exercise) => `${exercise.name} ${exercise.prescription}`).slice(0, 6);
   }
   return ["Sem exercicios cadastrados"];
+};
+
+const parseSets = (prescription) => {
+  const match = String(prescription || "").match(/\d+/);
+  return Number.parseInt(match?.[0] || "0", 10) || 0;
+};
+
+const getWorkoutDraft = () => {
+  if (!workoutForm) return { exercises: [], totalSets: 0, estimatedMinutes: 0 };
+  const data = new FormData(workoutForm);
+  const lines = String(data.get("blocks") || "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  if (!lines.length) lines.push("Exercicio livre 3x10");
+
+  const exercises = lines.map((line, index) => ({
+    ...parseExerciseLine(line, index, "draft"),
+    parsed: /\d+\s*x\s*.+/i.test(line)
+  }));
+  const totalSets = exercises.reduce((sum, exercise) => sum + parseSets(exercise.prescription), 0);
+
+  return {
+    student: String(data.get("student") || "Aluno"),
+    title: String(data.get("title") || "Novo treino"),
+    template: String(data.get("template") || "Modelo"),
+    exercises,
+    totalSets,
+    estimatedMinutes: Math.max(28, exercises.length * 7)
+  };
 };
 
 const formatUpdatedAt = (value) => {
@@ -188,7 +224,26 @@ const renderStudents = () => {
     </article>
   `).join("");
   renderStudentOptions();
+  renderWorkoutPreview();
   renderDashboard();
+};
+
+const renderWorkoutPreview = () => {
+  if (!previewList || !previewExercises || !previewSets || !previewMinutes) return;
+  const draft = getWorkoutDraft();
+  previewExercises.textContent = draft.exercises.length;
+  previewSets.textContent = draft.totalSets;
+  previewMinutes.textContent = draft.estimatedMinutes;
+  previewList.innerHTML = draft.exercises.map((exercise, index) => `
+    <article class="workout-preview__item">
+      <span>${String(index + 1).padStart(2, "0")}</span>
+      <div>
+        <strong>${escapeHtml(exercise.name)}</strong>
+        <small>${escapeHtml(exercise.prescription)} - ${escapeHtml(exercise.rest)} descanso</small>
+      </div>
+      <em>${exercise.parsed ? "ok" : "estimado"}</em>
+    </article>
+  `).join("");
 };
 
 const renderWorkouts = () => {
@@ -290,7 +345,7 @@ document.querySelector("[data-student-form]").addEventListener("submit", (event)
   showToast("Aluno mockado adicionado ao painel.");
 });
 
-document.querySelector("[data-workout-form]").addEventListener("submit", (event) => {
+workoutForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
   const workout = createWorkoutFromProfessorForm({
@@ -306,6 +361,9 @@ document.querySelector("[data-workout-form]").addEventListener("submit", (event)
   renderWorkouts();
   showToast("Treino publicado localmente para o app do aluno.");
 });
+
+workoutForm.addEventListener("input", renderWorkoutPreview);
+workoutForm.addEventListener("change", renderWorkoutPreview);
 
 document.querySelector("[data-broadcast-form]").addEventListener("submit", (event) => {
   event.preventDefault();

@@ -16,7 +16,7 @@ Esqueleto do painel usado pelo personal para administrar alunos, treinos, comuni
 
 - Dashboard: KPIs, prioridades e atividade recente.
 - Alunos: lista mockada, aderencia, objetivo, status e cadastro local em memoria.
-- Treinos: modelos, treinos cadastrados e publicacao local pelo bloco `Adicionar treino`.
+- Treinos: modelos, treinos cadastrados, preview estruturado e publicacao local pelo bloco `Adicionar treino`.
 - Comunicacao: caixa de entrada e aviso em massa mockado.
 - Negocio: agenda, financeiro e retencao como blocos reservados.
 - Aparencia: preview de marca branca com nome, frase, cor de destaque, modo claro/escuro e botao `Salvar e aplicar no app do aluno`.

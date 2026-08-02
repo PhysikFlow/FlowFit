@@ -25,6 +25,7 @@ Base web, mobile-first e sem dependencias de framework para um produto de treino
 - Evolucao com check-in local de peso, cintura e braco, grafico e linha do tempo.
 - Tema com cor de destaque, modo claro/escuro, nome da marca e frase curta configuraveis.
 - Sincronizacao de marca branca entre o painel do professor e o app do aluno via Supabase, com fallback local.
+- Preview estruturado no painel do professor antes de publicar um treino colado/digitado.
 - Service Worker registrado apenas em navegador/PWA, nao em WebView/QML.
 - Ajustes de responsividade e foco visivel para controles do prototipo mobile.
 
