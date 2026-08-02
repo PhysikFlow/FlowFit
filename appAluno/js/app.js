@@ -135,6 +135,23 @@ const applyPublishedBrandTheme = async () => {
   }
 };
 
+const refreshPublishedWorkout = async ({ silent = false } = {}) => {
+  const previousWorkoutId = currentWorkout.id;
+  const student = Store.getStudent(mockStudent);
+  const result = await workoutRepository.fetchLatestWorkoutForStudent(student.name);
+  if (!result.workout) return result;
+
+  currentWorkout = result.workout;
+  const changed = currentWorkout.id !== previousWorkoutId;
+  if (changed) {
+    setClickLocks.clear();
+    stopRestTimer();
+    if (!silent) Platform.notify("Seu personal publicou um novo treino.");
+  }
+  if (changed || result.synced) renderAll();
+  return result;
+};
+
 const syncOnboarding = () => {
   document.body.classList.toggle("has-onboarding", !Store.state.onboarded);
   onboarding?.classList.toggle("is-hidden", Store.state.onboarded);
@@ -598,3 +615,4 @@ if (Platform.canUseServiceWorker() && "serviceWorker" in navigator) {
 
 // Marca branca: aplica o tema publicado pelo professor (se houver).
 applyPublishedBrandTheme();
+refreshPublishedWorkout({ silent: true });

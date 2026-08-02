@@ -81,7 +81,8 @@ O painel do professor futuramente controlara logo, nome, acento, modo claro/escu
 - ajustes de responsividade, foco visivel e limpeza de textos para o prototipo mobile;
 - adaptador navegador/WebView;
 - painel do professor com publicacao local de treino para o app do aluno;
-- repositorio local `flowfit.published-workouts` como contrato temporario entre professor e aluno;
+- repositorio local-first `flowfit.published-workouts` com sincronizacao Supabase opcional;
+- schema Supabase inicial para `students`, `workout_plans` e `workout_exercises` com RLS de tenant demo;
 - preview estruturado no painel do professor para conferir exercicios interpretados antes de publicar;
 - manifest e Service Worker basicos.
 

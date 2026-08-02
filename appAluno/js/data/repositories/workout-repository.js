@@ -1,6 +1,39 @@
 import { Platform } from "../../core/platform.js";
+import { getSupabase } from "../../core/supabase.js";
+import { DEMO_COACH_ID } from "../../config.js";
 
 export const PUBLISHED_WORKOUTS_KEY = "flowfit.published-workouts";
+
+const STUDENTS_TABLE = "students";
+const PLANS_TABLE = "workout_plans";
+const EXERCISES_TABLE = "workout_exercises";
+const CLOUD_WORKOUT_SELECT = `
+  id,
+  student_id,
+  student_key,
+  owner,
+  code,
+  title,
+  focus,
+  estimated_minutes,
+  last_done_label,
+  source,
+  status,
+  updated_at,
+  workout_exercises (
+    id,
+    position,
+    name,
+    target,
+    prescription,
+    load,
+    rest,
+    tempo,
+    rir,
+    notes,
+    updated_at
+  )
+`;
 
 const DEFAULT_EXERCISE = {
   target: "Personalizado",
@@ -26,6 +59,62 @@ export const studentKeyFromName = (name) => normalizeText(name, "aluno")
 const slugFromText = (value, fallback = "exercicio") => studentKeyFromName(normalizeText(value, fallback));
 
 const normalizePrescription = (sets, reps) => `${sets} x ${normalizeText(reps, "10")}`;
+
+const initialsFromName = (name) => normalizeText(name, "Aluno")
+  .split(" ")
+  .filter(Boolean)
+  .slice(0, 2)
+  .map((part) => part[0])
+  .join("")
+  .toUpperCase() || "AL";
+
+const studentIdFromKey = (studentKey) => `student-${studentKey}`;
+
+const normalizeExercise = (exercise, index = 0, workoutId = "workout") => ({
+  ...DEFAULT_EXERCISE,
+  ...exercise,
+  id: normalizeText(exercise?.id, `${workoutId}-ex-${String(index + 1).padStart(2, "0")}`),
+  name: normalizeText(exercise?.name, `Exercicio ${index + 1}`),
+  prescription: normalizeText(exercise?.prescription, "3 x 10")
+});
+
+const normalizeWorkout = (workout) => {
+  const owner = normalizeText(workout?.owner, "Aluno");
+  const studentKey = normalizeText(workout?.studentKey, studentKeyFromName(owner));
+  const updatedAt = normalizeText(workout?.updatedAt, new Date().toISOString());
+  const id = normalizeText(workout?.id, `published-${Date.now()}`);
+  const exercises = Array.isArray(workout?.exercises)
+    ? workout.exercises.map((exercise, index) => normalizeExercise(exercise, index, id))
+    : [];
+
+  return {
+    id,
+    code: normalizeText(workout?.code, "A"),
+    title: normalizeText(workout?.title, "Novo treino"),
+    focus: normalizeText(workout?.focus, "Prescricao personalizada"),
+    estimatedMinutes: Number(workout?.estimatedMinutes || 45),
+    lastDoneLabel: normalizeText(workout?.lastDoneLabel, "novo"),
+    owner,
+    studentId: normalizeText(workout?.studentId, studentIdFromKey(studentKey)),
+    studentKey,
+    source: normalizeText(workout?.source, "professor"),
+    status: normalizeText(workout?.status, "published"),
+    updatedAt,
+    exercises
+  };
+};
+
+const mergeWorkoutLists = (...lists) => {
+  const merged = new Map();
+  lists.flat().filter(Boolean).forEach((item) => {
+    const workout = normalizeWorkout(item);
+    const previous = merged.get(workout.id);
+    if (!previous || new Date(workout.updatedAt) >= new Date(previous.updatedAt)) merged.set(workout.id, workout);
+  });
+  return [...merged.values()]
+    .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
+    .slice(0, 40);
+};
 
 export const parseExerciseLine = (line, index = 0, workoutId = "workout") => {
   const raw = normalizeText(line);
@@ -60,6 +149,7 @@ export const createWorkoutFromProfessorForm = ({ studentName, title, template, b
   if (!sourceLines.length) sourceLines.push("Exercicio livre 3x10");
   const id = `published-${Date.now()}`;
   const exercises = sourceLines.map((line, index) => parseExerciseLine(line, index, id));
+  const studentKey = studentKeyFromName(owner);
 
   return {
     id,
@@ -69,13 +159,89 @@ export const createWorkoutFromProfessorForm = ({ studentName, title, template, b
     estimatedMinutes: Math.max(28, exercises.length * 7),
     lastDoneLabel: "novo",
     owner,
-    studentKey: studentKeyFromName(owner),
+    studentId: studentIdFromKey(studentKey),
+    studentKey,
     source: "professor",
     status: "published",
     updatedAt: new Date().toISOString(),
     exercises
   };
 };
+
+const toStudentRow = (workout) => ({
+  id: workout.studentId,
+  coach_id: DEMO_COACH_ID,
+  student_key: workout.studentKey,
+  name: workout.owner,
+  initials: initialsFromName(workout.owner),
+  goal: "Hipertrofia",
+  status: "Ativo",
+  plan: "Performance",
+  workout: `Treino ${workout.code} - ${workout.title}`,
+  adherence: 0,
+  next_action: "Ver treino publicado",
+  updated_at: workout.updatedAt
+});
+
+const toWorkoutPlanRow = (workout) => ({
+  id: workout.id,
+  coach_id: DEMO_COACH_ID,
+  student_id: workout.studentId,
+  student_key: workout.studentKey,
+  owner: workout.owner,
+  code: workout.code,
+  title: workout.title,
+  focus: workout.focus,
+  estimated_minutes: workout.estimatedMinutes,
+  last_done_label: workout.lastDoneLabel,
+  source: workout.source,
+  status: workout.status,
+  updated_at: workout.updatedAt
+});
+
+const toExerciseRows = (workout) => workout.exercises.map((exercise, index) => ({
+  id: exercise.id,
+  workout_id: workout.id,
+  coach_id: DEMO_COACH_ID,
+  position: index,
+  name: exercise.name,
+  target: exercise.target,
+  prescription: exercise.prescription,
+  load: exercise.load,
+  rest: exercise.rest,
+  tempo: exercise.tempo,
+  rir: exercise.rir,
+  notes: exercise.notes,
+  updated_at: workout.updatedAt
+}));
+
+const toAppWorkout = (row) => normalizeWorkout({
+  id: row.id,
+  code: row.code,
+  title: row.title,
+  focus: row.focus,
+  estimatedMinutes: row.estimated_minutes,
+  lastDoneLabel: row.last_done_label,
+  owner: row.owner,
+  studentId: row.student_id,
+  studentKey: row.student_key,
+  source: row.source,
+  status: row.status,
+  updatedAt: row.updated_at,
+  exercises: [...(row.workout_exercises || [])]
+    .sort((a, b) => Number(a.position || 0) - Number(b.position || 0))
+    .map((exercise) => ({
+      id: exercise.id,
+      name: exercise.name,
+      target: exercise.target,
+      prescription: exercise.prescription,
+      load: exercise.load,
+      rest: exercise.rest,
+      tempo: exercise.tempo,
+      rir: exercise.rir,
+      notes: exercise.notes
+    }))
+});
 
 export const workoutRepository = {
   listPublishedWorkouts() {
@@ -86,13 +252,82 @@ export const workoutRepository = {
 
   savePublishedWorkout(workout) {
     const current = this.listPublishedWorkouts();
-    const next = [workout, ...current.filter((item) => item.id !== workout.id)].slice(0, 40);
+    const next = mergeWorkoutLists(workout, current);
     writePublishedWorkouts(next);
-    return workout;
+    return next.find((item) => item.id === workout.id) || normalizeWorkout(workout);
   },
 
   getLatestWorkoutForStudent(studentName) {
     const studentKey = studentKeyFromName(studentName);
     return this.listPublishedWorkouts().find((workout) => workout.studentKey === studentKey) || null;
+  },
+
+  async syncPublishedWorkout(workout) {
+    const normalized = this.savePublishedWorkout(workout);
+    const client = await getSupabase();
+    if (!client) return { synced: false, reason: "not-configured", workout: normalized };
+
+    try {
+      const { error: studentError } = await client
+        .from(STUDENTS_TABLE)
+        .upsert(toStudentRow(normalized), { onConflict: "id" });
+      if (studentError) return { synced: false, error: studentError, workout: normalized };
+
+      const { error: planError } = await client
+        .from(PLANS_TABLE)
+        .upsert(toWorkoutPlanRow(normalized), { onConflict: "id" });
+      if (planError) return { synced: false, error: planError, workout: normalized };
+
+      const { error: deleteError } = await client
+        .from(EXERCISES_TABLE)
+        .delete()
+        .eq("workout_id", normalized.id)
+        .eq("coach_id", DEMO_COACH_ID);
+      if (deleteError) return { synced: false, error: deleteError, workout: normalized };
+
+      const exerciseRows = toExerciseRows(normalized);
+      if (exerciseRows.length) {
+        const { error: exercisesError } = await client
+          .from(EXERCISES_TABLE)
+          .upsert(exerciseRows, { onConflict: "id" });
+        if (exercisesError) return { synced: false, error: exercisesError, workout: normalized };
+      }
+
+      return { synced: true, workout: normalized };
+    } catch (error) {
+      return { synced: false, error, workout: normalized };
+    }
+  },
+
+  async fetchPublishedWorkouts() {
+    const client = await getSupabase();
+    const localWorkouts = this.listPublishedWorkouts();
+    if (!client) return { synced: false, reason: "not-configured", workouts: localWorkouts };
+
+    try {
+      const { data, error } = await client
+        .from(PLANS_TABLE)
+        .select(CLOUD_WORKOUT_SELECT)
+        .eq("coach_id", DEMO_COACH_ID)
+        .eq("status", "published")
+        .order("updated_at", { ascending: false });
+
+      if (error) return { synced: false, error, workouts: localWorkouts };
+
+      const cloudWorkouts = (data || []).map(toAppWorkout);
+      const merged = mergeWorkoutLists(cloudWorkouts, localWorkouts);
+      writePublishedWorkouts(merged);
+      return { synced: true, workouts: merged };
+    } catch (error) {
+      return { synced: false, error, workouts: localWorkouts };
+    }
+  },
+
+  async fetchLatestWorkoutForStudent(studentName) {
+    const result = await this.fetchPublishedWorkouts();
+    return {
+      ...result,
+      workout: this.getLatestWorkoutForStudent(studentName)
+    };
   }
 };

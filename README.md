@@ -8,7 +8,7 @@ Base web, mobile-first e sem dependencias de framework para um produto de treino
 - `appAluno/js/data/`: dados mockados usados pela demonstracao do aluno e repositorios de dados.
 - `appAluno/js/core/`: adaptadores de plataforma, tema e estado local.
 - `appProfessor/`: painel administrativo do personal.
-- `supabase/schema.sql`: schema do backend Supabase para marca branca.
+- `supabase/schema.sql`: schema do backend Supabase para marca branca, alunos e treinos.
 - `PLANEJAMENTO.md`: arquitetura, fases e criterios de evolucao.
 
 ## Estado atual do prototipo
@@ -18,7 +18,7 @@ Base web, mobile-first e sem dependencias de framework para um produto de treino
 - Central de notificacoes mockadas com lido/nao lido persistido localmente.
 - Agenda com filtros, status pendente/concluido e criacao local de lembretes.
 - Treino do aluno renderizado a partir de dados mockados.
-- Treino publicado pelo professor salvo localmente e consumido pelo app do aluno quando a origem HTTP e a mesma.
+- Treino publicado pelo professor salvo localmente, sincronizado com Supabase quando configurado e consumido pelo app do aluno.
 - Registro de series, carga e repeticoes com persistencia local no navegador.
 - Cronometro simples de descanso durante a execucao do treino.
 - Conclusao de treino gerando historico local.
@@ -69,9 +69,15 @@ Sem Supabase, tudo continua funcionando no mesmo navegador e mesma origem HTTP. 
 
 > O `DEMO_COACH_ID` (`coach-demo`) isola o tenant enquanto nao existe login. Quando a autenticacao chegar, as policies de RLS devem ser trocadas por `auth.uid()` ou claims do JWT.
 
-## Publicacao local de treinos
+## Publicacao local-first de treinos
 
-Sem backend, o painel do professor ja consegue publicar um treino no `localStorage` usando `flowfit.published-workouts`. O app do aluno tenta carregar o treino mais recente do aluno atual; se nao encontrar, usa o treino mockado original.
+O painel do professor publica um treino no cache local (`flowfit.published-workouts`) imediatamente e, se o Supabase estiver configurado, tenta sincronizar as tabelas `students`, `workout_plans` e `workout_exercises`.
+
+O app do aluno tenta carregar o treino mais recente do aluno atual. A ordem e:
+
+1. cache local;
+2. Supabase em segundo plano, se configurado;
+3. treino mockado original como fallback.
 
 Para testar:
 
@@ -80,4 +86,12 @@ Para testar:
 3. Publique um treino para `Lucas Andrade`.
 4. Abra ou recarregue `http://localhost:8080/appAluno/#workout`.
 
-Isso e uma ponte temporaria de prototipo. No produto real, o mesmo contrato deve ser implementado por API/Supabase/Firebase.
+Para testar com Supabase real:
+
+1. Rode o `supabase/schema.sql` no SQL Editor.
+2. Preencha `SUPABASE_URL` e `SUPABASE_ANON_KEY` em `appAluno/js/config.js`.
+3. Publique um treino no painel do professor.
+4. Confira o status de sincronizacao no card de preview do treino.
+5. Abra o app do aluno para buscar o treino publicado.
+
+> O schema atual usa RLS com o tenant demo `coach-demo`. Isso e adequado para piloto, mas antes de producao precisa virar autenticacao real por personal/aluno.

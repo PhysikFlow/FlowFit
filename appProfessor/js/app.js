@@ -19,6 +19,7 @@ const previewExercises = document.querySelector("[data-preview-exercises]");
 const previewSets = document.querySelector("[data-preview-sets]");
 const previewMinutes = document.querySelector("[data-preview-minutes]");
 const previewList = document.querySelector("[data-preview-list]");
+const workoutSyncStatus = document.querySelector("[data-workout-sync-status]");
 
 let toastTimer;
 let themeSaveTimer;
@@ -37,6 +38,13 @@ const setThemeStatus = (message, state = "") => {
   themeStatus.textContent = message;
   themeStatus.classList.toggle("is-synced", state === "synced");
   themeStatus.classList.toggle("is-warning", state === "warning");
+};
+
+const setWorkoutSyncStatus = (message, state = "") => {
+  if (!workoutSyncStatus) return;
+  workoutSyncStatus.textContent = message;
+  workoutSyncStatus.classList.toggle("is-synced", state === "synced");
+  workoutSyncStatus.classList.toggle("is-warning", state === "warning");
 };
 
 const fillThemeInputs = (theme) => {
@@ -144,6 +152,25 @@ const syncStudentWorkout = (workout) => {
       nextAction: "Ver treino publicado"
     };
   });
+};
+
+const applyPublishedWorkouts = (publishedWorkouts = workoutRepository.listPublishedWorkouts()) => {
+  publishedWorkouts.forEach(syncStudentWorkout);
+  workouts = [...publishedWorkouts, ...mockWorkouts];
+  renderStudents();
+  renderWorkouts();
+};
+
+const refreshPublishedWorkouts = async ({ silent = false } = {}) => {
+  if (!silent) setWorkoutSyncStatus("Buscando treinos publicados...", "");
+  const result = await workoutRepository.fetchPublishedWorkouts();
+  applyPublishedWorkouts(result.workouts);
+  if (result.synced) {
+    setWorkoutSyncStatus("Treinos sincronizados com Supabase.", "synced");
+  } else {
+    setWorkoutSyncStatus("Modo local: treinos salvos neste navegador ate configurar Supabase.", "warning");
+  }
+  return result;
 };
 
 const showToast = (message) => {
@@ -345,7 +372,7 @@ document.querySelector("[data-student-form]").addEventListener("submit", (event)
   showToast("Aluno mockado adicionado ao painel.");
 });
 
-workoutForm.addEventListener("submit", (event) => {
+workoutForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
   const workout = createWorkoutFromProfessorForm({
@@ -354,12 +381,21 @@ workoutForm.addEventListener("submit", (event) => {
     template: data.get("template"),
     blocks: data.get("blocks")
   });
-  workoutRepository.savePublishedWorkout(workout);
-  workouts = [workout, ...workouts.filter((item) => item.id !== workout.id)];
-  syncStudentWorkout(workout);
+  const savedWorkout = workoutRepository.savePublishedWorkout(workout);
+  workouts = [savedWorkout, ...workouts.filter((item) => item.id !== savedWorkout.id)];
+  syncStudentWorkout(savedWorkout);
   renderStudents();
   renderWorkouts();
+  setWorkoutSyncStatus("Treino salvo localmente. Tentando sincronizar com Supabase...", "");
   showToast("Treino publicado localmente para o app do aluno.");
+
+  const result = await workoutRepository.syncPublishedWorkout(savedWorkout);
+  if (result.synced) {
+    setWorkoutSyncStatus("Treino salvo localmente e sincronizado com Supabase.", "synced");
+    showToast("Treino sincronizado com Supabase.");
+  } else {
+    setWorkoutSyncStatus("Treino salvo localmente. Supabase ainda nao configurado ou indisponivel.", "warning");
+  }
 });
 
 workoutForm.addEventListener("input", renderWorkoutPreview);
@@ -390,16 +426,14 @@ document.addEventListener("click", (event) => {
 window.addEventListener("hashchange", () => navigate(location.hash.slice(1), false));
 window.addEventListener("storage", (event) => {
   if (event.key !== PUBLISHED_WORKOUTS_KEY) return;
-  const publishedWorkouts = workoutRepository.listPublishedWorkouts();
-  publishedWorkouts.forEach(syncStudentWorkout);
-  workouts = [...publishedWorkouts, ...mockWorkouts];
-  renderStudents();
-  renderWorkouts();
+  applyPublishedWorkouts(workoutRepository.listPublishedWorkouts());
+  setWorkoutSyncStatus("Treinos locais atualizados por outra aba.", "synced");
 });
 
 workoutRepository.listPublishedWorkouts().forEach(syncStudentWorkout);
 renderAll();
 navigate(location.hash.slice(1) || "dashboard", false);
+refreshPublishedWorkouts({ silent: true });
 
 // Marca branca: carrega o tema publicado no servidor (se houver).
 (async () => {
