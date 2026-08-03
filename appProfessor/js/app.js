@@ -46,6 +46,12 @@ const setText = (selector, value) => {
   if (target) target.textContent = value;
 };
 
+const setAllText = (selector, value) => {
+  document.querySelectorAll(selector).forEach((target) => {
+    target.textContent = value;
+  });
+};
+
 const setHtml = (selector, value) => {
   const target = $(selector);
   if (target) target.innerHTML = value;
@@ -58,7 +64,8 @@ const pageTitles = {
   workouts: "Treinos",
   messages: "Comunicação",
   business: "Negócio",
-  appearance: "Aparência"
+  appearance: "Aparência",
+  profile: "Perfil"
 };
 
 const escapeHtml = (value) => String(value ?? "")
@@ -261,10 +268,10 @@ const renderCoachProfile = () => {
   const headline = profile?.headline || "Perfil do personal";
   const email = authContext?.email || "Entre para sincronizar";
 
-  setText("[data-coach-name]", name);
-  setText("[data-coach-headline]", headline);
-  setText("[data-coach-email]", email);
-  setText("[data-coach-initials]", initialsFromName(name));
+  setAllText("[data-coach-name]", name);
+  setAllText("[data-coach-headline]", headline);
+  setAllText("[data-coach-email]", email);
+  setAllText("[data-coach-initials]", initialsFromName(name));
   setText("[data-auth-user]", authContext?.email || "");
   if (authUser) authUser.title = authContext?.email || "";
 

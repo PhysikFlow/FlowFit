@@ -52,22 +52,13 @@
         <a href="#appearance" data-nav="appearance"><span data-icon="palette"></span>Aparência</a>
       </nav>
 
-      <details class="sidebar-profile" data-coach-profile-panel>
-        <summary>
-          <span class="sidebar-profile__avatar" data-coach-initials>PF</span>
-          <span class="sidebar-profile__identity">
-            <strong data-coach-name>Personal</strong>
-            <small data-coach-headline>Perfil do personal</small>
-          </span>
-        </summary>
-        <form class="sidebar-profile__form" data-coach-profile-form>
-          <label>Nome público <input name="name" data-coach-name-input placeholder="Nome exibido no painel" required /></label>
-          <label>Descrição curta <input name="headline" data-coach-headline-input placeholder="Ex: Hipertrofia e emagrecimento" /></label>
-          <small class="sidebar-profile__email" data-coach-email>Entre para sincronizar</small>
-          <p class="form-status sidebar-profile__status" data-coach-profile-status>Edite como seu nome aparece no painel.</p>
-          <button class="button button--block" type="submit">Salvar perfil</button>
-        </form>
-      </details>
+      <a class="sidebar-profile-link" href="#profile" data-nav="profile">
+        <span class="sidebar-profile__avatar" data-coach-initials>PF</span>
+        <span class="sidebar-profile__identity">
+          <strong data-coach-name>Personal</strong>
+          <small data-coach-headline>Perfil do personal</small>
+        </span>
+      </a>
     </aside>
 
     <main class="admin-shell">
@@ -240,6 +231,43 @@
           </article>
         </section>
       </section>
+
+      <section class="page" data-page="profile" aria-label="Perfil do personal">
+        <section class="profile-grid">
+          <form class="profile-editor card" data-coach-profile-form>
+            <span class="eyebrow">Perfil profissional</span>
+            <h2>Dados do personal</h2>
+            <p>Separe a identidade profissional do email usado para login. Esses dados podem alimentar o painel, convites e futuramente a área pública do personal.</p>
+
+            <label>Nome público <input name="name" data-coach-name-input placeholder="Nome exibido no painel" required /></label>
+            <label>Descrição curta <input name="headline" data-coach-headline-input placeholder="Ex: Hipertrofia e emagrecimento" /></label>
+
+            <div class="profile-email-note">
+              <span>Email de login</span>
+              <strong data-coach-email>Entre para sincronizar</strong>
+            </div>
+
+            <p class="form-status" data-coach-profile-status>Edite como seu nome aparece no painel.</p>
+            <button class="button button--block" type="submit">Salvar perfil</button>
+          </form>
+
+          <article class="profile-preview-card card">
+            <span class="eyebrow">Preview</span>
+            <div class="profile-preview-card__identity">
+              <span class="sidebar-profile__avatar profile-preview-card__avatar" data-coach-initials>PF</span>
+              <div>
+                <h2 data-coach-name>Personal</h2>
+                <p data-coach-headline>Perfil do personal</p>
+              </div>
+            </div>
+            <div class="profile-preview-card__panel">
+              <small>Como isso deve aparecer no produto</small>
+              <strong data-coach-name>Personal</strong>
+              <span data-coach-headline>Perfil do personal</span>
+            </div>
+          </article>
+        </section>
+      </section>
     </main>
 
     <div class="toast" role="status" aria-live="polite" data-toast></div>
@@ -261,7 +289,8 @@
           workouts: "Treinos",
           messages: "Comunicação",
           business: "Negócio",
-          appearance: "Aparência"
+          appearance: "Aparência",
+          profile: "Perfil"
         };
 
         const navigate = (name, updateHash = true) => {

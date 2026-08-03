@@ -194,25 +194,29 @@ button {
   color: var(--color-accent);
 }
 
-.sidebar-profile {
+.sidebar-profile-link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
   margin-top: auto;
   padding: var(--space-3);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-bg-elevated) 82%, transparent);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: transform 180ms var(--ease-out), border-color 180ms var(--ease-out), background 180ms var(--ease-out);
 }
 
-.sidebar-profile summary {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-3);
-  align-items: center;
-  cursor: pointer;
-  list-style: none;
+.sidebar-profile-link:hover,
+.sidebar-profile-link.is-active {
+  border-color: var(--color-accent-line);
+  background: var(--color-accent-soft);
 }
 
-.sidebar-profile summary::-webkit-details-marker {
-  display: none;
+.sidebar-profile-link:hover {
+  transform: translateY(-1px);
 }
 
 .sidebar-profile__avatar {
@@ -245,37 +249,6 @@ button {
   color: var(--color-muted);
   font-size: var(--text-xs);
   font-weight: 800;
-}
-
-.sidebar-profile__form {
-  display: grid;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-}
-
-.sidebar-profile__form label {
-  display: grid;
-  gap: var(--space-2);
-  color: var(--color-muted);
-  font-size: var(--text-xs);
-  font-weight: 900;
-}
-
-.sidebar-profile__form input {
-  width: 100%;
-  min-height: 2.55rem;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-elevated);
-  color: var(--color-text);
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: 850;
-  padding: 0 var(--space-3);
-}
-
-.sidebar-profile__status {
-  font-size: var(--text-xs);
 }
 
 .admin-shell {
@@ -340,7 +313,9 @@ button {
 .hero p,
 .workout-builder p,
 .business-grid p,
-.student-preview p {
+.student-preview p,
+.profile-editor p,
+.profile-preview-card p {
   color: var(--color-muted);
   line-height: 1.5;
 }
@@ -371,7 +346,8 @@ button {
 .dashboard-grid,
 .message-grid,
 .business-grid,
-.appearance-grid {
+.appearance-grid,
+.profile-grid {
   display: grid;
   gap: var(--space-4);
 }
@@ -383,7 +359,8 @@ button {
 
 .dashboard-grid,
 .message-grid,
-.appearance-grid {
+.appearance-grid,
+.profile-grid {
   grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
 }
 
@@ -498,7 +475,8 @@ button {
 }
 
 .quick-form label,
-.theme-editor label {
+.theme-editor label,
+.profile-editor label {
   display: grid;
   gap: var(--space-2);
   color: var(--color-muted);
@@ -511,7 +489,10 @@ button {
 .quick-form textarea,
 .theme-editor input,
 .theme-editor select,
-.theme-editor textarea {
+.theme-editor textarea,
+.profile-editor input,
+.profile-editor select,
+.profile-editor textarea {
   width: 100%;
   min-height: 2.75rem;
   border: 1px solid var(--color-line);
@@ -753,14 +734,74 @@ button {
 }
 
 .theme-editor,
-.student-preview {
+.student-preview,
+.profile-editor,
+.profile-preview-card {
   padding: var(--space-5);
   box-shadow: none;
 }
 
-.theme-editor {
+.theme-editor,
+.profile-editor {
   display: grid;
   gap: var(--space-4);
+}
+
+.profile-editor h2,
+.profile-preview-card h2 {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-2xl);
+}
+
+.profile-email-note {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+}
+
+.profile-email-note span {
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.profile-preview-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-5);
+}
+
+.profile-preview-card__identity {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.profile-preview-card__avatar {
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-xl);
+}
+
+.profile-preview-card__panel {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-accent-line);
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(circle at 90% 0%, var(--color-accent-soft), transparent 12rem),
+    var(--color-bg-elevated);
+}
+
+.profile-preview-card__panel small,
+.profile-preview-card__panel span {
+  color: var(--color-muted);
 }
 
 .form-status {
@@ -879,7 +920,7 @@ button {
     flex: 0 0 auto;
   }
 
-  .sidebar-profile {
+  .sidebar-profile-link {
     margin-top: 0;
   }
 
@@ -892,7 +933,8 @@ button {
   .workout-builder,
   .dashboard-grid,
   .message-grid,
-  .appearance-grid {
+  .appearance-grid,
+  .profile-grid {
     grid-template-columns: 1fr;
   }
 
