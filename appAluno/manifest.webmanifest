@@ -1,7 +1,7 @@
 {
   "name": "FlowFit Aluno",
   "short_name": "FlowFit",
-  "description": "Treinos, progresso e acompanhamento em um so lugar.",
+  "description": "Treinos, progresso e acompanhamento em um só lugar.",
   "lang": "pt-BR",
   "start_url": "./",
   "scope": "./",

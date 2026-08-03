@@ -19,8 +19,8 @@
         <h1 id="professor-auth-title">Entre para gerenciar seus alunos</h1>
         <p>Use email e senha ou entre com Google/Apple depois que os provedores estiverem configurados no Supabase.</p>
         <label>Nome do personal <input name="name" autocomplete="name" placeholder="Seu nome ou marca" /></label>
-        <label>Email <input type="email" name="email" autocomplete="email" placeholder="voce@email.com" required /></label>
-        <label>Senha <input type="password" name="password" autocomplete="current-password" minlength="6" placeholder="Minimo 6 caracteres" required /></label>
+        <label>Email <input type="email" name="email" autocomplete="email" placeholder="você@email.com" required /></label>
+        <label>Senha <input type="password" name="password" autocomplete="current-password" minlength="6" placeholder="Mínimo 6 caracteres" required /></label>
         <p class="form-status" data-auth-status>Entre ou crie uma conta de professor para sincronizar dados reais.</p>
         <div class="auth-card__actions">
           <button class="button" type="submit" data-auth-action="signin">Entrar</button>
@@ -34,7 +34,7 @@
       </form>
     </section>
 
-    <aside class="sidebar" aria-label="Navegacao do professor">
+    <aside class="sidebar" aria-label="Navegação do professor">
       <div class="sidebar__brand">
         <span class="surface-icon" aria-hidden="true" data-brand-icon></span>
         <div>
@@ -47,9 +47,9 @@
         <a class="is-active" href="#dashboard" data-nav="dashboard" aria-current="page"><span data-icon="chart"></span>Dashboard</a>
         <a href="#students" data-nav="students"><span data-icon="users"></span>Alunos</a>
         <a href="#workouts" data-nav="workouts"><span data-icon="dumbbell"></span>Treinos</a>
-        <a href="#messages" data-nav="messages"><span data-icon="message"></span>Comunicacao</a>
-        <a href="#business" data-nav="business"><span data-icon="wallet"></span>Negocio</a>
-        <a href="#appearance" data-nav="appearance"><span data-icon="palette"></span>Aparencia</a>
+        <a href="#messages" data-nav="messages"><span data-icon="message"></span>Comunicação</a>
+        <a href="#business" data-nav="business"><span data-icon="wallet"></span>Negócio</a>
+        <a href="#appearance" data-nav="appearance"><span data-icon="palette"></span>Aparência</a>
       </nav>
     </aside>
 
@@ -70,7 +70,7 @@
       <section class="page is-active" data-page="dashboard" aria-labelledby="dashboard-title">
         <div class="hero card">
           <div>
-            <span class="eyebrow">Visao geral</span>
+            <span class="eyebrow">Visão geral</span>
             <h2 id="dashboard-title">Economize tempo montando, copiando e ajustando treinos.</h2>
             <p>Use este painel para cadastrar alunos, publicar treinos e controlar a marca exibida no app do aluno.</p>
           </div>
@@ -84,13 +84,13 @@
         <section class="kpi-grid" aria-label="Indicadores principais">
           <article class="kpi card"><span class="surface-icon" data-icon="users"></span><div><strong data-kpi-students>0</strong><small>alunos ativos</small></div></article>
           <article class="kpi card"><span class="surface-icon" data-icon="dumbbell"></span><div><strong data-kpi-workouts>0</strong><small>treinos cadastrados</small></div></article>
-          <article class="kpi card"><span class="surface-icon" data-icon="calendar"></span><div><strong data-kpi-pending>0</strong><small>pendencias</small></div></article>
+          <article class="kpi card"><span class="surface-icon" data-icon="calendar"></span><div><strong data-kpi-pending>0</strong><small>pendências</small></div></article>
           <article class="kpi card"><span class="surface-icon" data-icon="wallet"></span><div><strong data-kpi-sync>Local</strong><small>status de dados</small></div></article>
         </section>
 
         <div class="dashboard-grid">
           <article class="card panel">
-            <div class="section-title section-title--inline"><h2>Atencao hoje</h2><span>prioridades</span></div>
+            <div class="section-title section-title--inline"><h2>Atenção hoje</h2><span>prioridades</span></div>
             <section class="task-list" data-task-list></section>
           </article>
           <article class="card panel">
@@ -102,9 +102,9 @@
 
       <section class="page" data-page="students" aria-labelledby="students-title">
         <div class="page-heading">
-          <span class="eyebrow">Gestao de alunos</span>
+          <span class="eyebrow">Gestão de alunos</span>
           <h1 id="students-title">Alunos e acompanhamento</h1>
-          <p>Cadastro, status, objetivo, treino ativo e proximas acoes.</p>
+          <p>Cadastro, status, objetivo, treino ativo e próximas ações.</p>
         </div>
 
         <form class="quick-form card" data-student-form>
@@ -126,7 +126,7 @@
             </select>
           </label>
           <button class="button" type="submit">Salvar aluno</button>
-          <p class="form-status" data-student-sync-status>Alunos salvos localmente e sincronizados com Supabase quando disponivel.</p>
+          <p class="form-status" data-student-sync-status>Alunos salvos localmente e sincronizados com Supabase quando disponível.</p>
         </form>
 
         <section class="student-list" data-student-list aria-label="Lista de alunos"></section>
@@ -135,9 +135,9 @@
       <section class="page" data-page="workouts" aria-labelledby="workouts-title">
         <div class="page-heading page-heading--with-action">
           <div>
-            <span class="eyebrow">Prescricao</span>
+            <span class="eyebrow">Prescrição</span>
             <h1 id="workouts-title">Treinos, modelos e ajustes</h1>
-            <p>Base para criar treinos A/B/C, duplicar modelos, trocar exercicios e futuramente importar planilhas/PDF.</p>
+            <p>Base para criar treinos A/B/C, duplicar modelos, trocar exercícios e futuramente importar planilhas/PDF.</p>
           </div>
           <a class="button" href="#add-workout" data-scroll-workout-form>Adicionar treino</a>
         </div>
@@ -146,21 +146,21 @@
           <div class="workout-builder__intro">
             <span class="eyebrow">Adicionar treino</span>
             <h2>Criar novo treino para um aluno</h2>
-            <p>Cadastre uma prescricao e publique no app do aluno. O treino fica salvo localmente e sincroniza com Supabase quando a conexao estiver disponivel.</p>
+            <p>Cadastre uma prescrição e publique no app do aluno. O treino fica salvo localmente e sincroniza com Supabase quando a conexão estiver disponível.</p>
             <aside class="workout-preview" data-workout-preview aria-live="polite">
               <div class="workout-preview__head">
                 <span class="surface-icon" aria-hidden="true" data-icon="dumbbell"></span>
                 <div>
                   <strong>Preview do treino</strong>
-                  <small>Digite ou cole exercicios como “Supino reto 4x10”.</small>
+                  <small>Digite ou cole exercícios como “Supino reto 4x10”.</small>
                 </div>
               </div>
               <div class="workout-preview__stats">
-                <span><strong data-preview-exercises>0</strong><small>exercicios</small></span>
-                <span><strong data-preview-sets>0</strong><small>series</small></span>
+                <span><strong data-preview-exercises>0</strong><small>exercícios</small></span>
+                <span><strong data-preview-sets>0</strong><small>séries</small></span>
                 <span><strong data-preview-minutes>0</strong><small>min</small></span>
               </div>
-              <section class="workout-preview__list" data-preview-list aria-label="Exercicios interpretados"></section>
+              <section class="workout-preview__list" data-preview-list aria-label="Exercícios interpretados"></section>
               <p class="form-status" data-workout-sync-status>Modo local: configure o Supabase para sincronizar treinos entre dispositivos.</p>
             </aside>
           </div>
@@ -168,16 +168,16 @@
             <label>Aluno
               <select name="student" data-student-options></select>
             </label>
-            <label>Nome do treino <input name="title" placeholder="Treino A - Peito e triceps" required /></label>
+            <label>Nome do treino <input name="title" placeholder="Treino A - Peito e tríceps" required /></label>
             <label>Modelo
               <select name="template">
                 <option>Hipertrofia 4x semana</option>
                 <option>Emagrecimento iniciante</option>
-                <option>Forca base</option>
+                <option>Força base</option>
               </select>
             </label>
-            <label>Exercicios iniciais
-              <textarea name="blocks" placeholder="Supino reto 4x10&#10;Crucifixo 3x12&#10;Triceps corda 3x15" required></textarea>
+            <label>Exercícios iniciais
+              <textarea name="blocks" placeholder="Supino reto 4x10&#10;Crucifixo 3x12&#10;Tríceps corda 3x15" required></textarea>
             </label>
             <button class="button button--block" type="submit">Publicar treino para o aluno</button>
           </form>
@@ -189,9 +189,9 @@
 
       <section class="page" data-page="messages" aria-labelledby="messages-title">
         <div class="page-heading">
-          <span class="eyebrow">Comunicacao</span>
+          <span class="eyebrow">Comunicação</span>
           <h1 id="messages-title">Avisos, check-ins e lembretes</h1>
-          <p>Area reservada para conversas, avisos e lembretes. Ainda sem envio real nesta versao.</p>
+          <p>Área reservada para conversas, avisos e lembretes. Ainda sem envio real nesta versão.</p>
         </div>
 
         <section class="message-grid">
@@ -201,7 +201,7 @@
           </article>
           <article class="card panel">
             <h2>Envio de avisos</h2>
-            <p>Este modulo precisa de autenticacao e notificacoes antes de ser liberado em producao.</p>
+            <p>Este módulo precisa de autenticação e notificações antes de ser liberado em produção.</p>
             <button class="button button--quiet button--block" type="button" disabled>Em desenvolvimento</button>
           </article>
         </section>
@@ -209,22 +209,22 @@
 
       <section class="page" data-page="business" aria-labelledby="business-title">
         <div class="page-heading">
-          <span class="eyebrow">Negocio</span>
-          <h1 id="business-title">Agenda, pagamentos e retencao</h1>
-          <p>Painel reservado para consultas, reavaliacoes, mensalidades, inadimplencia e relatorios.</p>
+          <span class="eyebrow">Negócio</span>
+          <h1 id="business-title">Agenda, pagamentos e retenção</h1>
+          <p>Painel reservado para consultas, reavaliações, mensalidades, inadimplência e relatórios.</p>
         </div>
 
         <section class="business-grid">
-          <article class="card panel"><span class="surface-icon" data-icon="calendar"></span><h2>Agenda</h2><p>Consultas, reavaliacoes e lembretes recorrentes.</p><span class="chip">Nao configurado</span></article>
-          <article class="card panel"><span class="surface-icon" data-icon="wallet"></span><h2>Financeiro</h2><p>PIX, cartao, boleto, assinatura e inadimplencia.</p><span class="chip">Nao configurado</span></article>
-          <article class="card panel"><span class="surface-icon" data-icon="chart"></span><h2>Retencao</h2><p>Alunos em risco, renovacoes e cancelamentos.</p><span class="chip">Nao configurado</span></article>
+          <article class="card panel"><span class="surface-icon" data-icon="calendar"></span><h2>Agenda</h2><p>Consultas, reavaliações e lembretes recorrentes.</p><span class="chip">Não configurado</span></article>
+          <article class="card panel"><span class="surface-icon" data-icon="wallet"></span><h2>Financeiro</h2><p>PIX, cartão, boleto, assinatura e inadimplência.</p><span class="chip">Não configurado</span></article>
+          <article class="card panel"><span class="surface-icon" data-icon="chart"></span><h2>Retenção</h2><p>Alunos em risco, renovações e cancelamentos.</p><span class="chip">Não configurado</span></article>
         </section>
       </section>
 
       <section class="page" data-page="appearance" aria-labelledby="appearance-title">
         <div class="page-heading">
           <span class="eyebrow">Marca branca</span>
-          <h1 id="appearance-title">Aparencia do app do aluno</h1>
+          <h1 id="appearance-title">Aparência do app do aluno</h1>
           <p>Base para o personal mudar nome, frase, cor de destaque e modo claro/escuro.</p>
         </div>
 
@@ -249,9 +249,9 @@
             <div class="preview-phone">
               <div class="preview-phone__bar"></div>
               <strong>Treino B</strong>
-              <small>Costas e biceps - 52 min</small>
+              <small>Costas e bíceps - 52 min</small>
               <div class="progress-track"><span style="--progress: 75%"></span></div>
-              <button class="button button--block" type="button">Comecar treino</button>
+              <button class="button button--block" type="button">Começar treino</button>
             </div>
           </article>
         </section>
@@ -275,9 +275,9 @@
           dashboard: "Dashboard",
           students: "Alunos",
           workouts: "Treinos",
-          messages: "Comunicacao",
-          business: "Negocio",
-          appearance: "Aparencia"
+          messages: "Comunicação",
+          business: "Negócio",
+          appearance: "Aparência"
         };
 
         const navigate = (name, updateHash = true) => {
@@ -298,8 +298,8 @@
         const showFallbackNotice = () => {
           const lastError = window.FlowFitProfessorErrors[window.FlowFitProfessorErrors.length - 1];
           const message = lastError
-            ? `Modo basico: o painel interativo nao carregou. Erro: ${lastError}`
-            : "Modo basico: o painel interativo nao carregou. Abra por servidor local/GitHub Pages e recarregue.";
+            ? `Modo básico: o painel interativo não carregou. Erro: ${lastError}`
+            : "Modo básico: o painel interativo não carregou. Abra por servidor local/GitHub Pages e recarregue.";
           document.querySelectorAll(".form-status").forEach((status) => {
             status.textContent = message;
             status.classList.add("is-warning");

@@ -33,13 +33,13 @@ const emptyStudent = {
   plan: "Sem plano",
   since: "hoje",
   coach: "Personal",
-  frequency: "Sem frequencia cadastrada"
+  frequency: "Sem frequência cadastrada"
 };
 const emptyWorkout = {
   id: "workout-empty",
   code: "-",
   title: "Nenhum treino publicado",
-  focus: "Aguardando prescricao do personal",
+  focus: "Aguardando prescrição do personal",
   estimatedMinutes: 0,
   lastDoneLabel: "novo",
   exercises: []
@@ -166,7 +166,7 @@ const handleOAuthSignIn = async (provider) => {
   });
 
   if (!result.ok) {
-    setAuthStatus(result.message || `Nao foi possivel abrir login com ${label}.`, "warning");
+    setAuthStatus(result.message || `Não foi possível abrir login com ${label}.`, "warning");
   }
 };
 
@@ -244,15 +244,15 @@ const renderStudent = () => {
   document.querySelector("[data-student-plan]").textContent = `Plano ${student.plan}`;
   document.querySelector("[data-coach-name]").textContent = student.coach;
   document.querySelector("[data-profile-goal]").textContent = student.goal || "Hipertrofia";
-  document.querySelector("[data-profile-frequency]").textContent = student.frequency || "Sem frequencia cadastrada";
+  document.querySelector("[data-profile-frequency]").textContent = student.frequency || "Sem frequência cadastrada";
 };
 
 const renderHome = () => {
   document.querySelector("[data-home-workout]").textContent = `Treino ${currentWorkout.code}`;
   document.querySelector("[data-home-summary]").textContent =
     currentWorkout.id === emptyWorkout.id
-      ? "Seu personal ainda nao publicou um treino para este email."
-      : `${currentWorkout.title} - ${getCurrentExercises().length} exercicios - cerca de ${currentWorkout.estimatedMinutes} minutos.`;
+      ? "Seu personal ainda não publicou um treino para este email."
+      : `${currentWorkout.title} - ${getCurrentExercises().length} exercícios - cerca de ${currentWorkout.estimatedMinutes} minutos.`;
   const sessions = Store.state.sessions || [];
   const doneWorkouts = sessions.length;
   const targetWorkouts = 4;
@@ -268,17 +268,17 @@ const renderHome = () => {
   document.querySelector("[data-workout-title]").textContent = currentWorkout.title;
   document.querySelector("[data-workout-focus]").textContent = currentWorkout.focus;
   document.querySelector("[data-workout-plan-title]").textContent = currentWorkout.id === emptyWorkout.id ? "Sem treino ativo" : `Treino ${currentWorkout.code} - ${currentWorkout.title}`;
-  document.querySelector("[data-workout-last]").textContent = currentWorkout.lastDoneLabel === "novo" ? "Ainda nao executado" : `Ultima execucao ${currentWorkout.lastDoneLabel}`;
+  document.querySelector("[data-workout-last]").textContent = currentWorkout.lastDoneLabel === "novo" ? "Ainda não executado" : `Última execução ${currentWorkout.lastDoneLabel}`;
   document.querySelector("[data-workout-minutes]").textContent = `${currentWorkout.estimatedMinutes} min`;
-  document.querySelector("[data-workout-exercise-count]").textContent = `${getCurrentExercises().length} exercicios`;
-  document.querySelector("[data-workout-set-count]").textContent = `${getTotalSets()} series`;
+  document.querySelector("[data-workout-exercise-count]").textContent = `${getCurrentExercises().length} exercícios`;
+  document.querySelector("[data-workout-set-count]").textContent = `${getTotalSets()} séries`;
 };
 
 const renderWorkoutProgress = () => {
   const totalSets = getTotalSets();
   const done = getCurrentExercises().reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
   const percent = totalSets > 0 ? Math.round((done / totalSets) * 100) : 0;
-  document.querySelector("[data-session-count]").textContent = `${done}/${totalSets} series`;
+  document.querySelector("[data-session-count]").textContent = `${done}/${totalSets} séries`;
   document.querySelector("[data-session-progress]").style.setProperty("--progress", `${percent}%`);
   document.querySelector("[data-finish]").disabled = totalSets === 0 || done < totalSets;
 };
@@ -314,7 +314,7 @@ const startRestTimer = (seconds) => {
     restRemaining -= 1;
     if (restRemaining <= 0) {
       stopRestTimer();
-      Platform.notify("Descanso finalizado. Proxima serie liberada.");
+      Platform.notify("Descanso finalizado. Próxima série liberada.");
       return;
     }
     renderRestTimer();
@@ -352,7 +352,7 @@ const renderExercises = () => {
   const list = document.querySelector("[data-exercise-list]");
   const exercises = getCurrentExercises();
   if (!exercises.length) {
-    list.innerHTML = `<article class="empty-state card"><strong>Nenhum exercicio publicado.</strong><small>Peça ao personal para revisar este treino.</small></article>`;
+    list.innerHTML = `<article class="empty-state card"><strong>Nenhum exercício publicado.</strong><small>Peça ao personal para revisar este treino.</small></article>`;
     renderWorkoutProgress();
     return;
   }
@@ -376,13 +376,13 @@ const renderExercises = () => {
             <span>RIR ${escapeHtml(exercise.rir)}</span>
             <span>${escapeHtml(exercise.tempo)}</span>
           </div>
-          <div class="set-log" aria-label="Registro rapido de ${escapeHtml(exercise.name)}">
+          <div class="set-log" aria-label="Registro rápido de ${escapeHtml(exercise.name)}">
             <label>Carga <input type="number" inputmode="decimal" min="0" step="0.5" value="${escapeHtml(log.load)}" data-log-load="${escapeHtml(exercise.id)}" aria-label="Carga usada em ${escapeHtml(exercise.name)}" /></label>
-            <label>Reps <input type="number" inputmode="numeric" min="1" step="1" value="${escapeHtml(log.reps)}" data-log-reps="${escapeHtml(exercise.id)}" aria-label="Repeticoes por serie em ${escapeHtml(exercise.name)}" /></label>
+            <label>Reps <input type="number" inputmode="numeric" min="1" step="1" value="${escapeHtml(log.reps)}" data-log-reps="${escapeHtml(exercise.id)}" aria-label="Repetições por série em ${escapeHtml(exercise.name)}" /></label>
           </div>
           <small>${escapeHtml(exercise.notes)}</small>
         </div>
-        <button class="set-button ${done >= total ? "is-done" : ""} ${locked ? "is-locked" : ""}" type="button" data-set="${escapeHtml(exercise.id)}" data-total="${total}" aria-label="Registrar serie de ${escapeHtml(exercise.name)}" ${locked ? "disabled" : ""}>
+        <button class="set-button ${done >= total ? "is-done" : ""} ${locked ? "is-locked" : ""}" type="button" data-set="${escapeHtml(exercise.id)}" data-total="${total}" aria-label="Registrar série de ${escapeHtml(exercise.name)}" ${locked ? "disabled" : ""}>
           ${label}
         </button>
       </article>
@@ -394,10 +394,10 @@ const renderExercises = () => {
 const renderProgress = () => {
   const entries = Store.getProgressEntries([]);
   if (!entries.length) {
-    document.querySelector("[data-chart]").innerHTML = `<article class="empty-state"><strong>Nenhum check-in salvo.</strong><small>Registre peso e medidas para criar seu historico real.</small></article>`;
+    document.querySelector("[data-chart]").innerHTML = `<article class="empty-state"><strong>Nenhum check-in salvo.</strong><small>Registre peso e medidas para criar seu histórico real.</small></article>`;
     document.querySelector("[data-measurements-date]").textContent = "Sem registros";
-    document.querySelector("[data-metric-list]").innerHTML = `<article class="empty-state card"><strong>Sem medidas ainda.</strong><small>Use o formulario de check-in acima.</small></article>`;
-    document.querySelector("[data-measurement-history]").innerHTML = `<article class="empty-state card"><strong>Linha do tempo vazia.</strong><small>Os proximos check-ins aparecem aqui.</small></article>`;
+    document.querySelector("[data-metric-list]").innerHTML = `<article class="empty-state card"><strong>Sem medidas ainda.</strong><small>Use o formulário de check-in acima.</small></article>`;
+    document.querySelector("[data-measurement-history]").innerHTML = `<article class="empty-state card"><strong>Linha do tempo vazia.</strong><small>Os próximos check-ins aparecem aqui.</small></article>`;
     return;
   }
   const recentEntries = entries.slice(-7);
@@ -410,7 +410,7 @@ const renderProgress = () => {
   const metrics = [
     { icon: "scale", label: "Peso", helper: "Meta: 78 kg", value: `${formatDecimal(latest.weight)} kg`, delta: formatDelta(latest.weight, previous.weight, "kg") },
     { icon: "ruler", label: "Cintura", helper: "Medida atual", value: `${formatDecimal(latest.waist)} cm`, delta: formatDelta(latest.waist, previous.waist, "cm") },
-    { icon: "weight", label: "Braco", helper: "Medida atual", value: `${formatDecimal(latest.arm)} cm`, delta: formatDelta(latest.arm, previous.arm, "cm") }
+    { icon: "weight", label: "Braço", helper: "Medida atual", value: `${formatDecimal(latest.arm)} cm`, delta: formatDelta(latest.arm, previous.arm, "cm") }
   ];
 
   document.querySelector("[data-chart]").innerHTML = recentEntries.map((entry) => {
@@ -430,7 +430,7 @@ const renderProgress = () => {
       <span class="surface-icon">${svgIcon("ruler")}</span>
       <div><strong>${formatShortDate(entry.date)}</strong><small>Peso ${formatDecimal(entry.weight)} kg</small></div>
       <span>Cintura ${formatDecimal(entry.waist)} cm</span>
-      <span>Braco ${formatDecimal(entry.arm)} cm</span>
+      <span>Braço ${formatDecimal(entry.arm)} cm</span>
     </article>
   `).join("");
 };
@@ -474,7 +474,7 @@ const renderNotifications = () => {
   document.querySelector("[data-notification-count]").classList.toggle("is-hidden", unreadCount === 0);
   if (!notificationItems.length) {
     document.querySelector("[data-notification-list]").innerHTML =
-      `<article class="empty-state card"><strong>Nenhum aviso recebido.</strong><small>As mensagens do personal aparecerao aqui quando o modulo de comunicacao for ativado.</small></article>`;
+      `<article class="empty-state card"><strong>Nenhum aviso recebido.</strong><small>As mensagens do personal aparecerão aqui quando o módulo de comunicação for ativado.</small></article>`;
     return;
   }
   document.querySelector("[data-notification-list]").innerHTML = notificationItems.map((item) => {
@@ -509,7 +509,7 @@ const renderHistory = () => {
     <article class="history-row card">
       <span class="surface-icon">${svgIcon("trophy")}</span>
       <div><strong>${escapeHtml(session.title)}</strong><small>${escapeHtml(session.finishedAt)}</small></div>
-      <span class="chip">${session.sets}/${session.totalSets} series</span>
+      <span class="chip">${session.sets}/${session.totalSets} séries</span>
       <small>${formatVolume(session.volume || 0)} de volume</small>
     </article>
   `).join("");
@@ -543,7 +543,7 @@ const startAuthenticatedApp = async () => {
   });
   if (!profileResult.synced && !profileResult.profile) {
     Store.resetOnboarding();
-    setAuthStatus("Login ok, mas o banco ainda nao aceitou profiles. Rode supabase/schema.sql no SQL Editor.", "warning");
+    setAuthStatus("Login ok, mas o banco ainda não aceitou profiles. Rode supabase/schema.sql no SQL Editor.", "warning");
     syncOnboarding();
     return false;
   }
@@ -551,7 +551,7 @@ const startAuthenticatedApp = async () => {
   if (authContext?.role !== "student") {
     await authRepository.signOut();
     Store.resetOnboarding();
-    setAuthStatus("Esta conta nao e de aluno. Use o painel do professor ou crie outra conta.", "warning");
+    setAuthStatus("Esta conta não é de aluno. Use o painel do professor ou crie outra conta.", "warning");
     syncOnboarding();
     return false;
   }
@@ -572,7 +572,7 @@ const startAuthenticatedApp = async () => {
   navigate(location.hash.slice(1) || "home", false);
 
   if (!studentResult.student) {
-    setAuthStatus("Conta autenticada, mas este email ainda nao foi cadastrado por um personal.", "warning");
+    setAuthStatus("Conta autenticada, mas este email ainda não foi cadastrado por um personal.", "warning");
     Platform.notify("Peça ao personal para cadastrar este email no painel.");
   } else {
     setAuthStatus("Conta autenticada. Dados reais carregados.", "synced");
@@ -611,7 +611,7 @@ document.addEventListener("click", (event) => {
     setButton.classList.toggle("is-done", next >= total);
     renderWorkoutProgress();
     Platform.vibrate(25);
-    if (next >= total) Platform.notify("Exercicio concluido. Boa!");
+    if (next >= total) Platform.notify("Exercício concluído. Boa!");
     else if (next > 0) startRestTimer(parseRestSeconds(exercise));
   }
 
@@ -653,7 +653,7 @@ document.querySelector("[data-progress-form]")?.addEventListener("submit", (even
     arm: Number(data.get("arm") || 0)
   });
   renderProgress();
-  Platform.notify("Check-in de evolucao salvo neste aparelho.");
+  Platform.notify("Check-in de evolução salvo neste aparelho.");
 });
 
 document.querySelector("[data-schedule-form]")?.addEventListener("submit", (event) => {
@@ -663,7 +663,7 @@ document.querySelector("[data-schedule-form]")?.addEventListener("submit", (even
     id: `custom-schedule-${Date.now()}`,
     time: String(data.get("time") || "Hoje"),
     title: String(data.get("title") || "Novo lembrete"),
-    detail: "Lembrete criado localmente neste prototipo.",
+    detail: "Lembrete criado localmente neste protótipo.",
     type: String(data.get("type") || "Treino")
   });
   Store.setScheduleFilter("Todos");
@@ -675,7 +675,7 @@ document.querySelector("[data-finish]")?.addEventListener("click", () => {
   const totalSets = getTotalSets();
   const done = getCurrentExercises().reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
   if (done < totalSets) {
-    Platform.notify("Registre todas as series antes de finalizar.");
+    Platform.notify("Registre todas as séries antes de finalizar.");
     return;
   }
   Store.addSession({
@@ -688,7 +688,7 @@ document.querySelector("[data-finish]")?.addEventListener("click", () => {
   });
   renderAll();
   Platform.vibrate([40, 40, 80]);
-  Platform.notify("Treino concluido! Historico local atualizado.");
+  Platform.notify("Treino concluído! Histórico local atualizado.");
   navigate("progress");
 });
 
@@ -725,7 +725,7 @@ onboardingForm?.addEventListener("submit", async (event) => {
     : await authRepository.signIn({ ...data, role: "student" });
 
   if (!result.ok) {
-    setAuthStatus(result.message || "Nao foi possivel autenticar.", "warning");
+    setAuthStatus(result.message || "Não foi possível autenticar.", "warning");
     return;
   }
 
@@ -747,8 +747,8 @@ const signOut = async () => {
   stopRestTimer();
   renderAll();
   syncOnboarding();
-  setAuthStatus("Sessao encerrada. Entre novamente para ver seus dados.", "");
-  Platform.notify("Sessao encerrada.");
+  setAuthStatus("Sessão encerrada. Entre novamente para ver seus dados.", "");
+  Platform.notify("Sessão encerrada.");
 };
 
 document.querySelector("[data-reset-onboarding]")?.addEventListener("click", signOut);
@@ -757,7 +757,7 @@ document.querySelector("[data-sign-out]")?.addEventListener("click", signOut);
 document.querySelector("[data-mark-all-read]")?.addEventListener("click", () => {
   Store.markAllNotificationsRead(notificationItems.map((item) => item.id));
   renderNotifications();
-  Platform.notify("Todas as notificacoes foram marcadas como lidas.");
+  Platform.notify("Todas as notificações foram marcadas como lidas.");
 });
 
 accentInput?.addEventListener("input", () => Theme.apply({ accent: accentInput.value }));
@@ -767,7 +767,7 @@ modeButtons.forEach((button) => button.addEventListener("click", () => Theme.app
 document.querySelector("[data-theme-reset]")?.addEventListener("click", () => {
   Theme.reset();
   syncThemeControls();
-  Platform.notify("Tema padrao restaurado.");
+  Platform.notify("Tema padrão restaurado.");
 });
 
 window.addEventListener("hashchange", () => navigate(location.hash.slice(1), false));

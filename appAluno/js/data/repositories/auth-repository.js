@@ -4,7 +4,7 @@ const PROFILES_TABLE = "profiles";
 
 const normalizeEmail = (value) => String(value ?? "").trim().toLowerCase();
 
-const normalizeName = (value, fallback = "Usuario") => {
+const normalizeName = (value, fallback = "Usuário") => {
   const text = String(value ?? "").trim();
   return text || fallback;
 };
@@ -65,7 +65,7 @@ export const authRepository = {
     if (!client || !user) return { synced: false, profile: null, reason: "not-authenticated" };
 
     const safeRole = role === "coach" ? "coach" : "student";
-    const safeName = normalizeName(name, user.email || "Usuario");
+    const safeName = normalizeName(name, user.email || "Usuário");
     const existing = await this.getProfile();
 
     if (existing) {
@@ -97,7 +97,7 @@ export const authRepository = {
 
   async signIn({ email, password, role, name } = {}) {
     const client = await getSupabase();
-    if (!client) return { ok: false, message: "Supabase nao configurado." };
+    if (!client) return { ok: false, message: "Supabase não configurado." };
 
     const { data, error } = await client.auth.signInWithPassword({
       email: normalizeEmail(email),
@@ -109,7 +109,7 @@ export const authRepository = {
     const profileResult = await this.ensureProfile({ role, name });
     if (profileResult.roleMismatch) {
       await client.auth.signOut();
-      return { ok: false, message: "Esta conta ja existe com outro tipo de acesso." };
+      return { ok: false, message: "Esta conta já existe com outro tipo de acesso." };
     }
 
     return { ok: true, session: data.session, user: data.user, profile: profileResult.profile };
@@ -117,7 +117,7 @@ export const authRepository = {
 
   async signUp({ email, password, role, name, redirectTo } = {}) {
     const client = await getSupabase();
-    if (!client) return { ok: false, message: "Supabase nao configurado." };
+    if (!client) return { ok: false, message: "Supabase não configurado." };
 
     const safeName = normalizeName(name, normalizeEmail(email));
     const { data, error } = await client.auth.signUp({
@@ -147,11 +147,11 @@ export const authRepository = {
 
   async signInWithOAuth({ provider, redirectTo } = {}) {
     const client = await getSupabase();
-    if (!client) return { ok: false, message: "Supabase nao configurado." };
+    if (!client) return { ok: false, message: "Supabase não configurado." };
 
     const safeProvider = String(provider || "").trim().toLowerCase();
     if (!["google", "apple"].includes(safeProvider)) {
-      return { ok: false, message: "Provedor de login invalido." };
+      return { ok: false, message: "Provedor de login inválido." };
     }
 
     const { data, error } = await client.auth.signInWithOAuth({

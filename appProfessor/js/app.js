@@ -52,9 +52,9 @@ const pageTitles = {
   dashboard: "Dashboard",
   students: "Alunos",
   workouts: "Treinos",
-  messages: "Comunicacao",
-  business: "Negocio",
-  appearance: "Aparencia"
+  messages: "Comunicação",
+  business: "Negócio",
+  appearance: "Aparência"
 };
 
 const escapeHtml = (value) => String(value ?? "")
@@ -93,7 +93,7 @@ const handleOAuthSignIn = async (provider) => {
   });
 
   if (!result.ok) {
-    setAuthStatus(result.message || `Nao foi possivel abrir login com ${label}.`, "warning");
+    setAuthStatus(result.message || `Não foi possível abrir login com ${label}.`, "warning");
   }
 };
 
@@ -123,7 +123,7 @@ const saveThemeNow = async ({ silent = false } = {}) => {
   const result = await themeRepository.saveBrandTheme(readTheme());
   const message = result.synced
     ? "Marca branca sincronizada com Supabase."
-    : "Marca branca salva localmente. Verifique a conexao com Supabase.";
+    : "Marca branca salva localmente. Verifique a conexão com Supabase.";
   setThemeStatus(message, result.synced ? "synced" : "warning");
   if (!silent) showToast(result.synced ? "Tema sincronizado." : "Tema salvo localmente.");
   return result;
@@ -131,7 +131,7 @@ const saveThemeNow = async ({ silent = false } = {}) => {
 
 const queueThemeSave = () => {
   clearTimeout(themeSaveTimer);
-  setThemeStatus("Alteracao pendente. Salvamento automatico em instantes.", "");
+  setThemeStatus("Alteração pendente. Salvamento automático em instantes.", "");
   themeSaveTimer = setTimeout(() => saveThemeNow({ silent: true }), 700);
 };
 
@@ -178,7 +178,7 @@ const getWorkoutBlocks = (workout) => {
   if (Array.isArray(workout.exercises) && workout.exercises.length) {
     return workout.exercises.map((exercise) => `${exercise.name} ${exercise.prescription}`).slice(0, 6);
   }
-  return ["Sem exercicios cadastrados"];
+  return ["Sem exercícios cadastrados"];
 };
 
 const getPublishedWorkoutForStudent = (student) => workouts.find((workout) => workout.studentKey === student.studentKey);
@@ -253,17 +253,17 @@ const renderTasks = () => {
     tasks.push({ type: "Alunos", title: "Cadastre o primeiro aluno", detail: "Use a tela Alunos para iniciar a base real do painel." });
   }
   if (withoutWorkout.length) {
-    tasks.push({ type: "Treinos", title: `${withoutWorkout.length} aluno(s) sem treino publicado`, detail: "Publique um treino para liberar a visualizacao no app do aluno." });
+    tasks.push({ type: "Treinos", title: `${withoutWorkout.length} aluno(s) sem treino publicado`, detail: "Publique um treino para liberar a visualização no app do aluno." });
   }
   if (checkinPending.length) {
     tasks.push({ type: "Check-in", title: `${checkinPending.length} check-in(s) pendente(s)`, detail: "Revise os alunos marcados como aguardando check-in." });
   }
   if (paymentPending.length) {
-    tasks.push({ type: "Financeiro", title: `${paymentPending.length} aluno(s) inadimplente(s)`, detail: "Controle manual ate o modulo financeiro ser ativado." });
+    tasks.push({ type: "Financeiro", title: `${paymentPending.length} aluno(s) inadimplente(s)`, detail: "Controle manual até o módulo financeiro ser ativado." });
   }
 
   if (!tasks.length) {
-    target.innerHTML = `<article class="empty-state card"><strong>Nenhuma pendencia operacional.</strong><small>Alunos ativos possuem treino publicado.</small></article>`;
+    target.innerHTML = `<article class="empty-state card"><strong>Nenhuma pendência operacional.</strong><small>Alunos ativos possuem treino publicado.</small></article>`;
     return;
   }
 
@@ -345,7 +345,7 @@ const renderStudents = () => {
     return;
   }
   if (!students.length) {
-    target.innerHTML = `<article class="empty-state card"><strong>Nenhum aluno cadastrado.</strong><small>Use o formulario acima para criar o primeiro aluno real.</small></article>`;
+    target.innerHTML = `<article class="empty-state card"><strong>Nenhum aluno cadastrado.</strong><small>Use o formulário acima para criar o primeiro aluno real.</small></article>`;
     renderStudentOptions();
     renderWorkoutPreview();
     return;
@@ -363,9 +363,9 @@ const renderStudents = () => {
       </div>
       <div class="student-card__meta">
         <span>${escapeHtml(student.workout)}</span>
-        <span>${student.adherence}% aderencia</span>
+        <span>${student.adherence}% aderência</span>
       </div>
-      <div class="progress-track" aria-label="${student.adherence} por cento de aderencia"><span style="--progress: ${student.adherence}%"></span></div>
+      <div class="progress-track" aria-label="${student.adherence} por cento de aderência"><span style="--progress: ${student.adherence}%"></span></div>
       <button class="button button--quiet button--block" type="button" data-student-action="${escapeHtml(student.id)}">
         ${escapeHtml(student.nextAction)} ${svgIcon("arrow-right")}
       </button>
@@ -410,7 +410,7 @@ const renderWorkoutPreview = () => {
   }
 
   if (!draft.exercises.length) {
-    previewList.innerHTML = `<article class="empty-state"><strong>Nenhum exercicio informado.</strong><small>Cole uma lista no formato: Supino reto 4x10.</small></article>`;
+    previewList.innerHTML = `<article class="empty-state"><strong>Nenhum exercício informado.</strong><small>Cole uma lista no formato: Supino reto 4x10.</small></article>`;
     return;
   }
 
@@ -431,7 +431,7 @@ const renderWorkouts = () => {
   setText("[data-workout-count]", `${workouts.length} itens`);
   if (!target) return;
   if (!workouts.length) {
-    target.innerHTML = `<article class="empty-state card"><strong>Nenhum treino publicado.</strong><small>Crie um treino para um aluno para iniciar a operacao.</small></article>`;
+    target.innerHTML = `<article class="empty-state card"><strong>Nenhum treino publicado.</strong><small>Crie um treino para um aluno para iniciar a operação.</small></article>`;
     return;
   }
 
@@ -460,7 +460,7 @@ const renderWorkouts = () => {
 const renderMessages = () => {
   const target = document.querySelector("[data-message-list]");
   if (!target) return;
-  target.innerHTML = `<article class="empty-state card"><strong>Nenhuma mensagem conectada.</strong><small>O modulo de comunicacao precisa de autenticacao antes de receber conversas reais.</small></article>`;
+  target.innerHTML = `<article class="empty-state card"><strong>Nenhuma mensagem conectada.</strong><small>O módulo de comunicação precisa de autenticação antes de receber conversas reais.</small></article>`;
 };
 
 const applyTheme = ({ brand, tagline, accent, mode } = {}) => {
@@ -516,7 +516,7 @@ document.querySelector("[data-student-form]")?.addEventListener("submit", async 
 
   const result = await studentRepository.syncStudent(savedStudent);
   setStudentSyncStatus(
-    result.synced ? "Aluno sincronizado com Supabase." : "Aluno salvo localmente. Supabase indisponivel.",
+    result.synced ? "Aluno sincronizado com Supabase." : "Aluno salvo localmente. Supabase indisponível.",
     result.synced ? "synced" : "warning"
   );
   if (result.synced) showToast("Aluno sincronizado.");
@@ -537,7 +537,7 @@ workoutForm?.addEventListener("submit", async (event) => {
 
   const data = new FormData(event.currentTarget);
   if (!String(data.get("blocks") || "").trim()) {
-    showToast("Informe pelo menos um exercicio.");
+    showToast("Informe pelo menos um exercício.");
     return;
   }
 
@@ -565,7 +565,7 @@ workoutForm?.addEventListener("submit", async (event) => {
 
   const result = await workoutRepository.syncPublishedWorkout(savedWorkout, linkedStudent);
   setWorkoutSyncStatus(
-    result.synced ? "Treino sincronizado com Supabase." : "Treino salvo localmente. Supabase indisponivel.",
+    result.synced ? "Treino sincronizado com Supabase." : "Treino salvo localmente. Supabase indisponível.",
     result.synced ? "synced" : "warning"
   );
   if (result.synced) showToast("Treino sincronizado.");
@@ -601,7 +601,7 @@ document.addEventListener("click", (event) => {
   }
 
   if (event.target.closest("[data-workout-action]")) {
-    showToast("Edicao detalhada de treino ainda nao implementada.");
+    showToast("Edição detalhada de treino ainda não implementada.");
   }
 });
 
@@ -639,7 +639,7 @@ authForm?.addEventListener("submit", async (event) => {
     : await authRepository.signIn({ ...data, role: "coach" });
 
   if (!result.ok) {
-    setAuthStatus(result.message || "Nao foi possivel autenticar.", "warning");
+    setAuthStatus(result.message || "Não foi possível autenticar.", "warning");
     return;
   }
 
@@ -660,7 +660,7 @@ document.querySelector("[data-sign-out]")?.addEventListener("click", async () =>
   dataStatus = "Local";
   renderAll();
   setAuthLocked(true);
-  setAuthStatus("Sessao encerrada. Entre novamente para ver dados reais.", "");
+  setAuthStatus("Sessão encerrada. Entre novamente para ver dados reais.", "");
 });
 
 const startAuthenticatedPanel = async () => {
@@ -677,14 +677,14 @@ const startAuthenticatedPanel = async () => {
   });
   if (!profileResult.synced && !profileResult.profile) {
     setAuthLocked(true);
-    setAuthStatus("Login ok, mas o banco ainda nao aceitou profiles. Rode supabase/schema.sql no SQL Editor.", "warning");
+    setAuthStatus("Login ok, mas o banco ainda não aceitou profiles. Rode supabase/schema.sql no SQL Editor.", "warning");
     return;
   }
   authContext = await authRepository.getAuthContext();
 
   if (authContext?.role !== "coach") {
     setAuthLocked(true);
-    setAuthStatus("Esta conta nao e de professor. Use o app do aluno ou crie uma conta de professor.", "warning");
+    setAuthStatus("Esta conta não é de professor. Use o app do aluno ou crie uma conta de professor.", "warning");
     return;
   }
 
@@ -707,7 +707,7 @@ const startAuthenticatedPanel = async () => {
   }
   fillThemeInputs(remote);
   applyTheme({ mode: remote.mode });
-  setThemeStatus("Tema publicado carregado para edicao.", "synced");
+  setThemeStatus("Tema publicado carregado para edição.", "synced");
 };
 
 const boot = async () => {
@@ -723,5 +723,5 @@ boot().catch((error) => {
   window.FlowFitProfessorErrors.push(String(error?.message || error));
   document.body?.setAttribute("data-professor-error", String(error?.message || error).slice(0, 180));
   window.FlowFitProfessorReady = false;
-  showToast("Falha ao iniciar painel. Recarregue a pagina.");
+  showToast("Falha ao iniciar painel. Recarregue a página.");
 });

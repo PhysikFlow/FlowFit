@@ -76,7 +76,7 @@ const normalizeExercise = (exercise, index = 0, workoutId = "workout") => ({
   ...DEFAULT_EXERCISE,
   ...exercise,
   id: normalizeText(exercise?.id, `${workoutId}-ex-${String(index + 1).padStart(2, "0")}`),
-  name: normalizeText(exercise?.name, `Exercicio ${index + 1}`),
+  name: normalizeText(exercise?.name, `Exercício ${index + 1}`),
   prescription: normalizeText(exercise?.prescription, "3 x 10")
 });
 
@@ -95,7 +95,7 @@ const normalizeWorkout = (workout) => {
     coachId: normalizeText(workout?.coachId, DEMO_COACH_ID),
     code: normalizeText(workout?.code, "A"),
     title: normalizeText(workout?.title, "Novo treino"),
-    focus: normalizeText(workout?.focus, "Prescricao personalizada"),
+    focus: normalizeText(workout?.focus, "Prescrição personalizada"),
     estimatedMinutes: Number(workout?.estimatedMinutes || 45),
     lastDoneLabel: normalizeText(workout?.lastDoneLabel, "novo"),
     owner,
@@ -123,7 +123,7 @@ const mergeWorkoutLists = (...lists) => {
 export const parseExerciseLine = (line, index = 0, workoutId = "workout") => {
   const raw = normalizeText(line);
   const match = raw.match(/^(.*?)\s+(\d+)\s*x\s*(.+)$/i);
-  const name = normalizeText(match?.[1], raw || `Exercicio ${index + 1}`);
+  const name = normalizeText(match?.[1], raw || `Exercício ${index + 1}`);
   const sets = Number.parseInt(match?.[2] || "3", 10) || 3;
   const reps = normalizeText(match?.[3], "10");
 
@@ -152,7 +152,7 @@ export const createWorkoutFromProfessorForm = ({ student, studentName, studentId
     .map((item) => item.trim())
     .filter(Boolean)
     .slice(0, 12);
-  if (!sourceLines.length) sourceLines.push("Exercicio livre 3x10");
+  if (!sourceLines.length) sourceLines.push("Exercício livre 3x10");
   const id = `published-${Date.now()}`;
   const exercises = sourceLines.map((line, index) => parseExerciseLine(line, index, id));
 
@@ -161,7 +161,7 @@ export const createWorkoutFromProfessorForm = ({ student, studentName, studentId
     coachId: normalizeText(student?.coachId || coachId, DEMO_COACH_ID),
     code: workoutTitle.match(/\bTreino\s+([A-Z0-9])/i)?.[1]?.toUpperCase() || "A",
     title: workoutTitle.replace(/^Treino\s+[A-Z0-9]\s*-\s*/i, ""),
-    focus: normalizeText(template, "Prescricao personalizada"),
+    focus: normalizeText(template, "Prescrição personalizada"),
     estimatedMinutes: Math.max(28, exercises.length * 7),
     lastDoneLabel: "novo",
     owner,
