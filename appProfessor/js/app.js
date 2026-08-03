@@ -76,6 +76,27 @@ const setStudentSyncStatus = (message, state = "") => setStatus(studentSyncStatu
 const setWorkoutSyncStatus = (message, state = "") => setStatus(workoutSyncStatus, message, state);
 const setAuthStatus = (message, state = "") => setStatus(authStatus, message, state);
 
+const getAuthRedirectUrl = () => {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  return url.href;
+};
+
+const getProviderLabel = (provider) => provider === "apple" ? "Apple" : "Google";
+
+const handleOAuthSignIn = async (provider) => {
+  const label = getProviderLabel(provider);
+  setAuthStatus(`Abrindo login com ${label}...`, "");
+  const result = await authRepository.signInWithOAuth({
+    provider,
+    redirectTo: getAuthRedirectUrl()
+  });
+
+  if (!result.ok) {
+    setAuthStatus(result.message || `Nao foi possivel abrir login com ${label}.`, "warning");
+  }
+};
+
 const setAuthLocked = (locked) => {
   authGate?.classList.toggle("is-hidden", !locked);
   document.body.classList.toggle("is-auth-locked", locked);
@@ -596,7 +617,14 @@ window.addEventListener("storage", (event) => {
   }
 });
 
-authForm?.addEventListener("click", (event) => {
+authForm?.addEventListener("click", async (event) => {
+  const oauthButton = event.target.closest("[data-oauth-provider]");
+  if (oauthButton) {
+    event.preventDefault();
+    await handleOAuthSignIn(oauthButton.dataset.oauthProvider);
+    return;
+  }
+
   const button = event.target.closest("[data-auth-action]");
   if (button) authAction = button.dataset.authAction;
 });
@@ -607,7 +635,7 @@ authForm?.addEventListener("submit", async (event) => {
   setAuthStatus(authAction === "signup" ? "Criando conta de professor..." : "Entrando...", "");
 
   const result = authAction === "signup"
-    ? await authRepository.signUp({ ...data, role: "coach" })
+    ? await authRepository.signUp({ ...data, role: "coach", redirectTo: getAuthRedirectUrl() })
     : await authRepository.signIn({ ...data, role: "coach" });
 
   if (!result.ok) {

@@ -17,7 +17,7 @@
       <form class="auth-card card" data-auth-form>
         <span class="eyebrow">FlowFit professor</span>
         <h1 id="professor-auth-title">Entre para gerenciar seus alunos</h1>
-        <p>Use email e senha. Google/Apple ficam para uma etapa futura quando os provedores estiverem configurados no Supabase.</p>
+        <p>Use email e senha ou entre com Google/Apple depois que os provedores estiverem configurados no Supabase.</p>
         <label>Nome do personal <input name="name" autocomplete="name" placeholder="Seu nome ou marca" /></label>
         <label>Email <input type="email" name="email" autocomplete="email" placeholder="voce@email.com" required /></label>
         <label>Senha <input type="password" name="password" autocomplete="current-password" minlength="6" placeholder="Minimo 6 caracteres" required /></label>
@@ -25,6 +25,11 @@
         <div class="auth-card__actions">
           <button class="button" type="submit" data-auth-action="signin">Entrar</button>
           <button class="button button--quiet" type="submit" data-auth-action="signup">Criar conta</button>
+        </div>
+        <div class="auth-divider"><span>ou continue com</span></div>
+        <div class="oauth-grid" aria-label="Login social">
+          <button class="button button--quiet" type="button" data-oauth-provider="google">Google</button>
+          <button class="button button--quiet" type="button" data-oauth-provider="apple">Apple</button>
         </div>
       </form>
     </section>

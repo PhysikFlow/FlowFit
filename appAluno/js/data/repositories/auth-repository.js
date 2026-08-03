@@ -9,6 +9,16 @@ const normalizeName = (value, fallback = "Usuario") => {
   return text || fallback;
 };
 
+const normalizeRedirectUrl = (value) => {
+  try {
+    const url = new URL(String(value || globalThis.location?.href || ""));
+    url.hash = "";
+    return url.href;
+  } catch {
+    return undefined;
+  }
+};
+
 const profileFromRow = (row) => row ? {
   userId: row.user_id,
   role: row.role,
@@ -105,7 +115,7 @@ export const authRepository = {
     return { ok: true, session: data.session, user: data.user, profile: profileResult.profile };
   },
 
-  async signUp({ email, password, role, name } = {}) {
+  async signUp({ email, password, role, name, redirectTo } = {}) {
     const client = await getSupabase();
     if (!client) return { ok: false, message: "Supabase nao configurado." };
 
@@ -113,7 +123,10 @@ export const authRepository = {
     const { data, error } = await client.auth.signUp({
       email: normalizeEmail(email),
       password: String(password || ""),
-      options: { data: { display_name: safeName } }
+      options: {
+        data: { display_name: safeName },
+        emailRedirectTo: normalizeRedirectUrl(redirectTo)
+      }
     });
 
     if (error) return { ok: false, error, message: error.message };
@@ -130,6 +143,26 @@ export const authRepository = {
 
     const profileResult = await this.ensureProfile({ role, name: safeName });
     return { ok: true, session, user: data.user, profile: profileResult.profile };
+  },
+
+  async signInWithOAuth({ provider, redirectTo } = {}) {
+    const client = await getSupabase();
+    if (!client) return { ok: false, message: "Supabase nao configurado." };
+
+    const safeProvider = String(provider || "").trim().toLowerCase();
+    if (!["google", "apple"].includes(safeProvider)) {
+      return { ok: false, message: "Provedor de login invalido." };
+    }
+
+    const { data, error } = await client.auth.signInWithOAuth({
+      provider: safeProvider,
+      options: {
+        redirectTo: normalizeRedirectUrl(redirectTo)
+      }
+    });
+
+    if (error) return { ok: false, error, message: error.message };
+    return { ok: true, data };
   },
 
   async signOut() {

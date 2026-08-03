@@ -149,6 +149,27 @@ const setStatus = (target, message, state = "") => {
 
 const setAuthStatus = (message, state = "") => setStatus(authStatus, message, state);
 
+const getAuthRedirectUrl = () => {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  return url.href;
+};
+
+const getProviderLabel = (provider) => provider === "apple" ? "Apple" : "Google";
+
+const handleOAuthSignIn = async (provider) => {
+  const label = getProviderLabel(provider);
+  setAuthStatus(`Abrindo login com ${label}...`, "");
+  const result = await authRepository.signInWithOAuth({
+    provider,
+    redirectTo: getAuthRedirectUrl()
+  });
+
+  if (!result.ok) {
+    setAuthStatus(result.message || `Nao foi possivel abrir login com ${label}.`, "warning");
+  }
+};
+
 const syncThemeControls = () => {
   if (accentInput) accentInput.value = Theme.value.accent;
   if (brandInput) brandInput.value = Theme.value.brandName;
@@ -682,7 +703,14 @@ document.querySelector("[data-skip-rest]")?.addEventListener("click", () => {
   Platform.notify("Descanso encerrado.");
 });
 
-onboardingForm?.addEventListener("click", (event) => {
+onboardingForm?.addEventListener("click", async (event) => {
+  const oauthButton = event.target.closest("[data-oauth-provider]");
+  if (oauthButton) {
+    event.preventDefault();
+    await handleOAuthSignIn(oauthButton.dataset.oauthProvider);
+    return;
+  }
+
   const button = event.target.closest("[data-auth-action]");
   if (button) authAction = button.dataset.authAction;
 });
@@ -693,7 +721,7 @@ onboardingForm?.addEventListener("submit", async (event) => {
   setAuthStatus(authAction === "signup" ? "Criando conta de aluno..." : "Entrando...", "");
 
   const result = authAction === "signup"
-    ? await authRepository.signUp({ ...data, role: "student" })
+    ? await authRepository.signUp({ ...data, role: "student", redirectTo: getAuthRedirectUrl() })
     : await authRepository.signIn({ ...data, role: "student" });
 
   if (!result.ok) {
