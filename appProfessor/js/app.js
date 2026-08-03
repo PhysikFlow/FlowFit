@@ -1,6 +1,7 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js";
 import { DEFAULT_BRAND_THEME, applyThemeTokens, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js";
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js";
+import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js";
 import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutRepository } from "../../appAluno/js/data/repositories/workout-repository.js";
 
@@ -21,12 +22,18 @@ const previewSets = document.querySelector("[data-preview-sets]");
 const previewMinutes = document.querySelector("[data-preview-minutes]");
 const previewList = document.querySelector("[data-preview-list]");
 const workoutSyncStatus = document.querySelector("[data-workout-sync-status]");
+const authGate = document.querySelector("[data-auth-gate]");
+const authForm = document.querySelector("[data-auth-form]");
+const authStatus = document.querySelector("[data-auth-status]");
+const authUser = document.querySelector("[data-auth-user]");
 
 let toastTimer;
 let themeSaveTimer;
 let students = studentRepository.listStudents();
 let workouts = workoutRepository.listPublishedWorkouts();
 let dataStatus = "Local";
+let authContext = null;
+let authAction = "signin";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -67,6 +74,12 @@ const setStatus = (target, message, state = "") => {
 const setThemeStatus = (message, state = "") => setStatus(themeStatus, message, state);
 const setStudentSyncStatus = (message, state = "") => setStatus(studentSyncStatus, message, state);
 const setWorkoutSyncStatus = (message, state = "") => setStatus(workoutSyncStatus, message, state);
+const setAuthStatus = (message, state = "") => setStatus(authStatus, message, state);
+
+const setAuthLocked = (locked) => {
+  authGate?.classList.toggle("is-hidden", !locked);
+  document.body.classList.toggle("is-auth-locked", locked);
+};
 
 const readTheme = () => ({
   brandName: brandInput?.value?.trim() || DEFAULT_BRAND_THEME.brandName,
@@ -299,8 +312,8 @@ const renderStudentOptions = () => {
   const previousValue = select.value;
   select.disabled = false;
   if (submitButton) submitButton.disabled = false;
-  select.innerHTML = students.map((student) => `<option value="${escapeHtml(student.name)}">${escapeHtml(student.name)}</option>`).join("");
-  if (students.some((student) => student.name === previousValue)) select.value = previousValue;
+  select.innerHTML = students.map((student) => `<option value="${escapeHtml(student.id)}">${escapeHtml(student.name)}${student.email ? ` - ${escapeHtml(student.email)}` : ""}</option>`).join("");
+  if (students.some((student) => student.id === previousValue)) select.value = previousValue;
 };
 
 const renderStudents = () => {
@@ -469,8 +482,13 @@ document.querySelector("[data-scroll-workout-form]")?.addEventListener("click", 
 
 document.querySelector("[data-student-form]")?.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!authContext?.user) {
+    showToast("Entre como professor antes de cadastrar alunos.");
+    setAuthLocked(true);
+    return;
+  }
   const student = createStudentFromProfessorForm(Object.fromEntries(new FormData(event.currentTarget)));
-  const savedStudent = studentRepository.saveStudent(student);
+  const savedStudent = studentRepository.saveStudent({ ...student, coachId: authContext.coachId });
   applyStudents([savedStudent, ...students.filter((item) => item.id !== savedStudent.id)]);
   setStudentSyncStatus("Aluno salvo localmente. Sincronizando com Supabase...", "");
   showToast("Aluno salvo.");
@@ -486,6 +504,11 @@ document.querySelector("[data-student-form]")?.addEventListener("submit", async 
 
 workoutForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!authContext?.user) {
+    showToast("Entre como professor antes de publicar treinos.");
+    setAuthLocked(true);
+    return;
+  }
   if (!students.length) {
     showToast("Cadastre um aluno antes de publicar treino.");
     return;
@@ -498,13 +521,14 @@ workoutForm?.addEventListener("submit", async (event) => {
   }
 
   const workout = createWorkoutFromProfessorForm({
-    studentName: data.get("student"),
+    student: students.find((student) => student.id === data.get("student")),
+    coachId: authContext.coachId,
     title: data.get("title"),
     template: data.get("template"),
     blocks: data.get("blocks")
   });
   const savedWorkout = workoutRepository.savePublishedWorkout(workout);
-  const linkedStudent = students.find((student) => student.studentKey === savedWorkout.studentKey);
+  const linkedStudent = students.find((student) => student.id === savedWorkout.studentId);
   if (linkedStudent) {
     studentRepository.saveStudent({
       ...linkedStudent,
@@ -518,7 +542,7 @@ workoutForm?.addEventListener("submit", async (event) => {
   setWorkoutSyncStatus("Treino salvo localmente. Sincronizando com Supabase...", "");
   showToast("Treino publicado.");
 
-  const result = await workoutRepository.syncPublishedWorkout(savedWorkout);
+  const result = await workoutRepository.syncPublishedWorkout(savedWorkout, linkedStudent);
   setWorkoutSyncStatus(
     result.synced ? "Treino sincronizado com Supabase." : "Treino salvo localmente. Supabase indisponivel.",
     result.synced ? "synced" : "warning"
@@ -549,7 +573,7 @@ document.addEventListener("click", (event) => {
     navigate("workouts");
     if (student) {
       const studentSelect = document.querySelector("[data-student-options]");
-      if (studentSelect) studentSelect.value = student.name;
+      if (studentSelect) studentSelect.value = student.id;
       renderWorkoutPreview();
     }
     focusWorkoutForm();
@@ -572,10 +596,76 @@ window.addEventListener("storage", (event) => {
   }
 });
 
-const boot = async () => {
+authForm?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-auth-action]");
+  if (button) authAction = button.dataset.authAction;
+});
+
+authForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const data = Object.fromEntries(new FormData(event.currentTarget));
+  setAuthStatus(authAction === "signup" ? "Criando conta de professor..." : "Entrando...", "");
+
+  const result = authAction === "signup"
+    ? await authRepository.signUp({ ...data, role: "coach" })
+    : await authRepository.signIn({ ...data, role: "coach" });
+
+  if (!result.ok) {
+    setAuthStatus(result.message || "Nao foi possivel autenticar.", "warning");
+    return;
+  }
+
+  if (result.pendingEmailConfirmation) {
+    setAuthStatus(result.message, "warning");
+    return;
+  }
+
+  setAuthStatus("Conta autenticada.", "synced");
+  await startAuthenticatedPanel();
+});
+
+document.querySelector("[data-sign-out]")?.addEventListener("click", async () => {
+  await authRepository.signOut();
+  authContext = null;
+  students = [];
+  workouts = [];
+  dataStatus = "Local";
   renderAll();
-  navigate(location.hash.slice(1) || "dashboard", false);
-  window.FlowFitProfessorReady = true;
+  setAuthLocked(true);
+  setAuthStatus("Sessao encerrada. Entre novamente para ver dados reais.", "");
+});
+
+const startAuthenticatedPanel = async () => {
+  const session = await authRepository.getSession();
+  if (!session?.user) {
+    setAuthLocked(true);
+    setAuthStatus("Entre ou crie uma conta de professor para sincronizar dados reais.", "");
+    return;
+  }
+
+  const profileResult = await authRepository.ensureProfile({
+    role: "coach",
+    name: session.user.user_metadata?.display_name || session.user.email
+  });
+  if (!profileResult.synced && !profileResult.profile) {
+    setAuthLocked(true);
+    setAuthStatus("Login ok, mas o banco ainda nao aceitou profiles. Rode supabase/schema.sql no SQL Editor.", "warning");
+    return;
+  }
+  authContext = await authRepository.getAuthContext();
+
+  if (authContext?.role !== "coach") {
+    setAuthLocked(true);
+    setAuthStatus("Esta conta nao e de professor. Use o app do aluno ou crie uma conta de professor.", "warning");
+    return;
+  }
+
+  setAuthLocked(false);
+  setText("[data-auth-user]", authContext.email);
+  if (authUser) authUser.title = authContext.email;
+  students = [];
+  workouts = [];
+  renderAll();
 
   await Promise.allSettled([
     refreshStudents({ silent: true }),
@@ -590,6 +680,13 @@ const boot = async () => {
   fillThemeInputs(remote);
   applyTheme({ mode: remote.mode });
   setThemeStatus("Tema publicado carregado para edicao.", "synced");
+};
+
+const boot = async () => {
+  renderAll();
+  navigate(location.hash.slice(1) || "dashboard", false);
+  window.FlowFitProfessorReady = true;
+  await startAuthenticatedPanel();
 };
 
 boot().catch((error) => {

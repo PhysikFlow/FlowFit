@@ -1,7 +1,7 @@
 import { getSupabase } from "../../core/supabase.js";
 import { Platform } from "../../core/platform.js";
 import { LEGACY_REMOTE_THEME_KEY, REMOTE_THEME_KEY, normalizeBrandTheme } from "../../core/brand-theme.js";
-import { DEMO_COACH_ID } from "../../config.js";
+import { authRepository } from "./auth-repository.js";
 
 const TABLE = "brand_theme";
 
@@ -32,15 +32,20 @@ export const themeRepository = {
   // Retorna o tema de marca branca (ou null). Busca na nuvem e cai no cache local.
   async fetchBrandTheme() {
     const client = await getSupabase();
+    const authContext = await authRepository.getAuthContext();
     if (client) {
       try {
-        const { data, error } = await client
+        let query = client
           .from(TABLE)
           .select("brand_name, tagline, accent, mode")
-          .eq("coach_id", DEMO_COACH_ID)
-          .maybeSingle();
-        if (!error && data) {
-          const theme = toAppTheme(data);
+          .limit(1);
+
+        if (authContext?.role === "coach") query = query.eq("coach_id", authContext.coachId);
+
+        const { data, error } = await query;
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!error && row) {
+          const theme = toAppTheme(row);
           writeCachedTheme(theme);
           return theme;
         }
@@ -55,12 +60,15 @@ export const themeRepository = {
   async saveBrandTheme(theme) {
     const normalized = writeCachedTheme(theme);
     const client = await getSupabase();
-    if (!client) return { synced: false, theme: normalized };
+    const authContext = await authRepository.getAuthContext();
+    if (!client || !authContext?.user || authContext.role !== "coach") {
+      return { synced: false, reason: "not-authenticated-as-coach", theme: normalized };
+    }
     try {
       const { error } = await client
         .from(TABLE)
         .upsert({
-          coach_id: DEMO_COACH_ID,
+          coach_id: authContext.coachId,
           brand_name: normalized.brandName,
           tagline: normalized.tagline,
           accent: normalized.accent,

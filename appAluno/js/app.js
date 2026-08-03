@@ -3,7 +3,8 @@ import { Store } from "./core/store.js";
 import { Theme } from "./core/theme.js";
 import { svgIcon } from "./core/icons.js";
 import { LEGACY_REMOTE_THEME_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js";
-import { activeWorkout, mockStudent, notificationItems, progressData, scheduleItems, weeklySummary } from "./data/mock-data.js";
+import { authRepository } from "./data/repositories/auth-repository.js";
+import { studentRepository } from "./data/repositories/student-repository.js";
 import { themeRepository } from "./data/repositories/theme-repository.js";
 import { PUBLISHED_WORKOUTS_KEY, workoutRepository } from "./data/repositories/workout-repository.js";
 
@@ -13,6 +14,7 @@ const onboarding = document.querySelector("[data-onboarding]");
 const onboardingForm = document.querySelector("[data-onboarding-form]");
 const accessAppButton = document.querySelector("[data-access-app]");
 const runtimeWarning = document.querySelector("[data-runtime-warning]");
+const authStatus = document.querySelector("[data-auth-status]");
 const toast = document.querySelector("[data-toast]");
 const accentInput = document.querySelector("[data-accent]");
 const brandInput = document.querySelector("[data-brand-input]");
@@ -23,7 +25,30 @@ let restTimerId;
 let restRemaining = 0;
 const SET_CLICK_DEBOUNCE_MS = 2000;
 const setClickLocks = new Set();
-let currentWorkout = workoutRepository.getLatestWorkoutForStudent(mockStudent.name) || activeWorkout;
+const emptyStudent = {
+  id: "student-empty",
+  name: "Aluno",
+  initials: "AL",
+  goal: "Sem objetivo cadastrado",
+  plan: "Sem plano",
+  since: "hoje",
+  coach: "Personal",
+  frequency: "Sem frequencia cadastrada"
+};
+const emptyWorkout = {
+  id: "workout-empty",
+  code: "-",
+  title: "Nenhum treino publicado",
+  focus: "Aguardando prescricao do personal",
+  estimatedMinutes: 0,
+  lastDoneLabel: "novo",
+  exercises: []
+};
+const scheduleItems = [];
+const notificationItems = [];
+let currentStudent = emptyStudent;
+let currentWorkout = emptyWorkout;
+let authAction = "signin";
 
 const escapeHtml = (value) => String(value ?? "")
   .replace(/&/g, "&amp;")
@@ -51,10 +76,8 @@ const getCurrentExercises = () => Array.isArray(currentWorkout.exercises) ? curr
 const getTotalSets = () => getCurrentExercises().reduce((sum, exercise) => sum + parseTotalSets(exercise), 0);
 
 const resolveCurrentWorkout = () => {
-  const student = Store.getStudent(mockStudent);
-  return workoutRepository.getLatestWorkoutForStudent(student.name)
-    || workoutRepository.getLatestWorkoutForStudent(mockStudent.name)
-    || activeWorkout;
+  if (!currentStudent?.name) return emptyWorkout;
+  return workoutRepository.getLatestWorkoutForStudent(currentStudent.name) || emptyWorkout;
 };
 
 const formatVolume = (value) => `${(value / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}t`;
@@ -62,6 +85,8 @@ const formatVolume = (value) => `${(value / 1000).toLocaleString("pt-BR", { maxi
 const formatDecimal = (value) => Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
 const formatShortDate = (date) => new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(date));
+
+const formatMonthYear = (date) => new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(date));
 
 const formatDelta = (current, previous, unit) => {
   if (previous === undefined) return `0 ${unit}`;
@@ -115,6 +140,15 @@ const showToast = (message) => {
   toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 2600);
 };
 
+const setStatus = (target, message, state = "") => {
+  if (!target) return;
+  target.textContent = message;
+  target.classList.toggle("is-synced", state === "synced");
+  target.classList.toggle("is-warning", state === "warning");
+};
+
+const setAuthStatus = (message, state = "") => setStatus(authStatus, message, state);
+
 const syncThemeControls = () => {
   if (accentInput) accentInput.value = Theme.value.accent;
   if (brandInput) brandInput.value = Theme.value.brandName;
@@ -137,16 +171,14 @@ const applyPublishedBrandTheme = async () => {
 
 const refreshPublishedWorkout = async ({ silent = false } = {}) => {
   const previousWorkoutId = currentWorkout.id;
-  const student = Store.getStudent(mockStudent);
-  const result = await workoutRepository.fetchLatestWorkoutForStudent(student.name);
-  if (!result.workout) return result;
+  const result = await workoutRepository.fetchLatestWorkoutForCurrentStudent(currentStudent);
+  currentWorkout = result.workout || emptyWorkout;
 
-  currentWorkout = result.workout;
   const changed = currentWorkout.id !== previousWorkoutId;
   if (changed) {
     setClickLocks.clear();
     stopRestTimer();
-    if (!silent) Platform.notify("Seu personal publicou um novo treino.");
+    if (!silent && currentWorkout.id !== emptyWorkout.id) Platform.notify("Seu personal publicou um novo treino.");
   }
   if (changed || result.synced) renderAll();
   return result;
@@ -163,26 +195,62 @@ const markRuntimeReady = () => {
   if (runtimeWarning) runtimeWarning.hidden = true;
 };
 
+const toRuntimeStudent = (student, authContext) => {
+  if (!student) {
+    const name = authContext?.profile?.name || authContext?.email || "Aluno";
+    return {
+      ...emptyStudent,
+      id: authContext?.user?.id || emptyStudent.id,
+      name,
+      initials: name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "AL"
+    };
+  }
+
+  return {
+    ...emptyStudent,
+    ...student,
+    since: student.createdAt ? formatMonthYear(student.createdAt) : "hoje",
+    coach: "Personal",
+    frequency: student.plan || "Atendimento"
+  };
+};
+
 const renderStudent = () => {
-  const student = Store.getStudent(mockStudent);
+  const student = currentStudent || emptyStudent;
   document.querySelectorAll("[data-student-name]").forEach((item) => { item.textContent = student.name; });
   document.querySelectorAll("[data-student-initials]").forEach((item) => { item.textContent = student.initials; });
-  document.querySelector("[data-student-since]").textContent = `Aluno desde ${student.since.toLowerCase()}`;
+  document.querySelector("[data-student-since]").textContent = `Aluno desde ${String(student.since || "hoje").toLowerCase()}`;
   document.querySelector("[data-student-plan]").textContent = `Plano ${student.plan}`;
   document.querySelector("[data-coach-name]").textContent = student.coach;
   document.querySelector("[data-profile-goal]").textContent = student.goal || "Hipertrofia";
-  document.querySelector("[data-profile-frequency]").textContent = student.frequency || "4 treinos por semana";
+  document.querySelector("[data-profile-frequency]").textContent = student.frequency || "Sem frequencia cadastrada";
 };
 
 const renderHome = () => {
   document.querySelector("[data-home-workout]").textContent = `Treino ${currentWorkout.code}`;
   document.querySelector("[data-home-summary]").textContent =
-    `${currentWorkout.title} - ${getCurrentExercises().length} exercicios - cerca de ${currentWorkout.estimatedMinutes} minutos.`;
-  document.querySelector("[data-stat-done]").textContent = `${weeklySummary.doneWorkouts}/${weeklySummary.targetWorkouts}`;
-  document.querySelector("[data-stat-volume]").textContent = formatVolume(weeklySummary.volumeKg);
-  document.querySelector("[data-stat-streak]").textContent = `${weeklySummary.streakDays} dias`;
-  document.querySelector("[data-week-percent]").textContent = `${weeklySummary.progressPercent}%`;
-  document.querySelector("[data-week-progress]").style.setProperty("--progress", `${weeklySummary.progressPercent}%`);
+    currentWorkout.id === emptyWorkout.id
+      ? "Seu personal ainda nao publicou um treino para este email."
+      : `${currentWorkout.title} - ${getCurrentExercises().length} exercicios - cerca de ${currentWorkout.estimatedMinutes} minutos.`;
+  const sessions = Store.state.sessions || [];
+  const doneWorkouts = sessions.length;
+  const targetWorkouts = 4;
+  const volumeKg = sessions.reduce((sum, session) => sum + Number(session.volume || 0), 0);
+  const progressPercent = Math.min(100, Math.round((doneWorkouts / targetWorkouts) * 100));
+  document.querySelector("[data-stat-done]").textContent = `${doneWorkouts}/${targetWorkouts}`;
+  document.querySelector("[data-stat-volume]").textContent = formatVolume(volumeKg);
+  document.querySelector("[data-stat-streak]").textContent = `${doneWorkouts} treinos`;
+  document.querySelector("[data-week-percent]").textContent = `${progressPercent}%`;
+  document.querySelector("[data-week-progress]").style.setProperty("--progress", `${progressPercent}%`);
+  document.querySelector("[data-week-message]").textContent = doneWorkouts ? "Continue registrando seus treinos" : "Comece pelo treino publicado";
+  document.querySelector("[data-week-delta]").textContent = `${progressPercent}%`;
+  document.querySelector("[data-workout-title]").textContent = currentWorkout.title;
+  document.querySelector("[data-workout-focus]").textContent = currentWorkout.focus;
+  document.querySelector("[data-workout-plan-title]").textContent = currentWorkout.id === emptyWorkout.id ? "Sem treino ativo" : `Treino ${currentWorkout.code} - ${currentWorkout.title}`;
+  document.querySelector("[data-workout-last]").textContent = currentWorkout.lastDoneLabel === "novo" ? "Ainda nao executado" : `Ultima execucao ${currentWorkout.lastDoneLabel}`;
+  document.querySelector("[data-workout-minutes]").textContent = `${currentWorkout.estimatedMinutes} min`;
+  document.querySelector("[data-workout-exercise-count]").textContent = `${getCurrentExercises().length} exercicios`;
+  document.querySelector("[data-workout-set-count]").textContent = `${getTotalSets()} series`;
 };
 
 const renderWorkoutProgress = () => {
@@ -303,7 +371,14 @@ const renderExercises = () => {
 };
 
 const renderProgress = () => {
-  const entries = Store.getProgressEntries(progressData.entries);
+  const entries = Store.getProgressEntries([]);
+  if (!entries.length) {
+    document.querySelector("[data-chart]").innerHTML = `<article class="empty-state"><strong>Nenhum check-in salvo.</strong><small>Registre peso e medidas para criar seu historico real.</small></article>`;
+    document.querySelector("[data-measurements-date]").textContent = "Sem registros";
+    document.querySelector("[data-metric-list]").innerHTML = `<article class="empty-state card"><strong>Sem medidas ainda.</strong><small>Use o formulario de check-in acima.</small></article>`;
+    document.querySelector("[data-measurement-history]").innerHTML = `<article class="empty-state card"><strong>Linha do tempo vazia.</strong><small>Os proximos check-ins aparecem aqui.</small></article>`;
+    return;
+  }
   const recentEntries = entries.slice(-7);
   const latest = entries.at(-1);
   const previous = entries.at(-2) || latest;
@@ -376,6 +451,11 @@ const renderNotifications = () => {
   const unreadCount = notificationItems.filter((item) => !Store.isNotificationRead(item.id)).length;
   document.querySelector("[data-notification-count]").textContent = unreadCount;
   document.querySelector("[data-notification-count]").classList.toggle("is-hidden", unreadCount === 0);
+  if (!notificationItems.length) {
+    document.querySelector("[data-notification-list]").innerHTML =
+      `<article class="empty-state card"><strong>Nenhum aviso recebido.</strong><small>As mensagens do personal aparecerao aqui quando o modulo de comunicacao for ativado.</small></article>`;
+    return;
+  }
   document.querySelector("[data-notification-list]").innerHTML = notificationItems.map((item) => {
     const read = Store.isNotificationRead(item.id);
     return `
@@ -422,6 +502,62 @@ const renderAll = () => {
   renderSchedule();
   renderNotifications();
   renderHistory();
+};
+
+const startAuthenticatedApp = async () => {
+  const session = await authRepository.getSession();
+  if (!session?.user) {
+    Store.resetOnboarding();
+    currentStudent = emptyStudent;
+    currentWorkout = emptyWorkout;
+    renderAll();
+    syncOnboarding();
+    setAuthStatus("Entre ou crie sua conta de aluno.", "");
+    return false;
+  }
+
+  const profileResult = await authRepository.ensureProfile({
+    role: "student",
+    name: session.user.user_metadata?.display_name || session.user.email
+  });
+  if (!profileResult.synced && !profileResult.profile) {
+    Store.resetOnboarding();
+    setAuthStatus("Login ok, mas o banco ainda nao aceitou profiles. Rode supabase/schema.sql no SQL Editor.", "warning");
+    syncOnboarding();
+    return false;
+  }
+  const authContext = await authRepository.getAuthContext();
+  if (authContext?.role !== "student") {
+    await authRepository.signOut();
+    Store.resetOnboarding();
+    setAuthStatus("Esta conta nao e de aluno. Use o painel do professor ou crie outra conta.", "warning");
+    syncOnboarding();
+    return false;
+  }
+
+  const studentResult = await studentRepository.fetchCurrentStudent();
+  currentStudent = toRuntimeStudent(studentResult.student, authContext);
+  Store.completeOnboarding({
+    name: currentStudent.name,
+    goal: currentStudent.goal,
+    frequency: currentStudent.frequency
+  });
+
+  currentWorkout = emptyWorkout;
+  await applyPublishedBrandTheme();
+  await refreshPublishedWorkout({ silent: true });
+  renderAll();
+  syncOnboarding();
+  navigate(location.hash.slice(1) || "home", false);
+
+  if (!studentResult.student) {
+    setAuthStatus("Conta autenticada, mas este email ainda nao foi cadastrado por um personal.", "warning");
+    Platform.notify("Peça ao personal para cadastrar este email no painel.");
+  } else {
+    setAuthStatus("Conta autenticada. Dados reais carregados.", "synced");
+  }
+
+  return true;
 };
 
 navItems.forEach((item) => item.addEventListener("click", (event) => {
@@ -546,26 +682,49 @@ document.querySelector("[data-skip-rest]")?.addEventListener("click", () => {
   Platform.notify("Descanso encerrado.");
 });
 
-onboardingForm?.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const data = new FormData(onboardingForm);
-  Store.completeOnboarding({
-    name: String(data.get("name") || mockStudent.name).trim(),
-    goal: String(data.get("goal") || "Hipertrofia"),
-    frequency: String(data.get("frequency") || "4 treinos por semana")
-  });
-  currentWorkout = resolveCurrentWorkout();
-  renderAll();
-  syncOnboarding();
-  Platform.notify("Entrada salva. Bem-vindo ao app.");
-  navigate("home");
+onboardingForm?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-auth-action]");
+  if (button) authAction = button.dataset.authAction;
 });
 
-document.querySelector("[data-reset-onboarding]")?.addEventListener("click", () => {
-  Store.resetOnboarding();
-  syncOnboarding();
-  Platform.notify("A entrada sera exibida novamente.");
+onboardingForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const data = Object.fromEntries(new FormData(onboardingForm));
+  setAuthStatus(authAction === "signup" ? "Criando conta de aluno..." : "Entrando...", "");
+
+  const result = authAction === "signup"
+    ? await authRepository.signUp({ ...data, role: "student" })
+    : await authRepository.signIn({ ...data, role: "student" });
+
+  if (!result.ok) {
+    setAuthStatus(result.message || "Nao foi possivel autenticar.", "warning");
+    return;
+  }
+
+  if (result.pendingEmailConfirmation) {
+    setAuthStatus(result.message, "warning");
+    return;
+  }
+
+  await startAuthenticatedApp();
+  Platform.notify("Bem-vindo ao app.");
 });
+
+const signOut = async () => {
+  await authRepository.signOut();
+  Store.resetOnboarding();
+  currentStudent = emptyStudent;
+  currentWorkout = emptyWorkout;
+  setClickLocks.clear();
+  stopRestTimer();
+  renderAll();
+  syncOnboarding();
+  setAuthStatus("Sessao encerrada. Entre novamente para ver seus dados.", "");
+  Platform.notify("Sessao encerrada.");
+};
+
+document.querySelector("[data-reset-onboarding]")?.addEventListener("click", signOut);
+document.querySelector("[data-sign-out]")?.addEventListener("click", signOut);
 
 document.querySelector("[data-mark-all-read]")?.addEventListener("click", () => {
   Store.markAllNotificationsRead(notificationItems.map((item) => item.id));
@@ -602,17 +761,14 @@ window.addEventListener("storage", (event) => {
 
 Theme.apply();
 syncThemeControls();
-currentWorkout = resolveCurrentWorkout();
 renderAll();
 renderRestTimer();
-syncOnboarding();
-markRuntimeReady();
 navigate(location.hash.slice(1) || "home", false);
 
 if (Platform.canUseServiceWorker() && "serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
 }
 
-// Marca branca: aplica o tema publicado pelo professor (se houver).
-applyPublishedBrandTheme();
-refreshPublishedWorkout({ silent: true });
+startAuthenticatedApp().finally(() => {
+  markRuntimeReady();
+});

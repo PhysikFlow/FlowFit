@@ -18,32 +18,25 @@
       <div class="onboarding__panel card">
         <span class="eyebrow"><span data-brand-name>FlowFit</span> aluno</span>
         <h1 id="onboarding-title">Entre no seu plano de treino</h1>
-        <p>Este piloto usa dados mockados e salva suas escolhas apenas neste aparelho.</p>
-        <p class="runtime-warning" data-runtime-warning>Se este botao nao responder, abra o projeto por HTTP: python -m http.server 8080.</p>
+        <p>Use o mesmo email cadastrado pelo seu personal. Seus treinos publicados aparecem automaticamente depois do login.</p>
+        <p class="runtime-warning" data-runtime-warning>Se o login nao responder, confirme se o schema Supabase foi atualizado e se a URL do GitHub Pages esta liberada no Auth.</p>
 
         <form class="onboarding-form" data-onboarding-form>
           <label>
-            Nome do aluno
-            <input type="text" name="name" value="Lucas Andrade" autocomplete="name" required />
+            Nome
+            <input type="text" name="name" autocomplete="name" placeholder="Seu nome" />
           </label>
           <label>
-            Objetivo principal
-            <select name="goal">
-              <option>Hipertrofia</option>
-              <option>Emagrecimento</option>
-              <option>Condicionamento</option>
-              <option>Corrida</option>
-            </select>
+            Email
+            <input type="email" name="email" autocomplete="email" placeholder="email cadastrado pelo personal" required />
           </label>
           <label>
-            Frequencia semanal
-            <select name="frequency">
-              <option>4 treinos por semana</option>
-              <option>3 treinos por semana</option>
-              <option>5 treinos por semana</option>
-            </select>
+            Senha
+            <input type="password" name="password" autocomplete="current-password" minlength="6" placeholder="Minimo 6 caracteres" required />
           </label>
-          <button class="button button--block" type="submit" data-access-app>Acessar app</button>
+          <p class="form-status" data-auth-status>Entre ou crie sua conta de aluno.</p>
+          <button class="button button--block" type="submit" data-auth-action="signin" data-access-app>Entrar</button>
+          <button class="button button--quiet button--block" type="submit" data-auth-action="signup">Criar conta de aluno</button>
         </form>
       </div>
     </section>
@@ -55,6 +48,9 @@
           <small data-brand-tagline>Seu treino, no seu ritmo</small>
         </div>
         <div class="topbar__actions">
+          <button class="icon-button" type="button" aria-label="Sair da conta" data-sign-out>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></svg>
+          </button>
           <button class="icon-button notification-button" type="button" aria-label="Abrir notificacoes" data-go="notifications">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>
             <span class="badge" data-notification-count>0</span>
@@ -89,8 +85,8 @@
         </div>
         <article class="week-card card">
           <div class="week-card__head">
-            <div><span class="eyebrow">Consistencia</span><h3>Falta pouco, Lucas</h3></div>
-            <strong>+12%</strong>
+            <div><span class="eyebrow">Consistencia</span><h3 data-week-message>Semana em andamento</h3></div>
+            <strong data-week-delta>0%</strong>
           </div>
           <div class="progress-track" aria-label="75 por cento da meta semanal"><span data-week-progress style="--progress: 75%"></span></div>
         </article>
@@ -99,22 +95,22 @@
       <section class="page" data-page="workout" aria-labelledby="workout-title">
         <header class="page-heading">
           <span class="eyebrow">Treino de hoje</span>
-          <h1 id="workout-title">Costas e biceps</h1>
-          <p>Priorize amplitude e controle. Registre cada serie conforme avanca.</p>
+          <h1 id="workout-title" data-workout-title>Nenhum treino publicado</h1>
+          <p data-workout-focus>Aguardando prescricao do personal.</p>
         </header>
 
         <article class="workout-summary card">
           <div class="workout-summary__top">
             <div>
               <span class="eyebrow">Plano ativo</span>
-              <h2>Hipertrofia - B</h2>
-              <p>Ultima execucao ha 7 dias</p>
+              <h2 data-workout-plan-title>Sem treino ativo</h2>
+              <p data-workout-last>Sem execucao registrada</p>
             </div>
-            <span class="chip">52 min</span>
+            <span class="chip" data-workout-minutes>0 min</span>
           </div>
           <div class="workout-summary__meta">
-            <span class="chip">7 exercicios</span>
-            <span class="chip">23 series</span>
+            <span class="chip" data-workout-exercise-count>0 exercicios</span>
+            <span class="chip" data-workout-set-count>0 series</span>
             <span class="chip">RIR 2</span>
           </div>
           <div class="session-progress">
@@ -175,7 +171,7 @@
         <header class="page-heading">
           <span class="eyebrow">Agenda e avisos</span>
           <h1 id="schedule-title">O que vem agora</h1>
-          <p>Lembretes mockados para treino, mensagens e reavaliacoes. Nesta fase tudo fica salvo localmente.</p>
+          <p>Lembretes criados neste aparelho. Comunicacao real entra depois da autenticacao de mensagens.</p>
         </header>
 
         <div class="filter-row" aria-label="Filtrar agenda">
@@ -185,7 +181,7 @@
           <button type="button" data-schedule-filter="Avaliacao">Avaliacao</button>
         </div>
 
-        <div class="section-title"><h2>Novo lembrete</h2><span>demo local</span></div>
+        <div class="section-title"><h2>Novo lembrete</h2><span>local</span></div>
         <form class="schedule-form card" data-schedule-form>
           <label>Titulo <input type="text" name="title" value="Mobilidade antes do treino" required /></label>
           <label>Horario <input type="text" name="time" value="Hoje, 17:40" required /></label>
@@ -207,7 +203,7 @@
         <header class="page-heading">
           <span class="eyebrow">Central de avisos</span>
           <h1 id="notifications-title">O que precisa da sua atencao</h1>
-          <p>Avisos mockados do personal, lembretes e sinais de evolucao. Tudo fica salvo localmente nesta fase.</p>
+          <p>Avisos reais do personal entram na proxima etapa de comunicacao.</p>
         </header>
 
         <div class="section-title">
@@ -221,7 +217,7 @@
         <article class="profile-card card">
           <span class="avatar" aria-hidden="true" data-student-initials>LA</span>
           <div>
-            <h1 id="profile-title" data-student-name>Lucas Andrade</h1>
+            <h1 id="profile-title" data-student-name>Aluno</h1>
             <p class="muted" data-student-since>Aluno desde janeiro de 2026</p>
             <span class="chip" data-student-plan>Plano Performance</span>
           </div>
@@ -235,7 +231,7 @@
 
         <div class="section-title"><h2>Personal</h2><span>acompanhamento</span></div>
         <article class="setting-row card">
-          <div><strong data-coach-name>Marina Costa</strong><small>Responsavel pela prescricao e ajustes do plano.</small></div>
+          <div><strong data-coach-name>Personal</strong><small>Responsavel pela prescricao e ajustes do plano.</small></div>
           <svg class="icon icon--muted" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
         </article>
 
@@ -258,8 +254,8 @@
           <article class="setting-row card"><span class="surface-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 5 6v6c0 4 3 7 7 9 4-2 7-5 7-9V6l-7-3Z" /><path d="m9 12 2 2 4-5" /></svg></span><div><strong>Privacidade</strong><small>Dados, fotos e permissoes</small></div><svg class="icon icon--muted" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg></article>
         </section>
 
-        <div class="section-title"><h2>Demo</h2><span>primeiro acesso</span></div>
-        <button class="button button--quiet button--block" type="button" data-reset-onboarding>Mostrar entrada novamente</button>
+        <div class="section-title"><h2>Conta</h2><span>sessao</span></div>
+        <button class="button button--quiet button--block" type="button" data-reset-onboarding>Sair e trocar conta</button>
       </section>
     </main>
 

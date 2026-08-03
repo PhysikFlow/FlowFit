@@ -58,6 +58,29 @@ body.has-onboarding {
   display: none;
 }
 
+.form-status {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.form-status.is-synced {
+  border-color: var(--color-accent-line);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.form-status.is-warning {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
 .onboarding-form {
   display: grid;
   gap: var(--space-4);

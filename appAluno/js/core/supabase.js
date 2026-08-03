@@ -10,7 +10,13 @@ export const getSupabase = () => {
   if (!isConfigured()) return null;
   if (!clientPromise) {
     clientPromise = import("https://esm.sh/@supabase/supabase-js@2")
-      .then(({ createClient }) => createClient(SUPABASE_URL, SUPABASE_ANON_KEY))
+      .then(({ createClient }) => createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          persistSession: true
+        }
+      }))
       .catch(() => null);
   }
   return clientPromise;

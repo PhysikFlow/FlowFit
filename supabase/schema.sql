@@ -1,14 +1,29 @@
 -- ============================================================================
--- Supabase: schema piloto do FlowFit
--- Rode este arquivo no SQL Editor do seu projeto Supabase.
+-- Supabase: schema autenticado do FlowFit
 --
--- O piloto ainda nao tem login. Por isso, as policies permitem apenas o tenant
--- demo (`coach-demo`) usando a anon key. Antes de producao, troque essas
--- policies por auth.uid()/claims de app_metadata mapeando personal -> coach_id.
+-- Uso:
+-- 1) Rode este arquivo no SQL Editor do projeto Supabase.
+-- 2) Em Authentication > URL Configuration, configure:
+--    - Site URL: URL do GitHub Pages
+--    - Redirect URLs: URL do GitHub Pages e subpastas appAluno/appProfessor
+--
+-- Arquitetura:
+-- - profiles.role = 'coach' ou 'student'
+-- - professor/personal grava dados com coach_id = auth.uid()::text
+-- - aluno acessa dados pelo email autenticado que o professor cadastrou
+-- - tabelas publicas ficam com RLS habilitado; anon nao acessa dados reais
 -- ============================================================================
 
+create table if not exists public.profiles (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  role       text not null check (role in ('coach', 'student')),
+  name       text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.brand_theme (
-  coach_id   text primary key,          -- tenant: um personal = uma marca
+  coach_id   text primary key,
   brand_name text not null default 'FlowFit',
   tagline    text not null default 'Seu treino, no seu ritmo',
   accent     text not null default '#7667ff',
@@ -17,25 +32,26 @@ create table if not exists public.brand_theme (
 );
 
 create table if not exists public.students (
-  id          text primary key,
-  coach_id    text not null default 'coach-demo',
-  student_key text not null,
-  name        text not null,
-  initials    text not null default 'AL',
-  goal        text not null default 'Hipertrofia',
-  status      text not null default 'Ativo',
-  plan        text not null default 'Novo',
-  workout     text not null default 'Sem treino atribuido',
-  adherence   integer not null default 0 check (adherence >= 0 and adherence <= 100),
-  next_action text not null default 'Criar primeiro treino',
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
-  unique (coach_id, student_key)
+  id              text primary key,
+  coach_id        text not null,
+  student_key     text not null,
+  student_user_id uuid references auth.users(id) on delete set null,
+  email           text,
+  name            text not null,
+  initials        text not null default 'AL',
+  goal            text not null default 'Hipertrofia',
+  status          text not null default 'Ativo',
+  plan            text not null default 'Novo',
+  workout         text not null default 'Sem treino atribuido',
+  adherence       integer not null default 0 check (adherence >= 0 and adherence <= 100),
+  next_action     text not null default 'Criar primeiro treino',
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
 );
 
 create table if not exists public.workout_plans (
   id                text primary key,
-  coach_id          text not null default 'coach-demo',
+  coach_id          text not null,
   student_id        text references public.students(id) on delete set null,
   student_key       text not null,
   owner             text not null,
@@ -53,7 +69,7 @@ create table if not exists public.workout_plans (
 create table if not exists public.workout_exercises (
   id           text primary key,
   workout_id   text not null references public.workout_plans(id) on delete cascade,
-  coach_id     text not null default 'coach-demo',
+  coach_id     text not null,
   position     integer not null default 0 check (position >= 0),
   name         text not null,
   target       text not null default 'Personalizado',
@@ -66,33 +82,64 @@ create table if not exists public.workout_exercises (
   updated_at   timestamptz not null default now()
 );
 
+-- Migração segura para bancos que já tinham o schema piloto antigo.
+alter table public.students
+  add column if not exists student_user_id uuid references auth.users(id) on delete set null,
+  add column if not exists email text;
+
+alter table public.students alter column coach_id drop default;
+alter table public.workout_plans alter column coach_id drop default;
+alter table public.workout_exercises alter column coach_id drop default;
+
+alter table public.students
+  drop constraint if exists students_coach_id_student_key_key;
+
+create index if not exists profiles_role_idx
+  on public.profiles (role);
+
 create index if not exists students_coach_student_key_idx
   on public.students (coach_id, student_key);
+
+create index if not exists students_email_idx
+  on public.students (lower(email));
+
+create unique index if not exists students_coach_email_unique_idx
+  on public.students (coach_id, lower(email))
+  where email is not null;
+
+create index if not exists students_student_user_id_idx
+  on public.students (student_user_id);
 
 create index if not exists workout_plans_coach_student_updated_idx
   on public.workout_plans (coach_id, student_key, updated_at desc);
 
+create index if not exists workout_plans_student_id_idx
+  on public.workout_plans (student_id);
+
 create index if not exists workout_exercises_workout_position_idx
   on public.workout_exercises (workout_id, position);
 
--- Permissoes para o papel anon (cliente de navegador usando a anon key).
--- Em projetos novos, confirme tambem nas configuracoes da Data API se as
--- tabelas publicas estao expostas.
-grant usage on schema public to anon;
-grant select, insert, update on public.brand_theme to anon;
-grant select, insert, update, delete on public.students to anon;
-grant select, insert, update, delete on public.workout_plans to anon;
-grant select, insert, update, delete on public.workout_exercises to anon;
+-- Data API: acesso anonimo nao le dados reais. Auth API continua funcionando.
+revoke all on public.profiles from anon;
+revoke all on public.brand_theme from anon;
+revoke all on public.students from anon;
+revoke all on public.workout_plans from anon;
+revoke all on public.workout_exercises from anon;
 
--- RLS: isolar dados por tenant desde a primeira API.
+grant usage on schema public to authenticated;
+grant select, insert, update on public.profiles to authenticated;
+grant select, insert, update on public.brand_theme to authenticated;
+grant select, insert, update, delete on public.students to authenticated;
+grant select, insert, update, delete on public.workout_plans to authenticated;
+grant select, insert, update, delete on public.workout_exercises to authenticated;
+
+alter table public.profiles enable row level security;
 alter table public.brand_theme enable row level security;
 alter table public.students enable row level security;
 alter table public.workout_plans enable row level security;
 alter table public.workout_exercises enable row level security;
 
--- Piloto: apenas o tenant demo (coach-demo) e acessivel enquanto nao existe
--- autenticacao. Quando o login chegar, trocar por policies baseadas em
--- auth.uid()/auth.jwt() mapeando personal -> coach_id.
+-- Remove policies do piloto anon/demo e recria policies autenticadas.
 drop policy if exists "brand_theme_select_demo" on public.brand_theme;
 drop policy if exists "brand_theme_insert_demo" on public.brand_theme;
 drop policy if exists "brand_theme_update_demo" on public.brand_theme;
@@ -109,86 +156,182 @@ drop policy if exists "workout_exercises_insert_demo" on public.workout_exercise
 drop policy if exists "workout_exercises_update_demo" on public.workout_exercises;
 drop policy if exists "workout_exercises_delete_demo" on public.workout_exercises;
 
-create policy "brand_theme_select_demo"
+drop policy if exists "profiles_select_own" on public.profiles;
+drop policy if exists "profiles_insert_own" on public.profiles;
+drop policy if exists "profiles_update_own" on public.profiles;
+drop policy if exists "brand_theme_select_authenticated" on public.brand_theme;
+drop policy if exists "brand_theme_insert_coach" on public.brand_theme;
+drop policy if exists "brand_theme_update_coach" on public.brand_theme;
+drop policy if exists "students_select_authenticated_owner" on public.students;
+drop policy if exists "students_insert_coach" on public.students;
+drop policy if exists "students_update_coach" on public.students;
+drop policy if exists "students_delete_coach" on public.students;
+drop policy if exists "workout_plans_select_authenticated_owner" on public.workout_plans;
+drop policy if exists "workout_plans_insert_coach" on public.workout_plans;
+drop policy if exists "workout_plans_update_coach" on public.workout_plans;
+drop policy if exists "workout_plans_delete_coach" on public.workout_plans;
+drop policy if exists "workout_exercises_select_authenticated_owner" on public.workout_exercises;
+drop policy if exists "workout_exercises_insert_coach" on public.workout_exercises;
+drop policy if exists "workout_exercises_update_coach" on public.workout_exercises;
+drop policy if exists "workout_exercises_delete_coach" on public.workout_exercises;
+
+create policy "profiles_select_own"
+  on public.profiles for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+create policy "profiles_insert_own"
+  on public.profiles for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+create policy "profiles_update_own"
+  on public.profiles for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "brand_theme_select_authenticated"
   on public.brand_theme for select
-  to anon
-  using (coach_id = 'coach-demo');
+  to authenticated
+  using (
+    coach_id = (select auth.uid())::text
+    or exists (
+      select 1
+      from public.students s
+      where s.coach_id = brand_theme.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  );
 
-create policy "brand_theme_insert_demo"
+create policy "brand_theme_insert_coach"
   on public.brand_theme for insert
-  to anon
-  with check (coach_id = 'coach-demo');
+  to authenticated
+  with check (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid()) and p.role = 'coach'
+    )
+  );
 
-create policy "brand_theme_update_demo"
+create policy "brand_theme_update_coach"
   on public.brand_theme for update
-  to anon
-  using (coach_id = 'coach-demo')
-  with check (coach_id = 'coach-demo');
+  to authenticated
+  using (coach_id = (select auth.uid())::text)
+  with check (coach_id = (select auth.uid())::text);
 
-create policy "students_select_demo"
+create policy "students_select_authenticated_owner"
   on public.students for select
-  to anon
-  using (coach_id = 'coach-demo');
+  to authenticated
+  using (
+    coach_id = (select auth.uid())::text
+    or student_user_id = (select auth.uid())
+    or lower(email) = lower((select auth.jwt() ->> 'email'))
+  );
 
-create policy "students_insert_demo"
+create policy "students_insert_coach"
   on public.students for insert
-  to anon
-  with check (coach_id = 'coach-demo');
+  to authenticated
+  with check (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid()) and p.role = 'coach'
+    )
+  );
 
-create policy "students_update_demo"
+create policy "students_update_coach"
   on public.students for update
-  to anon
-  using (coach_id = 'coach-demo')
-  with check (coach_id = 'coach-demo');
+  to authenticated
+  using (coach_id = (select auth.uid())::text)
+  with check (coach_id = (select auth.uid())::text);
 
-create policy "students_delete_demo"
+create policy "students_delete_coach"
   on public.students for delete
-  to anon
-  using (coach_id = 'coach-demo');
+  to authenticated
+  using (coach_id = (select auth.uid())::text);
 
-create policy "workout_plans_select_demo"
+create policy "workout_plans_select_authenticated_owner"
   on public.workout_plans for select
-  to anon
-  using (coach_id = 'coach-demo');
+  to authenticated
+  using (
+    coach_id = (select auth.uid())::text
+    or exists (
+      select 1
+      from public.students s
+      where s.id = workout_plans.student_id
+        and s.coach_id = workout_plans.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  );
 
-create policy "workout_plans_insert_demo"
+create policy "workout_plans_insert_coach"
   on public.workout_plans for insert
-  to anon
-  with check (coach_id = 'coach-demo');
+  to authenticated
+  with check (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid()) and p.role = 'coach'
+    )
+  );
 
-create policy "workout_plans_update_demo"
+create policy "workout_plans_update_coach"
   on public.workout_plans for update
-  to anon
-  using (coach_id = 'coach-demo')
-  with check (coach_id = 'coach-demo');
+  to authenticated
+  using (coach_id = (select auth.uid())::text)
+  with check (coach_id = (select auth.uid())::text);
 
-create policy "workout_plans_delete_demo"
+create policy "workout_plans_delete_coach"
   on public.workout_plans for delete
-  to anon
-  using (coach_id = 'coach-demo');
+  to authenticated
+  using (coach_id = (select auth.uid())::text);
 
-create policy "workout_exercises_select_demo"
+create policy "workout_exercises_select_authenticated_owner"
   on public.workout_exercises for select
-  to anon
-  using (coach_id = 'coach-demo');
+  to authenticated
+  using (
+    coach_id = (select auth.uid())::text
+    or exists (
+      select 1
+      from public.workout_plans wp
+      join public.students s
+        on s.id = wp.student_id
+       and s.coach_id = wp.coach_id
+      where wp.id = workout_exercises.workout_id
+        and wp.coach_id = workout_exercises.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  );
 
-create policy "workout_exercises_insert_demo"
+create policy "workout_exercises_insert_coach"
   on public.workout_exercises for insert
-  to anon
-  with check (coach_id = 'coach-demo');
+  to authenticated
+  with check (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid()) and p.role = 'coach'
+    )
+  );
 
-create policy "workout_exercises_update_demo"
+create policy "workout_exercises_update_coach"
   on public.workout_exercises for update
-  to anon
-  using (coach_id = 'coach-demo')
-  with check (coach_id = 'coach-demo');
+  to authenticated
+  using (coach_id = (select auth.uid())::text)
+  with check (coach_id = (select auth.uid())::text);
 
-create policy "workout_exercises_delete_demo"
+create policy "workout_exercises_delete_coach"
   on public.workout_exercises for delete
-  to anon
-  using (coach_id = 'coach-demo');
-
--- Linha inicial do tenant demo.
-insert into public.brand_theme (coach_id, brand_name, tagline, accent, mode)
-values ('coach-demo', 'FlowFit', 'Seu treino, no seu ritmo', '#7667ff', 'dark')
-on conflict (coach_id) do nothing;
+  to authenticated
+  using (coach_id = (select auth.uid())::text);

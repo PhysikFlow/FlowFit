@@ -13,6 +13,22 @@
     <script type="module" src="js/app.js"></script>
   </head>
   <body>
+    <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title">
+      <form class="auth-card card" data-auth-form>
+        <span class="eyebrow">FlowFit professor</span>
+        <h1 id="professor-auth-title">Entre para gerenciar seus alunos</h1>
+        <p>Use email e senha. Google/Apple ficam para uma etapa futura quando os provedores estiverem configurados no Supabase.</p>
+        <label>Nome do personal <input name="name" autocomplete="name" placeholder="Seu nome ou marca" /></label>
+        <label>Email <input type="email" name="email" autocomplete="email" placeholder="voce@email.com" required /></label>
+        <label>Senha <input type="password" name="password" autocomplete="current-password" minlength="6" placeholder="Minimo 6 caracteres" required /></label>
+        <p class="form-status" data-auth-status>Entre ou crie uma conta de professor para sincronizar dados reais.</p>
+        <div class="auth-card__actions">
+          <button class="button" type="submit" data-auth-action="signin">Entrar</button>
+          <button class="button button--quiet" type="submit" data-auth-action="signup">Criar conta</button>
+        </div>
+      </form>
+    </section>
+
     <aside class="sidebar" aria-label="Navegacao do professor">
       <div class="sidebar__brand">
         <span class="surface-icon" aria-hidden="true" data-brand-icon></span>
@@ -39,8 +55,10 @@
           <h1 data-page-title>Dashboard</h1>
         </div>
         <div class="topbar__actions">
+          <span class="session-chip" data-auth-user></span>
           <button class="button button--quiet" type="button" data-nav-jump="students">Adicionar aluno</button>
           <button class="button" type="button" data-nav-jump="workouts" data-focus-workout-form>Novo treino</button>
+          <button class="button button--quiet" type="button" data-sign-out>Sair</button>
         </div>
       </header>
 
@@ -86,6 +104,7 @@
 
         <form class="quick-form card" data-student-form>
           <label>Nome <input name="name" placeholder="Nome completo do aluno" autocomplete="name" required /></label>
+          <label>Email de acesso <input type="email" name="email" placeholder="email do aluno" autocomplete="email" required /></label>
           <label>Objetivo
             <select name="goal">
               <option>Hipertrofia</option>
