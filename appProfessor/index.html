@@ -35,7 +35,7 @@
     <main class="admin-shell">
       <header class="topbar">
         <div>
-          <span class="eyebrow">Piloto com dados mockados</span>
+          <span class="eyebrow">Dados reais sincronizados</span>
           <h1 data-page-title>Dashboard</h1>
         </div>
         <div class="topbar__actions">
@@ -49,7 +49,7 @@
           <div>
             <span class="eyebrow">Visao geral</span>
             <h2 id="dashboard-title">Economize tempo montando, copiando e ajustando treinos.</h2>
-            <p>Este esqueleto deixa claro onde vao entrar alunos, prescricoes, agenda, financeiro e marca branca.</p>
+            <p>Use este painel para cadastrar alunos, publicar treinos e controlar a marca exibida no app do aluno.</p>
           </div>
           <div class="hero__stack">
             <span class="chip">Web primeiro</span>
@@ -61,8 +61,8 @@
         <section class="kpi-grid" aria-label="Indicadores principais">
           <article class="kpi card"><span class="surface-icon" data-icon="users"></span><div><strong data-kpi-students>0</strong><small>alunos ativos</small></div></article>
           <article class="kpi card"><span class="surface-icon" data-icon="dumbbell"></span><div><strong data-kpi-workouts>0</strong><small>treinos cadastrados</small></div></article>
-          <article class="kpi card"><span class="surface-icon" data-icon="calendar"></span><div><strong>7</strong><small>itens na semana</small></div></article>
-          <article class="kpi card"><span class="surface-icon" data-icon="wallet"></span><div><strong>R$ 8,4k</strong><small>receita mockada</small></div></article>
+          <article class="kpi card"><span class="surface-icon" data-icon="calendar"></span><div><strong data-kpi-pending>0</strong><small>pendencias</small></div></article>
+          <article class="kpi card"><span class="surface-icon" data-icon="wallet"></span><div><strong data-kpi-sync>Local</strong><small>status de dados</small></div></article>
         </section>
 
         <div class="dashboard-grid">
@@ -71,7 +71,7 @@
             <section class="task-list" data-task-list></section>
           </article>
           <article class="card panel">
-            <div class="section-title section-title--inline"><h2>Atividade recente</h2><span>mock</span></div>
+            <div class="section-title section-title--inline"><h2>Atividade recente</h2><span>dados reais</span></div>
             <section class="activity-list" data-activity-list></section>
           </article>
         </div>
@@ -81,11 +81,11 @@
         <div class="page-heading">
           <span class="eyebrow">Gestao de alunos</span>
           <h1 id="students-title">Alunos e acompanhamento</h1>
-          <p>Cadastro, status, objetivo, treino ativo e proximas acoes. Depois isso vira tabela real com busca e filtros.</p>
+          <p>Cadastro, status, objetivo, treino ativo e proximas acoes.</p>
         </div>
 
         <form class="quick-form card" data-student-form>
-          <label>Nome <input name="name" value="Novo Aluno" required /></label>
+          <label>Nome <input name="name" placeholder="Nome completo do aluno" autocomplete="name" required /></label>
           <label>Objetivo
             <select name="goal">
               <option>Hipertrofia</option>
@@ -101,7 +101,8 @@
               <option>Inadimplente</option>
             </select>
           </label>
-          <button class="button" type="submit">Adicionar mock</button>
+          <button class="button" type="submit">Salvar aluno</button>
+          <p class="form-status" data-student-sync-status>Alunos salvos localmente e sincronizados com Supabase quando disponivel.</p>
         </form>
 
         <section class="student-list" data-student-list aria-label="Lista de alunos"></section>
@@ -121,7 +122,7 @@
           <div class="workout-builder__intro">
             <span class="eyebrow">Adicionar treino</span>
             <h2>Criar novo treino para um aluno</h2>
-            <p>Este e o ponto de entrada do personal para cadastrar uma prescricao. Por enquanto publica no armazenamento local compartilhado com o app do aluno; depois vira o builder completo com backend.</p>
+            <p>Cadastre uma prescricao e publique no app do aluno. O treino fica salvo localmente e sincroniza com Supabase quando a conexao estiver disponivel.</p>
             <aside class="workout-preview" data-workout-preview aria-live="polite">
               <div class="workout-preview__head">
                 <span class="surface-icon" aria-hidden="true" data-icon="dumbbell"></span>
@@ -143,7 +144,7 @@
             <label>Aluno
               <select name="student" data-student-options></select>
             </label>
-            <label>Nome do treino <input name="title" value="Treino A - Peito e triceps" required /></label>
+            <label>Nome do treino <input name="title" placeholder="Treino A - Peito e triceps" required /></label>
             <label>Modelo
               <select name="template">
                 <option>Hipertrofia 4x semana</option>
@@ -152,9 +153,7 @@
               </select>
             </label>
             <label>Exercicios iniciais
-              <textarea name="blocks">Supino reto 4x10
-Crucifixo 3x12
-Triceps corda 3x15</textarea>
+              <textarea name="blocks" placeholder="Supino reto 4x10&#10;Crucifixo 3x12&#10;Triceps corda 3x15" required></textarea>
             </label>
             <button class="button button--block" type="submit">Publicar treino para o aluno</button>
           </form>
@@ -168,7 +167,7 @@ Triceps corda 3x15</textarea>
         <div class="page-heading">
           <span class="eyebrow">Comunicacao</span>
           <h1 id="messages-title">Avisos, check-ins e lembretes</h1>
-          <p>Esqueleto para chat, notificacoes, lembretes de treino e respostas rapidas do personal.</p>
+          <p>Area reservada para conversas, avisos e lembretes. Ainda sem envio real nesta versao.</p>
         </div>
 
         <section class="message-grid">
@@ -177,18 +176,9 @@ Triceps corda 3x15</textarea>
             <section class="message-list" data-message-list></section>
           </article>
           <article class="card panel">
-            <h2>Enviar aviso em massa</h2>
-            <form class="quick-form quick-form--stack" data-broadcast-form>
-              <label>Publico
-                <select name="audience">
-                  <option>Todos os alunos ativos</option>
-                  <option>Alunos com check-in pendente</option>
-                  <option>Alunos inadimplentes</option>
-                </select>
-              </label>
-              <label>Mensagem <textarea name="message">Nao esqueca de registrar as cargas do treino de hoje.</textarea></label>
-              <button class="button button--block" type="submit">Salvar aviso mock</button>
-            </form>
+            <h2>Envio de avisos</h2>
+            <p>Este modulo precisa de autenticacao e notificacoes antes de ser liberado em producao.</p>
+            <button class="button button--quiet button--block" type="button" disabled>Em desenvolvimento</button>
           </article>
         </section>
       </section>
@@ -201,9 +191,9 @@ Triceps corda 3x15</textarea>
         </div>
 
         <section class="business-grid">
-          <article class="card panel"><span class="surface-icon" data-icon="calendar"></span><h2>Agenda</h2><p>Consultas, reavaliacoes e lembretes recorrentes.</p><span class="chip">Skeleton</span></article>
-          <article class="card panel"><span class="surface-icon" data-icon="wallet"></span><h2>Financeiro</h2><p>PIX, cartao, boleto, assinatura e inadimplencia.</p><span class="chip">Futuro</span></article>
-          <article class="card panel"><span class="surface-icon" data-icon="chart"></span><h2>Retencao</h2><p>Alunos em risco, renovacoes e cancelamentos.</p><span class="chip">IA depois</span></article>
+          <article class="card panel"><span class="surface-icon" data-icon="calendar"></span><h2>Agenda</h2><p>Consultas, reavaliacoes e lembretes recorrentes.</p><span class="chip">Nao configurado</span></article>
+          <article class="card panel"><span class="surface-icon" data-icon="wallet"></span><h2>Financeiro</h2><p>PIX, cartao, boleto, assinatura e inadimplencia.</p><span class="chip">Nao configurado</span></article>
+          <article class="card panel"><span class="surface-icon" data-icon="chart"></span><h2>Retencao</h2><p>Alunos em risco, renovacoes e cancelamentos.</p><span class="chip">Nao configurado</span></article>
         </section>
       </section>
 

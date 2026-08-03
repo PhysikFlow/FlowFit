@@ -192,14 +192,3 @@ create policy "workout_exercises_delete_demo"
 insert into public.brand_theme (coach_id, brand_name, tagline, accent, mode)
 values ('coach-demo', 'FlowFit', 'Seu treino, no seu ritmo', '#7667ff', 'dark')
 on conflict (coach_id) do nothing;
-
-insert into public.students (
-  id, coach_id, student_key, name, initials, goal, status, plan, workout,
-  adherence, next_action
-)
-values (
-  'student-lucas-andrade', 'coach-demo', 'lucas-andrade', 'Lucas Andrade',
-  'LA', 'Hipertrofia', 'Ativo', 'Performance', 'Treino B - Costas',
-  86, 'Acompanhar execucao'
-)
-on conflict (id) do nothing;

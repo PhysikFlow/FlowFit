@@ -270,8 +270,19 @@ export const workoutRepository = {
     try {
       const { error: studentError } = await client
         .from(STUDENTS_TABLE)
-        .upsert(toStudentRow(normalized), { onConflict: "id" });
+        .upsert(toStudentRow(normalized), { onConflict: "id", ignoreDuplicates: true });
       if (studentError) return { synced: false, error: studentError, workout: normalized };
+
+      const { error: studentWorkoutError } = await client
+        .from(STUDENTS_TABLE)
+        .update({
+          workout: `Treino ${normalized.code} - ${normalized.title}`,
+          next_action: "Ver treino publicado",
+          updated_at: normalized.updatedAt
+        })
+        .eq("id", normalized.studentId)
+        .eq("coach_id", DEMO_COACH_ID);
+      if (studentWorkoutError) return { synced: false, error: studentWorkoutError, workout: normalized };
 
       const { error: planError } = await client
         .from(PLANS_TABLE)

@@ -5,9 +5,9 @@ Esqueleto do painel usado pelo personal para administrar alunos, treinos, comuni
 ## Estado atual
 
 - HTML, CSS e JS puros.
-- Dados mockados em `js/data/mock-data.js`.
 - Navegacao por hash.
 - Sem login, pagamentos ou banco de dados obrigatorio.
+- Alunos e treinos persistidos em repositórios local-first com Supabase opcional.
 - Marca branca salva localmente e, se Supabase estiver configurado, sincronizada na nuvem.
 - Publicacao local-first de treinos para o app do aluno via `flowfit.published-workouts`, com sync Supabase opcional.
 - Reaproveita tokens, componentes e icones compartilhados do `appAluno`.
@@ -15,10 +15,10 @@ Esqueleto do painel usado pelo personal para administrar alunos, treinos, comuni
 ## Telas criadas
 
 - Dashboard: KPIs, prioridades e atividade recente.
-- Alunos: lista mockada, aderencia, objetivo, status e cadastro local em memoria.
+- Alunos: lista real, objetivo, status, treino ativo e cadastro persistido.
 - Treinos: modelos, treinos cadastrados, preview estruturado e publicacao local pelo bloco `Adicionar treino`.
-- Comunicacao: caixa de entrada e aviso em massa mockado.
-- Negocio: agenda, financeiro e retencao como blocos reservados.
+- Comunicacao: estado vazio ate autenticacao/notificacoes reais.
+- Negocio: agenda, financeiro e retencao como modulos nao configurados.
 - Aparencia: preview de marca branca com nome, frase, cor de destaque, modo claro/escuro e botao `Salvar e aplicar no app do aluno`.
 
 ## Proximos passos naturais

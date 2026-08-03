@@ -7,7 +7,7 @@ Base web, mobile-first e sem dependencias de framework para um produto de treino
 - `appAluno/`: primeira superficie funcional do produto.
 - `appAluno/js/data/`: dados mockados usados pela demonstracao do aluno e repositorios de dados.
 - `appAluno/js/core/`: adaptadores de plataforma, tema e estado local.
-- `appProfessor/`: painel administrativo do personal.
+- `appProfessor/`: painel administrativo do personal com alunos/treinos persistidos.
 - `supabase/schema.sql`: schema do backend Supabase para marca branca, alunos e treinos.
 - `PLANEJAMENTO.md`: arquitetura, fases e criterios de evolucao.
 
@@ -26,6 +26,7 @@ Base web, mobile-first e sem dependencias de framework para um produto de treino
 - Tema com cor de destaque, modo claro/escuro, nome da marca e frase curta configuraveis.
 - Sincronizacao de marca branca entre o painel do professor e o app do aluno via Supabase, com fallback local.
 - Preview estruturado no painel do professor antes de publicar um treino colado/digitado.
+- Painel do professor sem datasets falsos: alunos e treinos vêm de Supabase/localStorage.
 - Service Worker registrado apenas em navegador/PWA, nao em WebView/QML.
 - Ajustes de responsividade e foco visivel para controles do prototipo mobile.
 
