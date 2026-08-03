@@ -51,6 +51,23 @@
         <a href="#business" data-nav="business"><span data-icon="wallet"></span>Negócio</a>
         <a href="#appearance" data-nav="appearance"><span data-icon="palette"></span>Aparência</a>
       </nav>
+
+      <details class="sidebar-profile" data-coach-profile-panel>
+        <summary>
+          <span class="sidebar-profile__avatar" data-coach-initials>PF</span>
+          <span class="sidebar-profile__identity">
+            <strong data-coach-name>Personal</strong>
+            <small data-coach-headline>Perfil do personal</small>
+          </span>
+        </summary>
+        <form class="sidebar-profile__form" data-coach-profile-form>
+          <label>Nome público <input name="name" data-coach-name-input placeholder="Nome exibido no painel" required /></label>
+          <label>Descrição curta <input name="headline" data-coach-headline-input placeholder="Ex: Hipertrofia e emagrecimento" /></label>
+          <small class="sidebar-profile__email" data-coach-email>Entre para sincronizar</small>
+          <p class="form-status sidebar-profile__status" data-coach-profile-status>Edite como seu nome aparece no painel.</p>
+          <button class="button button--block" type="submit">Salvar perfil</button>
+        </form>
+      </details>
     </aside>
 
     <main class="admin-shell">
@@ -100,13 +117,7 @@
         </div>
       </section>
 
-      <section class="page" data-page="students" aria-labelledby="students-title">
-        <div class="page-heading">
-          <span class="eyebrow">Gestão de alunos</span>
-          <h1 id="students-title">Alunos e acompanhamento</h1>
-          <p>Cadastro, status, objetivo, treino ativo e próximas ações.</p>
-        </div>
-
+      <section class="page" data-page="students" aria-label="Alunos e acompanhamento">
         <form class="quick-form card" data-student-form>
           <label>Nome <input name="name" placeholder="Nome completo do aluno" autocomplete="name" required /></label>
           <label>Email de acesso <input type="email" name="email" placeholder="email do aluno" autocomplete="email" required /></label>
@@ -132,16 +143,7 @@
         <section class="student-list" data-student-list aria-label="Lista de alunos"></section>
       </section>
 
-      <section class="page" data-page="workouts" aria-labelledby="workouts-title">
-        <div class="page-heading page-heading--with-action">
-          <div>
-            <span class="eyebrow">Prescrição</span>
-            <h1 id="workouts-title">Treinos, modelos e ajustes</h1>
-            <p>Base para criar treinos A/B/C, duplicar modelos, trocar exercícios e futuramente importar planilhas/PDF.</p>
-          </div>
-          <a class="button" href="#add-workout" data-scroll-workout-form>Adicionar treino</a>
-        </div>
-
+      <section class="page" data-page="workouts" aria-label="Treinos, modelos e ajustes">
         <div class="workout-builder card" id="add-workout">
           <div class="workout-builder__intro">
             <span class="eyebrow">Adicionar treino</span>
@@ -187,13 +189,7 @@
         <section class="workout-list" data-workout-list aria-label="Treinos cadastrados"></section>
       </section>
 
-      <section class="page" data-page="messages" aria-labelledby="messages-title">
-        <div class="page-heading">
-          <span class="eyebrow">Comunicação</span>
-          <h1 id="messages-title">Avisos, check-ins e lembretes</h1>
-          <p>Área reservada para conversas, avisos e lembretes. Ainda sem envio real nesta versão.</p>
-        </div>
-
+      <section class="page" data-page="messages" aria-label="Avisos, check-ins e lembretes">
         <section class="message-grid">
           <article class="card panel">
             <h2>Caixa de entrada</h2>
@@ -207,13 +203,7 @@
         </section>
       </section>
 
-      <section class="page" data-page="business" aria-labelledby="business-title">
-        <div class="page-heading">
-          <span class="eyebrow">Negócio</span>
-          <h1 id="business-title">Agenda, pagamentos e retenção</h1>
-          <p>Painel reservado para consultas, reavaliações, mensalidades, inadimplência e relatórios.</p>
-        </div>
-
+      <section class="page" data-page="business" aria-label="Agenda, pagamentos e retenção">
         <section class="business-grid">
           <article class="card panel"><span class="surface-icon" data-icon="calendar"></span><h2>Agenda</h2><p>Consultas, reavaliações e lembretes recorrentes.</p><span class="chip">Não configurado</span></article>
           <article class="card panel"><span class="surface-icon" data-icon="wallet"></span><h2>Financeiro</h2><p>PIX, cartão, boleto, assinatura e inadimplência.</p><span class="chip">Não configurado</span></article>
@@ -221,13 +211,7 @@
         </section>
       </section>
 
-      <section class="page" data-page="appearance" aria-labelledby="appearance-title">
-        <div class="page-heading">
-          <span class="eyebrow">Marca branca</span>
-          <h1 id="appearance-title">Aparência do app do aluno</h1>
-          <p>Base para o personal mudar nome, frase, cor de destaque e modo claro/escuro.</p>
-        </div>
-
+      <section class="page" data-page="appearance" aria-label="Aparência do app do aluno">
         <section class="appearance-grid">
           <form class="theme-editor card" data-theme-form>
             <label>Nome da marca <input name="brand" value="FlowFit" data-brand-input /></label>

@@ -26,6 +26,10 @@ const authGate = document.querySelector("[data-auth-gate]");
 const authForm = document.querySelector("[data-auth-form]");
 const authStatus = document.querySelector("[data-auth-status]");
 const authUser = document.querySelector("[data-auth-user]");
+const coachProfileForm = document.querySelector("[data-coach-profile-form]");
+const coachProfileStatus = document.querySelector("[data-coach-profile-status]");
+const coachNameInput = document.querySelector("[data-coach-name-input]");
+const coachHeadlineInput = document.querySelector("[data-coach-headline-input]");
 
 let toastTimer;
 let themeSaveTimer;
@@ -64,6 +68,14 @@ const escapeHtml = (value) => String(value ?? "")
   .replace(/"/g, "&quot;")
   .replace(/'/g, "&#039;");
 
+const initialsFromName = (value) => {
+  const parts = String(value || "Personal")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts.at(-1)[0]}` : parts[0]?.slice(0, 2) || "PF").toUpperCase();
+};
+
 const setStatus = (target, message, state = "") => {
   if (!target) return;
   target.textContent = message;
@@ -75,6 +87,7 @@ const setThemeStatus = (message, state = "") => setStatus(themeStatus, message, 
 const setStudentSyncStatus = (message, state = "") => setStatus(studentSyncStatus, message, state);
 const setWorkoutSyncStatus = (message, state = "") => setStatus(workoutSyncStatus, message, state);
 const setAuthStatus = (message, state = "") => setStatus(authStatus, message, state);
+const setCoachProfileStatus = (message, state = "") => setStatus(coachProfileStatus, message, state);
 
 const getAuthRedirectUrl = () => {
   const url = new URL(window.location.href);
@@ -239,6 +252,24 @@ const renderIcons = () => {
     target.innerHTML = svgIcon(target.dataset.icon);
   });
   setHtml("[data-brand-icon]", svgIcon("dumbbell"));
+};
+
+const renderCoachProfile = () => {
+  const profile = authContext?.profile;
+  const fallbackName = authContext?.user?.user_metadata?.display_name || authContext?.email || "Personal";
+  const name = profile?.name || fallbackName;
+  const headline = profile?.headline || "Perfil do personal";
+  const email = authContext?.email || "Entre para sincronizar";
+
+  setText("[data-coach-name]", name);
+  setText("[data-coach-headline]", headline);
+  setText("[data-coach-email]", email);
+  setText("[data-coach-initials]", initialsFromName(name));
+  setText("[data-auth-user]", authContext?.email || "");
+  if (authUser) authUser.title = authContext?.email || "";
+
+  if (coachNameInput && document.activeElement !== coachNameInput) coachNameInput.value = profile?.name || "";
+  if (coachHeadlineInput && document.activeElement !== coachHeadlineInput) coachHeadlineInput.value = profile?.headline || "";
 };
 
 const renderTasks = () => {
@@ -479,6 +510,7 @@ const applyTheme = ({ brand, tagline, accent, mode } = {}) => {
 
 const renderAll = () => {
   renderIcons();
+  renderCoachProfile();
   renderStudents();
   renderWorkouts();
   renderMessages();
@@ -585,6 +617,43 @@ document.querySelector("[data-reset-theme]")?.addEventListener("click", () => {
   applyTheme({ mode: DEFAULT_BRAND_THEME.mode });
   saveThemeNow();
   showToast("Tema restaurado.");
+});
+
+coachProfileForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!authContext?.user) {
+    showToast("Entre como professor antes de editar o perfil.");
+    setAuthLocked(true);
+    return;
+  }
+
+  const data = Object.fromEntries(new FormData(event.currentTarget));
+  setCoachProfileStatus("Salvando perfil...", "");
+  const result = await authRepository.updateProfile({
+    name: data.name,
+    headline: data.headline
+  });
+
+  if (!result.synced || !result.profile) {
+    setCoachProfileStatus(result.error?.message || "Não foi possível sincronizar o perfil.", "warning");
+    showToast("Perfil não sincronizado.");
+    return;
+  }
+
+  authContext = {
+    ...authContext,
+    profile: {
+      ...authContext.profile,
+      ...result.profile,
+      headline: result.partial ? authContext.profile?.headline || "" : result.profile.headline
+    }
+  };
+  renderCoachProfile();
+  setCoachProfileStatus(
+    result.partial ? "Nome salvo. Rode o schema.sql atualizado para salvar a descrição curta." : "Perfil sincronizado com Supabase.",
+    result.partial ? "warning" : "synced"
+  );
+  showToast("Perfil atualizado.");
 });
 
 document.addEventListener("click", (event) => {

@@ -18,6 +18,7 @@ create table if not exists public.profiles (
   user_id    uuid primary key references auth.users(id) on delete cascade,
   role       text not null check (role in ('coach', 'student')),
   name       text not null,
+  headline   text not null default 'Personal trainer',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -83,6 +84,9 @@ create table if not exists public.workout_exercises (
 );
 
 -- Migração segura para bancos que já tinham o schema piloto antigo.
+alter table public.profiles
+  add column if not exists headline text not null default 'Personal trainer';
+
 alter table public.students
   add column if not exists student_user_id uuid references auth.users(id) on delete set null,
   add column if not exists email text;

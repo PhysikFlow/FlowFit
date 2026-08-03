@@ -1,6 +1,8 @@
 import { getSupabase } from "../../core/supabase.js";
 
 const PROFILES_TABLE = "profiles";
+const PROFILE_COLUMNS_BASE = "user_id, role, name, created_at, updated_at";
+const PROFILE_COLUMNS_EXTENDED = "user_id, role, name, headline, created_at, updated_at";
 
 const normalizeEmail = (value) => String(value ?? "").trim().toLowerCase();
 
@@ -23,9 +25,15 @@ const profileFromRow = (row) => row ? {
   userId: row.user_id,
   role: row.role,
   name: row.name,
+  headline: row.headline || "",
   createdAt: row.created_at,
   updatedAt: row.updated_at
 } : null;
+
+const isMissingProfileColumn = (error) => {
+  const message = String(error?.message || "");
+  return error?.code === "42703" || /column .* does not exist/i.test(message);
+};
 
 export const authRepository = {
   async getClient() {
@@ -49,11 +57,21 @@ export const authRepository = {
     const user = await this.getUser();
     if (!client || !user) return null;
 
-    const { data, error } = await client
+    let { data, error } = await client
       .from(PROFILES_TABLE)
-      .select("user_id, role, name, created_at, updated_at")
+      .select(PROFILE_COLUMNS_EXTENDED)
       .eq("user_id", user.id)
       .maybeSingle();
+
+    if (isMissingProfileColumn(error)) {
+      const fallback = await client
+        .from(PROFILES_TABLE)
+        .select(PROFILE_COLUMNS_BASE)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) return null;
     return profileFromRow(data);
@@ -70,15 +88,7 @@ export const authRepository = {
 
     if (existing) {
       if (existing.role !== safeRole) return { synced: true, profile: existing, roleMismatch: true };
-
-      const { data, error } = await client
-        .from(PROFILES_TABLE)
-        .update({ name: safeName, updated_at: new Date().toISOString() })
-        .eq("user_id", user.id)
-        .select("user_id, role, name, created_at, updated_at")
-        .maybeSingle();
-
-      return { synced: !error, error, profile: profileFromRow(data) || existing };
+      return { synced: true, profile: existing };
     }
 
     const { data, error } = await client
@@ -89,10 +99,45 @@ export const authRepository = {
         name: safeName,
         updated_at: new Date().toISOString()
       })
-      .select("user_id, role, name, created_at, updated_at")
+      .select(PROFILE_COLUMNS_BASE)
       .maybeSingle();
 
     return { synced: !error, error, profile: profileFromRow(data) };
+  },
+
+  async updateProfile({ name, headline } = {}) {
+    const client = await getSupabase();
+    const user = await this.getUser();
+    if (!client || !user) return { synced: false, profile: null, reason: "not-authenticated" };
+
+    const safeName = normalizeName(name, user.email || "Usuário");
+    const safeHeadline = String(headline ?? "").trim();
+    const now = new Date().toISOString();
+    let { data, error } = await client
+      .from(PROFILES_TABLE)
+      .update({
+        name: safeName,
+        headline: safeHeadline,
+        updated_at: now
+      })
+      .eq("user_id", user.id)
+      .select(PROFILE_COLUMNS_EXTENDED)
+      .maybeSingle();
+
+    let partial = false;
+    if (isMissingProfileColumn(error)) {
+      partial = true;
+      const fallback = await client
+        .from(PROFILES_TABLE)
+        .update({ name: safeName, updated_at: now })
+        .eq("user_id", user.id)
+        .select(PROFILE_COLUMNS_BASE)
+        .maybeSingle();
+      data = fallback.data;
+      error = fallback.error;
+    }
+
+    return { synced: !error, error, partial, profile: profileFromRow(data) };
   },
 
   async signIn({ email, password, role, name } = {}) {
