@@ -235,5 +235,83 @@
     </main>
 
     <div class="toast" role="status" aria-live="polite" data-toast></div>
+    <script>
+      (() => {
+        window.FlowFitProfessorErrors = window.FlowFitProfessorErrors || [];
+        const rememberError = (error) => {
+          const message = String(error?.message || error?.reason?.message || error || "Erro desconhecido").slice(0, 180);
+          window.FlowFitProfessorErrors.push(message);
+          document.body?.setAttribute("data-professor-error", message);
+        };
+
+        window.addEventListener("error", (event) => rememberError(`${event.message} @ ${event.filename}:${event.lineno}:${event.colno}`));
+        window.addEventListener("unhandledrejection", (event) => rememberError(event.reason));
+
+        const pageTitles = {
+          dashboard: "Dashboard",
+          students: "Alunos",
+          workouts: "Treinos",
+          messages: "Comunicacao",
+          business: "Negocio",
+          appearance: "Aparencia"
+        };
+
+        const navigate = (name, updateHash = true) => {
+          const pages = [...document.querySelectorAll("[data-page]")];
+          const destination = pages.some((page) => page.dataset.page === name) ? name : "dashboard";
+          pages.forEach((page) => page.classList.toggle("is-active", page.dataset.page === destination));
+          document.querySelectorAll("[data-nav]").forEach((item) => {
+            const active = item.dataset.nav === destination;
+            item.classList.toggle("is-active", active);
+            if (active) item.setAttribute("aria-current", "page");
+            else item.removeAttribute("aria-current");
+          });
+          const title = document.querySelector("[data-page-title]");
+          if (title) title.textContent = pageTitles[destination] || "Painel";
+          if (updateHash) history.replaceState(null, "", `#${destination}`);
+        };
+
+        const showFallbackNotice = () => {
+          const lastError = window.FlowFitProfessorErrors[window.FlowFitProfessorErrors.length - 1];
+          const message = lastError
+            ? `Modo basico: o painel interativo nao carregou. Erro: ${lastError}`
+            : "Modo basico: o painel interativo nao carregou. Abra por servidor local/GitHub Pages e recarregue.";
+          document.querySelectorAll(".form-status").forEach((status) => {
+            status.textContent = message;
+            status.classList.add("is-warning");
+          });
+          const toast = document.querySelector("[data-toast]");
+          if (!toast) return;
+          toast.textContent = message;
+          toast.classList.add("is-visible");
+          window.setTimeout(() => toast.classList.remove("is-visible"), 4200);
+        };
+
+        const installFallback = () => {
+          if (window.FlowFitProfessorReady) return;
+          document.body.dataset.professorFallback = "true";
+          document.querySelectorAll("[data-nav]").forEach((item) => item.addEventListener("click", (event) => {
+            event.preventDefault();
+            navigate(item.dataset.nav);
+          }));
+          document.querySelectorAll("[data-nav-jump]").forEach((button) => button.addEventListener("click", () => {
+            navigate(button.dataset.navJump);
+            if (button.hasAttribute("data-focus-workout-form")) {
+              window.setTimeout(() => document.querySelector("[data-workout-form]")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+            }
+          }));
+          document.querySelector("[data-scroll-workout-form]")?.addEventListener("click", (event) => {
+            event.preventDefault();
+            document.querySelector("[data-workout-form]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+          navigate(location.hash.slice(1) || "dashboard", false);
+          showFallbackNotice();
+        };
+
+        document.addEventListener("DOMContentLoaded", () => {
+          window.setTimeout(installFallback, 900);
+        });
+      })();
+    </script>
   </body>
 </html>

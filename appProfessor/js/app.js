@@ -2,7 +2,7 @@ import { svgIcon } from "../../appAluno/js/core/icons.js";
 import { DEFAULT_BRAND_THEME, applyThemeTokens, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js";
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js";
-import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, studentKeyFromName, workoutRepository } from "../../appAluno/js/data/repositories/workout-repository.js";
+import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutRepository } from "../../appAluno/js/data/repositories/workout-repository.js";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -27,6 +27,19 @@ let themeSaveTimer;
 let students = studentRepository.listStudents();
 let workouts = workoutRepository.listPublishedWorkouts();
 let dataStatus = "Local";
+
+const $ = (selector) => document.querySelector(selector);
+
+const setText = (selector, value) => {
+  const target = $(selector);
+  if (target) target.textContent = value;
+};
+
+const setHtml = (selector, value) => {
+  const target = $(selector);
+  if (target) target.innerHTML = value;
+  return target;
+};
 
 const pageTitles = {
   dashboard: "Dashboard",
@@ -56,17 +69,17 @@ const setStudentSyncStatus = (message, state = "") => setStatus(studentSyncStatu
 const setWorkoutSyncStatus = (message, state = "") => setStatus(workoutSyncStatus, message, state);
 
 const readTheme = () => ({
-  brandName: brandInput.value.trim() || "FlowFit",
-  tagline: taglineInput.value.trim() || "Seu treino, no seu ritmo",
-  accent: accentInput.value,
-  mode: document.documentElement.dataset.mode
+  brandName: brandInput?.value?.trim() || DEFAULT_BRAND_THEME.brandName,
+  tagline: taglineInput?.value?.trim() || DEFAULT_BRAND_THEME.tagline,
+  accent: accentInput?.value || DEFAULT_BRAND_THEME.accent,
+  mode: document.documentElement.dataset.mode || DEFAULT_BRAND_THEME.mode
 });
 
 const fillThemeInputs = (theme) => {
   const normalized = normalizeBrandTheme(theme);
-  brandInput.value = normalized.brandName;
-  taglineInput.value = normalized.tagline;
-  accentInput.value = normalized.accent;
+  if (brandInput) brandInput.value = normalized.brandName;
+  if (taglineInput) taglineInput.value = normalized.tagline;
+  if (accentInput) accentInput.value = normalized.accent;
   return normalized;
 };
 
@@ -89,6 +102,7 @@ const queueThemeSave = () => {
 };
 
 const showToast = (message) => {
+  if (!toast) return;
   clearTimeout(toastTimer);
   toast.textContent = message;
   toast.classList.add("is-visible");
@@ -104,7 +118,7 @@ const navigate = (name, updateHash = true) => {
     if (active) item.setAttribute("aria-current", "page");
     else item.removeAttribute("aria-current");
   });
-  title.textContent = pageTitles[destination] || "Painel";
+  if (title) title.textContent = pageTitles[destination] || "Painel";
   if (updateHash) history.replaceState(null, "", `#${destination}`);
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
@@ -190,11 +204,12 @@ const renderIcons = () => {
   document.querySelectorAll("[data-icon]").forEach((target) => {
     target.innerHTML = svgIcon(target.dataset.icon);
   });
-  document.querySelector("[data-brand-icon]").innerHTML = svgIcon("dumbbell");
+  setHtml("[data-brand-icon]", svgIcon("dumbbell"));
 };
 
 const renderTasks = () => {
   const target = document.querySelector("[data-task-list]");
+  if (!target) return;
   const withoutWorkout = students.filter((student) => !getPublishedWorkoutForStudent(student));
   const checkinPending = students.filter((student) => student.status === "Aguardando check-in");
   const paymentPending = students.filter((student) => student.status === "Inadimplente");
@@ -228,6 +243,7 @@ const renderTasks = () => {
 
 const renderActivities = () => {
   const target = document.querySelector("[data-activity-list]");
+  if (!target) return;
   const activities = [
     ...workouts.map((workout) => ({
       icon: "dumbbell",
@@ -261,10 +277,10 @@ const renderActivities = () => {
 const renderDashboard = () => {
   const activeStudents = students.filter((student) => student.status !== "Inadimplente").length;
   const pendingCount = students.filter((student) => student.status !== "Ativo" || !getPublishedWorkoutForStudent(student)).length;
-  document.querySelector("[data-kpi-students]").textContent = activeStudents;
-  document.querySelector("[data-kpi-workouts]").textContent = workouts.length;
-  document.querySelector("[data-kpi-pending]").textContent = pendingCount;
-  document.querySelector("[data-kpi-sync]").textContent = dataStatus;
+  setText("[data-kpi-students]", activeStudents);
+  setText("[data-kpi-workouts]", workouts.length);
+  setText("[data-kpi-pending]", pendingCount);
+  setText("[data-kpi-sync]", dataStatus);
   renderTasks();
   renderActivities();
 };
@@ -272,6 +288,7 @@ const renderDashboard = () => {
 const renderStudentOptions = () => {
   const select = document.querySelector("[data-student-options]");
   const submitButton = workoutForm?.querySelector("button[type='submit']");
+  if (!select) return;
   if (!students.length) {
     select.innerHTML = `<option value="">Cadastre um aluno primeiro</option>`;
     select.disabled = true;
@@ -288,6 +305,11 @@ const renderStudentOptions = () => {
 
 const renderStudents = () => {
   const target = document.querySelector("[data-student-list]");
+  if (!target) {
+    renderStudentOptions();
+    renderWorkoutPreview();
+    return;
+  }
   if (!students.length) {
     target.innerHTML = `<article class="empty-state card"><strong>Nenhum aluno cadastrado.</strong><small>Use o formulario acima para criar o primeiro aluno real.</small></article>`;
     renderStudentOptions();
@@ -372,7 +394,8 @@ const renderWorkoutPreview = () => {
 
 const renderWorkouts = () => {
   const target = document.querySelector("[data-workout-list]");
-  document.querySelector("[data-workout-count]").textContent = `${workouts.length} itens`;
+  setText("[data-workout-count]", `${workouts.length} itens`);
+  if (!target) return;
   if (!workouts.length) {
     target.innerHTML = `<article class="empty-state card"><strong>Nenhum treino publicado.</strong><small>Crie um treino para um aluno para iniciar a operacao.</small></article>`;
     return;
@@ -402,20 +425,21 @@ const renderWorkouts = () => {
 
 const renderMessages = () => {
   const target = document.querySelector("[data-message-list]");
+  if (!target) return;
   target.innerHTML = `<article class="empty-state card"><strong>Nenhuma mensagem conectada.</strong><small>O modulo de comunicacao precisa de autenticacao antes de receber conversas reais.</small></article>`;
 };
 
 const applyTheme = ({ brand, tagline, accent, mode } = {}) => {
   const nextTheme = applyThemeTokens({
-    brandName: brand ?? brandInput.value,
-    tagline: tagline ?? taglineInput.value,
-    accent: accent ?? accentInput.value,
+    brandName: brand ?? brandInput?.value ?? DEFAULT_BRAND_THEME.brandName,
+    tagline: tagline ?? taglineInput?.value ?? DEFAULT_BRAND_THEME.tagline,
+    accent: accent ?? accentInput?.value ?? DEFAULT_BRAND_THEME.accent,
     mode: mode ?? document.documentElement.dataset.mode
   });
   document.title = `${nextTheme.brandName} - Professor`;
   document.querySelectorAll("[data-brand-name]").forEach((item) => { item.textContent = nextTheme.brandName; });
-  document.querySelector("[data-preview-brand]").textContent = nextTheme.brandName;
-  document.querySelector("[data-preview-tagline]").textContent = nextTheme.tagline;
+  setText("[data-preview-brand]", nextTheme.brandName);
+  setText("[data-preview-tagline]", nextTheme.tagline);
   modeButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.modeChoice === nextTheme.mode));
 };
 
@@ -438,12 +462,12 @@ jumpButtons.forEach((button) => button.addEventListener("click", () => {
   if (button.hasAttribute("data-focus-workout-form")) focusWorkoutForm();
 }));
 
-document.querySelector("[data-scroll-workout-form]").addEventListener("click", (event) => {
+document.querySelector("[data-scroll-workout-form]")?.addEventListener("click", (event) => {
   event.preventDefault();
   focusWorkoutForm();
 });
 
-document.querySelector("[data-student-form]").addEventListener("submit", async (event) => {
+document.querySelector("[data-student-form]")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const student = createStudentFromProfessorForm(Object.fromEntries(new FormData(event.currentTarget)));
   const savedStudent = studentRepository.saveStudent(student);
@@ -458,9 +482,9 @@ document.querySelector("[data-student-form]").addEventListener("submit", async (
   );
   if (result.synced) showToast("Aluno sincronizado.");
   event.currentTarget.reset();
-}));
+});
 
-workoutForm.addEventListener("submit", async (event) => {
+workoutForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!students.length) {
     showToast("Cadastre um aluno antes de publicar treino.");
@@ -501,17 +525,17 @@ workoutForm.addEventListener("submit", async (event) => {
   );
   if (result.synced) showToast("Treino sincronizado.");
   renderWorkoutPreview();
-}));
+});
 
-workoutForm.addEventListener("input", renderWorkoutPreview);
-workoutForm.addEventListener("change", renderWorkoutPreview);
+workoutForm?.addEventListener("input", renderWorkoutPreview);
+workoutForm?.addEventListener("change", renderWorkoutPreview);
 
-brandInput.addEventListener("input", () => { applyTheme(); queueThemeSave(); });
-taglineInput.addEventListener("input", () => { applyTheme(); queueThemeSave(); });
-accentInput.addEventListener("input", () => { applyTheme(); queueThemeSave(); });
+brandInput?.addEventListener("input", () => { applyTheme(); queueThemeSave(); });
+taglineInput?.addEventListener("input", () => { applyTheme(); queueThemeSave(); });
+accentInput?.addEventListener("input", () => { applyTheme(); queueThemeSave(); });
 modeButtons.forEach((button) => button.addEventListener("click", () => { applyTheme({ mode: button.dataset.modeChoice }); queueThemeSave(); }));
-document.querySelector("[data-save-theme]").addEventListener("click", () => saveThemeNow());
-document.querySelector("[data-reset-theme]").addEventListener("click", () => {
+document.querySelector("[data-save-theme]")?.addEventListener("click", () => saveThemeNow());
+document.querySelector("[data-reset-theme]")?.addEventListener("click", () => {
   fillThemeInputs(DEFAULT_BRAND_THEME);
   applyTheme({ mode: DEFAULT_BRAND_THEME.mode });
   saveThemeNow();
@@ -524,7 +548,8 @@ document.addEventListener("click", (event) => {
     const student = students.find((item) => item.id === studentAction.dataset.studentAction);
     navigate("workouts");
     if (student) {
-      document.querySelector("[data-student-options]").value = student.name;
+      const studentSelect = document.querySelector("[data-student-options]");
+      if (studentSelect) studentSelect.value = student.name;
       renderWorkoutPreview();
     }
     focusWorkoutForm();
@@ -547,12 +572,16 @@ window.addEventListener("storage", (event) => {
   }
 });
 
-renderAll();
-navigate(location.hash.slice(1) || "dashboard", false);
-refreshStudents({ silent: true });
-refreshPublishedWorkouts({ silent: true });
+const boot = async () => {
+  renderAll();
+  navigate(location.hash.slice(1) || "dashboard", false);
+  window.FlowFitProfessorReady = true;
 
-(async () => {
+  await Promise.allSettled([
+    refreshStudents({ silent: true }),
+    refreshPublishedWorkouts({ silent: true })
+  ]);
+
   const remote = await themeRepository.fetchBrandTheme();
   if (!remote) {
     setThemeStatus("Sem tema publicado ainda. Use Salvar e aplicar para criar o primeiro.", "");
@@ -561,4 +590,13 @@ refreshPublishedWorkouts({ silent: true });
   fillThemeInputs(remote);
   applyTheme({ mode: remote.mode });
   setThemeStatus("Tema publicado carregado para edicao.", "synced");
-})();
+};
+
+boot().catch((error) => {
+  console.error("Falha ao iniciar appProfessor", error);
+  window.FlowFitProfessorErrors = window.FlowFitProfessorErrors || [];
+  window.FlowFitProfessorErrors.push(String(error?.message || error));
+  document.body?.setAttribute("data-professor-error", String(error?.message || error).slice(0, 180));
+  window.FlowFitProfessorReady = false;
+  showToast("Falha ao iniciar painel. Recarregue a pagina.");
+});
