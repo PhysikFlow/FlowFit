@@ -4,10 +4,28 @@ import { LEGACY_REMOTE_THEME_KEY, REMOTE_THEME_KEY, normalizeBrandTheme } from "
 import { authRepository } from "./auth-repository.js";
 
 const TABLE = "brand_theme";
+const THEME_COLUMNS_BASE = "brand_name, tagline, accent, mode";
+const THEME_COLUMNS_EXTENDED = [
+  THEME_COLUMNS_BASE,
+  "background_color",
+  "surface_color",
+  "text_color",
+  "font_preset",
+  "radius_preset",
+  "background_style"
+].join(", ");
 
 // O app usa camelCase; o banco usa snake_case. A conversao fica confinada aqui.
 // O cache local guarda o shape do app (camelCase), entao aceitamos ambos.
 const toAppTheme = (row) => row ? normalizeBrandTheme(row) : null;
+
+const isMissingThemeColumn = (error) => {
+  const message = String(error?.message || "");
+  return error?.code === "42703"
+    || error?.code === "PGRST204"
+    || /column .* does not exist/i.test(message)
+    || /could not find .* column/i.test(message);
+};
 
 const readCachedTheme = () => {
   const current = Platform.storage.get(REMOTE_THEME_KEY);
@@ -37,12 +55,23 @@ export const themeRepository = {
       try {
         let query = client
           .from(TABLE)
-          .select("brand_name, tagline, accent, mode")
+          .select(THEME_COLUMNS_EXTENDED)
           .limit(1);
 
         if (authContext?.role === "coach") query = query.eq("coach_id", authContext.coachId);
 
-        const { data, error } = await query;
+        let { data, error } = await query;
+        if (isMissingThemeColumn(error)) {
+          query = client
+            .from(TABLE)
+            .select(THEME_COLUMNS_BASE)
+            .limit(1);
+
+          if (authContext?.role === "coach") query = query.eq("coach_id", authContext.coachId);
+          const fallback = await query;
+          data = fallback.data;
+          error = fallback.error;
+        }
         const row = Array.isArray(data) ? data[0] : data;
         if (!error && row) {
           const theme = toAppTheme(row);
@@ -65,17 +94,42 @@ export const themeRepository = {
       return { synced: false, reason: "not-authenticated-as-coach", theme: normalized };
     }
     try {
-      const { error } = await client
+      const payload = {
+        coach_id: authContext.coachId,
+        brand_name: normalized.brandName,
+        tagline: normalized.tagline,
+        accent: normalized.accent,
+        mode: normalized.mode,
+        background_color: normalized.backgroundColor,
+        surface_color: normalized.surfaceColor,
+        text_color: normalized.textColor,
+        font_preset: normalized.fontPreset,
+        radius_preset: normalized.radiusPreset,
+        background_style: normalized.backgroundStyle,
+        updated_at: new Date().toISOString()
+      };
+
+      let { error } = await client
         .from(TABLE)
-        .upsert({
+        .upsert(payload, { onConflict: "coach_id" });
+
+      let partial = false;
+      if (isMissingThemeColumn(error)) {
+        partial = true;
+        const fallback = await client
+          .from(TABLE)
+          .upsert({
           coach_id: authContext.coachId,
           brand_name: normalized.brandName,
           tagline: normalized.tagline,
           accent: normalized.accent,
           mode: normalized.mode,
           updated_at: new Date().toISOString()
-        }, { onConflict: "coach_id" });
-      return { synced: !error, error, theme: normalized };
+          }, { onConflict: "coach_id" });
+        error = fallback.error;
+      }
+
+      return { synced: !error, error, partial, theme: normalized };
     } catch (error) {
       return { synced: false, error, theme: normalized };
     }

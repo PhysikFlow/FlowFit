@@ -205,9 +205,66 @@
       <section class="page" data-page="appearance" aria-label="Aparência do app do aluno">
         <section class="appearance-grid">
           <form class="theme-editor card" data-theme-form>
-            <label>Nome da marca <input name="brand" value="FlowFit" data-brand-input /></label>
-            <label>Frase curta <input name="tagline" value="Seu treino, no seu ritmo" data-tagline-input /></label>
-            <label>Cor de destaque <input type="color" name="accent" value="#7667ff" data-accent-input /></label>
+            <div class="theme-editor__section">
+              <span class="eyebrow">Identidade</span>
+              <label>Nome da marca <input name="brand" value="FlowFit" data-brand-input /></label>
+              <label>Frase curta <input name="tagline" value="Seu treino, no seu ritmo" data-tagline-input /></label>
+            </div>
+
+            <div class="theme-editor__section">
+              <span class="eyebrow">Cores</span>
+              <div class="theme-editor__colors">
+                <label>Cor de destaque <input type="color" name="accent" value="#7667ff" data-accent-input /></label>
+                <label>Fundo do app <input type="color" name="background" value="#090b10" data-background-input /></label>
+                <label>Cards/superfícies <input type="color" name="surface" value="#151922" data-surface-input /></label>
+                <label>Texto principal <input type="color" name="text" value="#f7f7fa" data-text-input /></label>
+              </div>
+            </div>
+
+            <div class="theme-editor__section">
+              <span class="eyebrow">Tipografia e forma</span>
+              <label>Fonte
+                <select name="font" data-font-input>
+                  <option value="system">Sistema / Inter</option>
+                  <option value="rounded">Arredondada</option>
+                  <option value="geometric">Geométrica</option>
+                  <option value="editorial">Editorial serifada</option>
+                  <option value="mono">Técnica mono</option>
+                </select>
+              </label>
+              <label>Arredondamento
+                <select name="radius" data-radius-input>
+                  <option value="soft">Suave</option>
+                  <option value="sharp">Mais reto</option>
+                  <option value="round">Bem redondo</option>
+                  <option value="pill">Pílula</option>
+                </select>
+              </label>
+              <label>Estilo de fundo
+                <select name="backgroundStyle" data-background-style-input>
+                  <option value="aurora">Aurora suave</option>
+                  <option value="spotlight">Spotlight</option>
+                  <option value="diagonal">Diagonal</option>
+                  <option value="mesh">Mesh</option>
+                  <option value="none">Cor sólida</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="theme-editor__section">
+              <span class="eyebrow">Assets locais</span>
+              <label class="file-picker">Logo do app
+                <input type="file" accept="image/*" data-logo-input />
+                <small data-logo-file-name>Nenhum arquivo selecionado</small>
+              </label>
+              <label class="file-picker">Foto do personal
+                <input type="file" accept="image/*" data-photo-input />
+                <small data-photo-file-name>Nenhum arquivo selecionado</small>
+              </label>
+              <p class="asset-note">Logo e foto ficam só neste navegador por enquanto. Não são enviados para Supabase nem para Storage.</p>
+              <button class="button button--quiet button--block" type="button" data-clear-brand-assets>Limpar logo/foto local</button>
+            </div>
+
             <div class="mode-switch" aria-label="Modo de cor">
               <button class="is-active" type="button" data-mode-choice="dark">Escuro</button>
               <button type="button" data-mode-choice="light">Claro</button>
@@ -219,10 +276,22 @@
 
           <article class="student-preview card">
             <span class="eyebrow">Preview aluno</span>
-            <h2 data-preview-brand>FlowFit</h2>
-            <p data-preview-tagline>Seu treino, no seu ritmo</p>
             <div class="preview-phone">
               <div class="preview-phone__bar"></div>
+              <div class="preview-brand-strip">
+                <span class="preview-logo" data-preview-logo>FF</span>
+                <div>
+                  <h2 data-preview-brand>FlowFit</h2>
+                  <p data-preview-tagline>Seu treino, no seu ritmo</p>
+                </div>
+              </div>
+              <div class="preview-coach-card">
+                <span data-preview-photo-wrap><span class="avatar" data-preview-photo-fallback>PF</span></span>
+                <div>
+                  <strong data-coach-name>Personal</strong>
+                  <small data-coach-headline>Perfil do personal</small>
+                </div>
+              </div>
               <strong>Treino B</strong>
               <small>Costas e bíceps - 52 min</small>
               <div class="progress-track"><span style="--progress: 75%"></span></div>

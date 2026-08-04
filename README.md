@@ -20,7 +20,8 @@ Base web, mobile-first e sem dependencias de framework para um produto de treino
 - RLS habilitado para `profiles`, `brand_theme`, `students`, `workout_plans` e `workout_exercises`.
 - Dados anonimos/mockados removidos do fluxo principal do app do aluno.
 - Check-ins, series, cargas, repeticoes, historico e lembretes ainda ficam locais no aparelho.
-- Marca branca sincronizada pelo professor e lida pelo aluno autorizado.
+- Marca branca sincronizada pelo professor e lida pelo aluno autorizado: nome, frase, cores, fonte, arredondamento e estilo de fundo.
+- Logo e foto do personal existem como preview/cache local por enquanto; ainda nao usam Supabase Storage.
 - Service Worker atualizado para evitar cache antigo no GitHub Pages.
 
 ## GitHub Pages + Supabase Auth

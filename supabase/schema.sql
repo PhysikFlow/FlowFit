@@ -29,6 +29,12 @@ create table if not exists public.brand_theme (
   tagline    text not null default 'Seu treino, no seu ritmo',
   accent     text not null default '#7667ff',
   mode       text not null default 'dark',
+  background_color text not null default '#090b10',
+  surface_color    text not null default '#151922',
+  text_color       text not null default '#f7f7fa',
+  font_preset      text not null default 'system',
+  radius_preset    text not null default 'soft',
+  background_style text not null default 'aurora',
   updated_at timestamptz not null default now()
 );
 
@@ -86,6 +92,14 @@ create table if not exists public.workout_exercises (
 -- Migração segura para bancos que já tinham o schema piloto antigo.
 alter table public.profiles
   add column if not exists headline text not null default 'Personal trainer';
+
+alter table public.brand_theme
+  add column if not exists background_color text not null default '#090b10',
+  add column if not exists surface_color text not null default '#151922',
+  add column if not exists text_color text not null default '#f7f7fa',
+  add column if not exists font_preset text not null default 'system',
+  add column if not exists radius_preset text not null default 'soft',
+  add column if not exists background_style text not null default 'aurora';
 
 alter table public.students
   add column if not exists student_user_id uuid references auth.users(id) on delete set null,

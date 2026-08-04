@@ -2,7 +2,7 @@ import { Platform } from "./core/platform.js";
 import { Store } from "./core/store.js";
 import { Theme } from "./core/theme.js";
 import { svgIcon } from "./core/icons.js";
-import { LEGACY_REMOTE_THEME_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js";
+import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js";
 import { authRepository } from "./data/repositories/auth-repository.js";
 import { studentRepository } from "./data/repositories/student-repository.js";
 import { themeRepository } from "./data/repositories/theme-repository.js";
@@ -177,6 +177,31 @@ const syncThemeControls = () => {
   document.querySelectorAll("[data-brand-name]").forEach((item) => { item.textContent = Theme.value.brandName; });
   document.querySelectorAll("[data-brand-tagline]").forEach((item) => { item.textContent = Theme.value.tagline; });
   modeButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.mode === Theme.value.mode));
+  syncBrandAssets();
+};
+
+const setImageOrText = (target, dataUrl, fallback, alt) => {
+  if (!target) return;
+  if (!dataUrl) {
+    target.textContent = fallback;
+    return;
+  }
+
+  const image = document.createElement("img");
+  image.src = dataUrl;
+  image.alt = alt;
+  target.replaceChildren(image);
+};
+
+const syncBrandAssets = () => {
+  const assets = Platform.storage.get(LOCAL_BRAND_ASSETS_KEY, {});
+  const logoFallback = (Theme.value.brandName || "FlowFit").slice(0, 2).toUpperCase();
+  document.querySelectorAll("[data-brand-logo]").forEach((target) => {
+    setImageOrText(target, assets.logoDataUrl, logoFallback, "Logo local da marca");
+  });
+  document.querySelectorAll("[data-coach-photo]").forEach((target) => {
+    setImageOrText(target, assets.photoDataUrl, "PF", "Foto local do personal");
+  });
 };
 
 const applyPublishedBrandTheme = async () => {
@@ -775,6 +800,7 @@ window.addEventListener("app:notify", (event) => showToast(event.detail));
 window.addEventListener("app:theme", syncThemeControls);
 window.addEventListener("storage", (event) => {
   if ([REMOTE_THEME_KEY, LEGACY_REMOTE_THEME_KEY].includes(event.key)) applyPublishedBrandTheme();
+  if (event.key === LOCAL_BRAND_ASSETS_KEY) syncBrandAssets();
   if (event.key === PUBLISHED_WORKOUTS_KEY) {
     const previousWorkoutId = currentWorkout.id;
     currentWorkout = resolveCurrentWorkout();

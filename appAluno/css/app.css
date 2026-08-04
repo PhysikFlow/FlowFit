@@ -19,7 +19,7 @@ body.has-onboarding {
   padding: calc(env(safe-area-inset-top) + var(--space-4)) var(--space-4)
     calc(env(safe-area-inset-bottom) + var(--space-4));
   background:
-    radial-gradient(circle at 80% 10%, var(--color-accent-soft), transparent 16rem),
+    var(--brand-bg-effect),
     var(--color-bg);
 }
 
@@ -149,7 +149,32 @@ body.has-onboarding {
 }
 
 .brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   min-width: 0;
+}
+
+.brand-logo {
+  display: grid;
+  width: 2.7rem;
+  height: 2.7rem;
+  place-items: center;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-accent-line);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: 950;
+}
+
+.brand-logo img,
+.coach-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand strong {
@@ -164,6 +189,10 @@ body.has-onboarding {
   display: block;
   margin-top: 0.15rem;
   color: var(--color-muted);
+}
+
+.coach-photo {
+  overflow: hidden;
 }
 
 .page {

@@ -12,7 +12,7 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 85% 3%, var(--color-accent-soft), transparent 18rem),
+    var(--brand-bg-effect),
     var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);

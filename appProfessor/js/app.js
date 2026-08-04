@@ -1,5 +1,6 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js";
-import { DEFAULT_BRAND_THEME, applyThemeTokens, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js";
+import { Platform } from "../../appAluno/js/core/platform.js";
+import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, MODE_PALETTES, applyThemeTokens, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js";
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js";
@@ -13,6 +14,14 @@ const toast = document.querySelector("[data-toast]");
 const brandInput = document.querySelector("[data-brand-input]");
 const taglineInput = document.querySelector("[data-tagline-input]");
 const accentInput = document.querySelector("[data-accent-input]");
+const backgroundInput = document.querySelector("[data-background-input]");
+const surfaceInput = document.querySelector("[data-surface-input]");
+const textInput = document.querySelector("[data-text-input]");
+const fontInput = document.querySelector("[data-font-input]");
+const radiusInput = document.querySelector("[data-radius-input]");
+const backgroundStyleInput = document.querySelector("[data-background-style-input]");
+const logoInput = document.querySelector("[data-logo-input]");
+const photoInput = document.querySelector("[data-photo-input]");
 const modeButtons = [...document.querySelectorAll("[data-mode-choice]")];
 const themeStatus = document.querySelector("[data-theme-status]");
 const studentSyncStatus = document.querySelector("[data-student-sync-status]");
@@ -122,10 +131,76 @@ const setAuthLocked = (locked) => {
   document.body.classList.toggle("is-auth-locked", locked);
 };
 
+const readLocalBrandAssets = () => Platform.storage.get(LOCAL_BRAND_ASSETS_KEY, {});
+
+const writeLocalBrandAssets = (assets = {}) => {
+  const current = readLocalBrandAssets();
+  return Platform.storage.set(LOCAL_BRAND_ASSETS_KEY, { ...current, ...assets });
+};
+
+const renderLocalBrandAssets = () => {
+  const assets = readLocalBrandAssets();
+  const logoTarget = document.querySelector("[data-preview-logo]");
+  if (logoTarget) {
+    if (assets.logoDataUrl) {
+      logoTarget.innerHTML = `<img src="${assets.logoDataUrl}" alt="Logo local da marca" />`;
+    } else {
+      const initials = (brandInput?.value || DEFAULT_BRAND_THEME.brandName).trim().slice(0, 2).toUpperCase() || "FF";
+      logoTarget.textContent = initials;
+    }
+  }
+
+  const photoWrap = document.querySelector("[data-preview-photo-wrap]");
+  if (photoWrap) {
+    photoWrap.innerHTML = assets.photoDataUrl
+      ? `<img class="preview-photo" src="${assets.photoDataUrl}" alt="Foto local do personal" />`
+      : `<span class="avatar" data-preview-photo-fallback>${initialsFromName(authContext?.profile?.name || authContext?.email || "PF")}</span>`;
+  }
+
+  setText("[data-logo-file-name]", assets.logoName || "Nenhum arquivo selecionado");
+  setText("[data-photo-file-name]", assets.photoName || "Nenhum arquivo selecionado");
+};
+
+const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.addEventListener("load", () => resolve(String(reader.result || "")));
+  reader.addEventListener("error", () => reject(reader.error || new Error("Falha ao ler imagem.")));
+  reader.readAsDataURL(file);
+});
+
+const handleLocalAssetInput = async (input, type) => {
+  const file = input?.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    showToast("Escolha um arquivo de imagem.");
+    return;
+  }
+  if (file.size > 1024 * 1024) {
+    showToast("Imagem muito grande. Use um arquivo de até 1MB por enquanto.");
+    return;
+  }
+
+  const dataUrl = await fileToDataUrl(file);
+  const prefix = type === "logo" ? "logo" : "photo";
+  writeLocalBrandAssets({
+    [`${prefix}DataUrl`]: dataUrl,
+    [`${prefix}Name`]: file.name
+  });
+  renderLocalBrandAssets();
+  setThemeStatus("Asset salvo apenas neste navegador. Ainda não é enviado para a nuvem.", "warning");
+  showToast(type === "logo" ? "Logo local atualizado." : "Foto local atualizada.");
+};
+
 const readTheme = () => ({
   brandName: brandInput?.value?.trim() || DEFAULT_BRAND_THEME.brandName,
   tagline: taglineInput?.value?.trim() || DEFAULT_BRAND_THEME.tagline,
   accent: accentInput?.value || DEFAULT_BRAND_THEME.accent,
+  backgroundColor: backgroundInput?.value || DEFAULT_BRAND_THEME.backgroundColor,
+  surfaceColor: surfaceInput?.value || DEFAULT_BRAND_THEME.surfaceColor,
+  textColor: textInput?.value || DEFAULT_BRAND_THEME.textColor,
+  fontPreset: fontInput?.value || DEFAULT_BRAND_THEME.fontPreset,
+  radiusPreset: radiusInput?.value || DEFAULT_BRAND_THEME.radiusPreset,
+  backgroundStyle: backgroundStyleInput?.value || DEFAULT_BRAND_THEME.backgroundStyle,
   mode: document.documentElement.dataset.mode || DEFAULT_BRAND_THEME.mode
 });
 
@@ -134,6 +209,12 @@ const fillThemeInputs = (theme) => {
   if (brandInput) brandInput.value = normalized.brandName;
   if (taglineInput) taglineInput.value = normalized.tagline;
   if (accentInput) accentInput.value = normalized.accent;
+  if (backgroundInput) backgroundInput.value = normalized.backgroundColor;
+  if (surfaceInput) surfaceInput.value = normalized.surfaceColor;
+  if (textInput) textInput.value = normalized.textColor;
+  if (fontInput) fontInput.value = normalized.fontPreset;
+  if (radiusInput) radiusInput.value = normalized.radiusPreset;
+  if (backgroundStyleInput) backgroundStyleInput.value = normalized.backgroundStyle;
   return normalized;
 };
 
@@ -141,11 +222,13 @@ const saveThemeNow = async ({ silent = false } = {}) => {
   clearTimeout(themeSaveTimer);
   setThemeStatus("Salvando marca branca...", "");
   const result = await themeRepository.saveBrandTheme(readTheme());
-  const message = result.synced
+  const message = result.synced && result.partial
+    ? "Tema básico sincronizado. Rode o schema.sql atualizado para salvar todas as opções."
+    : result.synced
     ? "Marca branca sincronizada com Supabase."
     : "Marca branca salva localmente. Verifique a conexão com Supabase.";
-  setThemeStatus(message, result.synced ? "synced" : "warning");
-  if (!silent) showToast(result.synced ? "Tema sincronizado." : "Tema salvo localmente.");
+  setThemeStatus(message, result.synced && !result.partial ? "synced" : "warning");
+  if (!silent) showToast(result.synced && !result.partial ? "Tema sincronizado." : "Tema salvo com aviso.");
   return result;
 };
 
@@ -277,6 +360,7 @@ const renderCoachProfile = () => {
 
   if (coachNameInput && document.activeElement !== coachNameInput) coachNameInput.value = profile?.name || "";
   if (coachHeadlineInput && document.activeElement !== coachHeadlineInput) coachHeadlineInput.value = profile?.headline || "";
+  renderLocalBrandAssets();
 };
 
 const renderTasks = () => {
@@ -501,11 +585,29 @@ const renderMessages = () => {
   target.innerHTML = `<article class="empty-state card"><strong>Nenhuma mensagem conectada.</strong><small>O módulo de comunicação precisa de autenticação antes de receber conversas reais.</small></article>`;
 };
 
-const applyTheme = ({ brand, tagline, accent, mode } = {}) => {
+const applyTheme = (overrides = {}) => {
+  const {
+    brand,
+    tagline,
+    accent,
+    mode,
+    backgroundColor,
+    surfaceColor,
+    textColor,
+    fontPreset,
+    radiusPreset,
+    backgroundStyle
+  } = overrides;
   const nextTheme = applyThemeTokens({
     brandName: brand ?? brandInput?.value ?? DEFAULT_BRAND_THEME.brandName,
     tagline: tagline ?? taglineInput?.value ?? DEFAULT_BRAND_THEME.tagline,
     accent: accent ?? accentInput?.value ?? DEFAULT_BRAND_THEME.accent,
+    backgroundColor: backgroundColor ?? backgroundInput?.value ?? DEFAULT_BRAND_THEME.backgroundColor,
+    surfaceColor: surfaceColor ?? surfaceInput?.value ?? DEFAULT_BRAND_THEME.surfaceColor,
+    textColor: textColor ?? textInput?.value ?? DEFAULT_BRAND_THEME.textColor,
+    fontPreset: fontPreset ?? fontInput?.value ?? DEFAULT_BRAND_THEME.fontPreset,
+    radiusPreset: radiusPreset ?? radiusInput?.value ?? DEFAULT_BRAND_THEME.radiusPreset,
+    backgroundStyle: backgroundStyle ?? backgroundStyleInput?.value ?? DEFAULT_BRAND_THEME.backgroundStyle,
     mode: mode ?? document.documentElement.dataset.mode
   });
   document.title = `${nextTheme.brandName} - Professor`;
@@ -513,6 +615,7 @@ const applyTheme = ({ brand, tagline, accent, mode } = {}) => {
   setText("[data-preview-brand]", nextTheme.brandName);
   setText("[data-preview-tagline]", nextTheme.tagline);
   modeButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.modeChoice === nextTheme.mode));
+  renderLocalBrandAssets();
 };
 
 const renderAll = () => {
@@ -614,10 +717,43 @@ workoutForm?.addEventListener("submit", async (event) => {
 workoutForm?.addEventListener("input", renderWorkoutPreview);
 workoutForm?.addEventListener("change", renderWorkoutPreview);
 
-brandInput?.addEventListener("input", () => { applyTheme(); queueThemeSave(); });
-taglineInput?.addEventListener("input", () => { applyTheme(); queueThemeSave(); });
-accentInput?.addEventListener("input", () => { applyTheme(); queueThemeSave(); });
-modeButtons.forEach((button) => button.addEventListener("click", () => { applyTheme({ mode: button.dataset.modeChoice }); queueThemeSave(); }));
+const themeInputs = [
+  brandInput,
+  taglineInput,
+  accentInput,
+  backgroundInput,
+  surfaceInput,
+  textInput,
+  fontInput,
+  radiusInput,
+  backgroundStyleInput
+].filter(Boolean);
+
+themeInputs.forEach((input) => input.addEventListener("input", () => { applyTheme(); queueThemeSave(); }));
+themeInputs.forEach((input) => input.addEventListener("change", () => { applyTheme(); queueThemeSave(); }));
+
+const shouldApplyModePalette = (input, key) => Object.values(MODE_PALETTES).some((palette) => palette[key] === input?.value);
+
+modeButtons.forEach((button) => button.addEventListener("click", () => {
+  const mode = button.dataset.modeChoice;
+  const palette = MODE_PALETTES[mode] || MODE_PALETTES.dark;
+  if (shouldApplyModePalette(backgroundInput, "backgroundColor")) backgroundInput.value = palette.backgroundColor;
+  if (shouldApplyModePalette(surfaceInput, "surfaceColor")) surfaceInput.value = palette.surfaceColor;
+  if (shouldApplyModePalette(textInput, "textColor")) textInput.value = palette.textColor;
+  applyTheme({ mode });
+  queueThemeSave();
+}));
+
+logoInput?.addEventListener("change", () => handleLocalAssetInput(logoInput, "logo"));
+photoInput?.addEventListener("change", () => handleLocalAssetInput(photoInput, "photo"));
+document.querySelector("[data-clear-brand-assets]")?.addEventListener("click", () => {
+  Platform.storage.set(LOCAL_BRAND_ASSETS_KEY, {});
+  if (logoInput) logoInput.value = "";
+  if (photoInput) photoInput.value = "";
+  renderLocalBrandAssets();
+  setThemeStatus("Logo e foto locais removidos deste navegador.", "warning");
+  showToast("Assets locais removidos.");
+});
 document.querySelector("[data-save-theme]")?.addEventListener("click", () => saveThemeNow());
 document.querySelector("[data-reset-theme]")?.addEventListener("click", () => {
   fillThemeInputs(DEFAULT_BRAND_THEME);
