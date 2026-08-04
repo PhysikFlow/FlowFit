@@ -790,9 +790,10 @@ brandInput?.addEventListener("input", () => Theme.apply({ brandName: brandInput.
 taglineInput?.addEventListener("input", () => Theme.apply({ tagline: taglineInput.value.trim() || "Seu treino, no seu ritmo" }));
 modeButtons.forEach((button) => button.addEventListener("click", () => Theme.apply({ mode: button.dataset.mode })));
 document.querySelector("[data-theme-reset]")?.addEventListener("click", () => {
+  Platform.storage.set(LOCAL_BRAND_ASSETS_KEY, {});
   Theme.reset();
   syncThemeControls();
-  Platform.notify("Tema padrão restaurado.");
+  Platform.notify("Cache local de tema restaurado.");
 });
 
 window.addEventListener("hashchange", () => navigate(location.hash.slice(1), false));

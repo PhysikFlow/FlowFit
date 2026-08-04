@@ -1,6 +1,6 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js";
 import { Platform } from "../../appAluno/js/core/platform.js";
-import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, MODE_PALETTES, applyThemeTokens, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js";
+import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js";
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js";
@@ -22,7 +22,6 @@ const radiusInput = document.querySelector("[data-radius-input]");
 const backgroundStyleInput = document.querySelector("[data-background-style-input]");
 const logoInput = document.querySelector("[data-logo-input]");
 const photoInput = document.querySelector("[data-photo-input]");
-const modeButtons = [...document.querySelectorAll("[data-mode-choice]")];
 const themeStatus = document.querySelector("[data-theme-status]");
 const studentSyncStatus = document.querySelector("[data-student-sync-status]");
 const workoutForm = document.querySelector("[data-workout-form]");
@@ -201,7 +200,7 @@ const readTheme = () => ({
   fontPreset: fontInput?.value || DEFAULT_BRAND_THEME.fontPreset,
   radiusPreset: radiusInput?.value || DEFAULT_BRAND_THEME.radiusPreset,
   backgroundStyle: backgroundStyleInput?.value || DEFAULT_BRAND_THEME.backgroundStyle,
-  mode: document.documentElement.dataset.mode || DEFAULT_BRAND_THEME.mode
+  mode: inferModeFromColor(backgroundInput?.value || DEFAULT_BRAND_THEME.backgroundColor)
 });
 
 const fillThemeInputs = (theme) => {
@@ -598,23 +597,23 @@ const applyTheme = (overrides = {}) => {
     radiusPreset,
     backgroundStyle
   } = overrides;
+  const nextBackgroundColor = backgroundColor ?? backgroundInput?.value ?? DEFAULT_BRAND_THEME.backgroundColor;
   const nextTheme = applyThemeTokens({
     brandName: brand ?? brandInput?.value ?? DEFAULT_BRAND_THEME.brandName,
     tagline: tagline ?? taglineInput?.value ?? DEFAULT_BRAND_THEME.tagline,
     accent: accent ?? accentInput?.value ?? DEFAULT_BRAND_THEME.accent,
-    backgroundColor: backgroundColor ?? backgroundInput?.value ?? DEFAULT_BRAND_THEME.backgroundColor,
+    backgroundColor: nextBackgroundColor,
     surfaceColor: surfaceColor ?? surfaceInput?.value ?? DEFAULT_BRAND_THEME.surfaceColor,
     textColor: textColor ?? textInput?.value ?? DEFAULT_BRAND_THEME.textColor,
     fontPreset: fontPreset ?? fontInput?.value ?? DEFAULT_BRAND_THEME.fontPreset,
     radiusPreset: radiusPreset ?? radiusInput?.value ?? DEFAULT_BRAND_THEME.radiusPreset,
     backgroundStyle: backgroundStyle ?? backgroundStyleInput?.value ?? DEFAULT_BRAND_THEME.backgroundStyle,
-    mode: mode ?? document.documentElement.dataset.mode
+    mode: mode ?? inferModeFromColor(nextBackgroundColor)
   });
   document.title = `${nextTheme.brandName} - Professor`;
   document.querySelectorAll("[data-brand-name]").forEach((item) => { item.textContent = nextTheme.brandName; });
   setText("[data-preview-brand]", nextTheme.brandName);
   setText("[data-preview-tagline]", nextTheme.tagline);
-  modeButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.modeChoice === nextTheme.mode));
   renderLocalBrandAssets();
 };
 
@@ -732,18 +731,6 @@ const themeInputs = [
 themeInputs.forEach((input) => input.addEventListener("input", () => { applyTheme(); queueThemeSave(); }));
 themeInputs.forEach((input) => input.addEventListener("change", () => { applyTheme(); queueThemeSave(); }));
 
-const shouldApplyModePalette = (input, key) => Object.values(MODE_PALETTES).some((palette) => palette[key] === input?.value);
-
-modeButtons.forEach((button) => button.addEventListener("click", () => {
-  const mode = button.dataset.modeChoice;
-  const palette = MODE_PALETTES[mode] || MODE_PALETTES.dark;
-  if (shouldApplyModePalette(backgroundInput, "backgroundColor")) backgroundInput.value = palette.backgroundColor;
-  if (shouldApplyModePalette(surfaceInput, "surfaceColor")) surfaceInput.value = palette.surfaceColor;
-  if (shouldApplyModePalette(textInput, "textColor")) textInput.value = palette.textColor;
-  applyTheme({ mode });
-  queueThemeSave();
-}));
-
 logoInput?.addEventListener("change", () => handleLocalAssetInput(logoInput, "logo"));
 photoInput?.addEventListener("change", () => handleLocalAssetInput(photoInput, "photo"));
 document.querySelector("[data-clear-brand-assets]")?.addEventListener("click", () => {
@@ -755,11 +742,21 @@ document.querySelector("[data-clear-brand-assets]")?.addEventListener("click", (
   showToast("Assets locais removidos.");
 });
 document.querySelector("[data-save-theme]")?.addEventListener("click", () => saveThemeNow());
-document.querySelector("[data-reset-theme]")?.addEventListener("click", () => {
+document.querySelector("[data-reset-theme]")?.addEventListener("click", async () => {
+  Platform.storage.set(LOCAL_BRAND_ASSETS_KEY, {});
+  if (logoInput) logoInput.value = "";
+  if (photoInput) photoInput.value = "";
   fillThemeInputs(DEFAULT_BRAND_THEME);
-  applyTheme({ mode: DEFAULT_BRAND_THEME.mode });
-  saveThemeNow();
-  showToast("Tema restaurado.");
+  applyTheme(DEFAULT_BRAND_THEME);
+  renderLocalBrandAssets();
+  const result = await saveThemeNow({ silent: true });
+  setThemeStatus(
+    result.synced && !result.partial
+      ? "Tema restaurado para o padrão FlowFit validado e sincronizado."
+      : "Tema restaurado localmente. Sincronize quando Supabase estiver disponível.",
+    result.synced && !result.partial ? "synced" : "warning"
+  );
+  showToast("Tema padrão restaurado.");
 });
 
 coachProfileForm?.addEventListener("submit", async (event) => {

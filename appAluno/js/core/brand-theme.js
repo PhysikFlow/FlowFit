@@ -56,8 +56,36 @@ const backgroundEffects = {
   mesh: "radial-gradient(circle at 12% 8%, var(--color-accent-soft), transparent 22rem), radial-gradient(circle at 92% 0%, hsl(var(--hue-accent) 80% 55% / 0.1), transparent 18rem)"
 };
 
+const hexToRgb = (hex, fallback = DEFAULT_BRAND_THEME.accent) => {
+  const safeHex = isValidHex(hex) ? hex : fallback;
+  const value = safeHex.replace("#", "");
+  return {
+    red: Number.parseInt(value.slice(0, 2), 16),
+    green: Number.parseInt(value.slice(2, 4), 16),
+    blue: Number.parseInt(value.slice(4, 6), 16)
+  };
+};
+
+const relativeLuminance = (hex) => {
+  const { red, green, blue } = hexToRgb(hex);
+  const channels = [red, green, blue].map((value) => {
+    const normalized = value / 255;
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+  return (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
+};
+
+export const inferModeFromColor = (hex) => relativeLuminance(hex) > 0.56 ? "light" : "dark";
+
+const readableOnColor = (hex) => relativeLuminance(hex) > 0.5 ? "#10131a" : "#ffffff";
+
 export const normalizeBrandTheme = (theme = {}) => {
-  const mode = theme.mode === "light" ? "light" : "dark";
+  const rawBackground = theme.backgroundColor || theme.background_color;
+  const mode = theme.mode === "light" || theme.mode === "dark"
+    ? theme.mode
+    : inferModeFromColor(isValidHex(rawBackground) ? rawBackground : DEFAULT_BRAND_THEME.backgroundColor);
   const palette = MODE_PALETTES[mode];
   const fontPreset = allowed(theme.fontPreset || theme.font_preset, Object.keys(FONT_STACKS), DEFAULT_BRAND_THEME.fontPreset);
   const radiusPreset = allowed(theme.radiusPreset || theme.radius_preset, Object.keys(RADIUS_PRESETS), DEFAULT_BRAND_THEME.radiusPreset);
@@ -78,11 +106,10 @@ export const normalizeBrandTheme = (theme = {}) => {
 };
 
 export const hexToHsl = (hex) => {
-  const safeHex = isValidHex(hex) ? hex : DEFAULT_BRAND_THEME.accent;
-  const value = safeHex.replace("#", "");
-  const red = Number.parseInt(value.slice(0, 2), 16) / 255;
-  const green = Number.parseInt(value.slice(2, 4), 16) / 255;
-  const blue = Number.parseInt(value.slice(4, 6), 16) / 255;
+  const rgb = hexToRgb(hex);
+  const red = rgb.red / 255;
+  const green = rgb.green / 255;
+  const blue = rgb.blue / 255;
   const max = Math.max(red, green, blue);
   const min = Math.min(red, green, blue);
   const delta = max - min;
@@ -124,10 +151,13 @@ export const applyThemeTokens = (theme) => {
   root.style.setProperty("--color-bg", normalized.backgroundColor);
   root.style.setProperty("--color-bg-elevated", `color-mix(in srgb, ${normalized.surfaceColor} 88%, ${normalized.backgroundColor})`);
   root.style.setProperty("--color-surface", normalized.surfaceColor);
-  root.style.setProperty("--color-surface-strong", `color-mix(in srgb, ${normalized.surfaceColor} 86%, ${normalized.textColor})`);
+  root.style.setProperty("--color-surface-strong", `color-mix(in srgb, ${normalized.surfaceColor} 92%, ${normalized.accent})`);
   root.style.setProperty("--color-surface-glass", `color-mix(in srgb, ${normalized.surfaceColor} 82%, transparent)`);
   root.style.setProperty("--color-text", normalized.textColor);
-  root.style.setProperty("--color-line", `color-mix(in srgb, ${normalized.textColor} 12%, transparent)`);
+  root.style.setProperty("--color-muted", `color-mix(in srgb, ${normalized.textColor} 68%, ${normalized.backgroundColor})`);
+  root.style.setProperty("--color-subtle", `color-mix(in srgb, ${normalized.textColor} 45%, ${normalized.backgroundColor})`);
+  root.style.setProperty("--color-line", `color-mix(in srgb, ${normalized.accent} 18%, transparent)`);
+  root.style.setProperty("--color-on-accent", readableOnColor(normalized.accent));
   root.style.setProperty("--font-sans", FONT_STACKS[normalized.fontPreset]);
   root.style.setProperty("--brand-bg-effect", backgroundEffects[normalized.backgroundStyle]);
 

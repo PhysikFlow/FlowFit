@@ -885,28 +885,6 @@ body.has-onboarding {
   cursor: pointer;
 }
 
-.mode-switch {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-2);
-}
-
-.mode-switch button {
-  min-height: 2.75rem;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-muted);
-  cursor: pointer;
-  font-weight: 800;
-}
-
-.mode-switch button.is-active {
-  border-color: var(--color-accent-line);
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-}
-
 .bottom-nav {
   position: fixed;
   z-index: 20;
