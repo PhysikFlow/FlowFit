@@ -13,8 +13,11 @@ const navItems = [...document.querySelectorAll("[data-nav]")];
 const onboarding = document.querySelector("[data-onboarding]");
 const onboardingForm = document.querySelector("[data-onboarding-form]");
 const accessAppButton = document.querySelector("[data-access-app]");
-const runtimeWarning = document.querySelector("[data-runtime-warning]");
 const authStatus = document.querySelector("[data-auth-status]");
+const authTitle = document.querySelector("[data-auth-title]");
+const authCopy = document.querySelector("[data-auth-copy]");
+const authSubmit = document.querySelector("[data-auth-submit]");
+const authSecondary = document.querySelector("[data-auth-secondary]");
 const toast = document.querySelector("[data-toast]");
 const accentInput = document.querySelector("[data-accent]");
 const brandInput = document.querySelector("[data-brand-input]");
@@ -49,6 +52,20 @@ const notificationItems = [];
 let currentStudent = emptyStudent;
 let currentWorkout = emptyWorkout;
 let authAction = "signin";
+
+const getInviteEmail = () => {
+  try {
+    return new URLSearchParams(window.location.search).get("email")?.trim().toLowerCase() || "";
+  } catch {
+    return "";
+  }
+};
+
+const prefillInviteEmail = () => {
+  const email = getInviteEmail();
+  const emailInput = onboardingForm?.querySelector('input[name="email"]');
+  if (email && emailInput && !emailInput.value) emailInput.value = email;
+};
 
 const escapeHtml = (value) => String(value ?? "")
   .replace(/&/g, "&amp;")
@@ -162,7 +179,54 @@ const getAuthRedirectUrl = () => {
   return url.href;
 };
 
-const getProviderLabel = (provider) => provider === "apple" ? "Apple" : "Google";
+const authModeContent = {
+  signin: {
+    title: "Entrar no app",
+    copy: "Use o email cadastrado pelo seu personal.",
+    submit: "Entrar",
+    status: "Entre para ver seu treino.",
+    secondary: "Primeiro acesso? Use “Criar conta”."
+  },
+  signup: {
+    title: "Criar conta de aluno",
+    copy: "Crie sua senha usando o email informado pelo personal.",
+    submit: "Criar conta",
+    status: "Depois da confirmação, seus treinos aparecem aqui.",
+    secondary: "Já tem conta? Volte para “Entrar”."
+  }
+};
+
+const syncAuthMode = (mode = authAction, { preserveStatus = false } = {}) => {
+  authAction = mode === "signup" ? "signup" : "signin";
+  const content = authModeContent[authAction];
+  if (onboardingForm) onboardingForm.dataset.authMode = authAction;
+  if (authTitle) authTitle.textContent = content.title;
+  if (authCopy) authCopy.textContent = content.copy;
+  if (authSubmit) authSubmit.textContent = content.submit;
+  if (authSecondary) authSecondary.textContent = content.secondary;
+  onboardingForm?.querySelector('input[name="password"]')?.setAttribute("autocomplete", authAction === "signup" ? "new-password" : "current-password");
+  onboardingForm?.querySelectorAll("[data-auth-mode-button]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.authModeButton === authAction);
+  });
+  if (!preserveStatus) setAuthStatus(content.status, "");
+};
+
+const getProviderLabel = () => "Google";
+
+const handlePasswordReset = async () => {
+  const email = onboardingForm?.querySelector('input[name="email"]')?.value;
+  if (!email) {
+    setAuthStatus("Informe seu email para recuperar a senha.", "warning");
+    return;
+  }
+
+  setAuthStatus("Enviando email de recuperação...", "");
+  const result = await authRepository.resetPassword({ email, redirectTo: getAuthRedirectUrl() });
+  setAuthStatus(
+    result.ok ? "Enviamos o link de recuperação para seu email." : result.message || "Não foi possível enviar a recuperação.",
+    result.ok ? "synced" : "warning"
+  );
+};
 
 const handleOAuthSignIn = async (provider) => {
   const label = getProviderLabel(provider);
@@ -245,7 +309,6 @@ const syncOnboarding = () => {
 const markRuntimeReady = () => {
   accessAppButton?.removeAttribute("aria-busy");
   accessAppButton?.setAttribute("data-ready", "true");
-  if (runtimeWarning) runtimeWarning.hidden = true;
 };
 
 const toRuntimeStudent = (student, authContext) => {
@@ -565,7 +628,7 @@ const startAuthenticatedApp = async () => {
     currentWorkout = emptyWorkout;
     renderAll();
     syncOnboarding();
-    setAuthStatus("Entre ou crie sua conta de aluno.", "");
+    syncAuthMode("signin");
     return false;
   }
 
@@ -575,7 +638,7 @@ const startAuthenticatedApp = async () => {
   });
   if (!profileResult.synced && !profileResult.profile) {
     Store.resetOnboarding();
-    setAuthStatus("Login ok, mas o banco ainda não aceitou profiles. Rode supabase/schema.sql no SQL Editor.", "warning");
+    setAuthStatus("Conta autenticada, mas o perfil não carregou. Recarregue a página.", "warning");
     syncOnboarding();
     return false;
   }
@@ -691,13 +754,13 @@ document.querySelector("[data-progress-form]")?.addEventListener("submit", (even
 document.querySelector("[data-schedule-form]")?.addEventListener("submit", (event) => {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
-  Store.addScheduleItem({
-    id: `custom-schedule-${Date.now()}`,
-    time: String(data.get("time") || "Hoje"),
-    title: String(data.get("title") || "Novo lembrete"),
-    detail: "Lembrete criado localmente neste protótipo.",
-    type: String(data.get("type") || "Treino")
-  });
+    Store.addScheduleItem({
+      id: `custom-schedule-${Date.now()}`,
+      time: String(data.get("time") || "Hoje"),
+      title: String(data.get("title") || "Novo lembrete"),
+      detail: "Lembrete criado.",
+      type: String(data.get("type") || "Treino")
+    });
   Store.setScheduleFilter("Todos");
   renderSchedule();
   Platform.notify("Lembrete adicionado na agenda local.");
@@ -743,8 +806,18 @@ onboardingForm?.addEventListener("click", async (event) => {
     return;
   }
 
-  const button = event.target.closest("[data-auth-action]");
-  if (button) authAction = button.dataset.authAction;
+  const modeButton = event.target.closest("[data-auth-mode-button]");
+  if (modeButton) {
+    event.preventDefault();
+    syncAuthMode(modeButton.dataset.authModeButton);
+    return;
+  }
+
+  const resetButton = event.target.closest("[data-auth-reset]");
+  if (resetButton) {
+    event.preventDefault();
+    await handlePasswordReset();
+  }
 });
 
 onboardingForm?.addEventListener("submit", async (event) => {
@@ -779,7 +852,8 @@ const signOut = async () => {
   stopRestTimer();
   renderAll();
   syncOnboarding();
-  setAuthStatus("Sessão encerrada. Entre novamente para ver seus dados.", "");
+  syncAuthMode("signin");
+  setAuthStatus("Sessão encerrada.", "");
   Platform.notify("Sessão encerrada.");
 };
 
@@ -821,6 +895,8 @@ window.addEventListener("storage", (event) => {
   }
 });
 
+prefillInviteEmail();
+syncAuthMode("signin", { preserveStatus: true });
 Theme.apply();
 syncThemeControls();
 renderAll();

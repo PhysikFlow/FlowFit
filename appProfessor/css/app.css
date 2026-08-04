@@ -102,7 +102,7 @@ body.is-auth-locked {
 
 .oauth-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: var(--space-3);
 }
 
@@ -606,6 +606,78 @@ h3 {
   grid-column: 1 / -1;
 }
 
+.student-tools-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.student-invite,
+.student-import {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  padding: var(--space-5);
+  box-shadow: none;
+}
+
+.student-invite h2,
+.student-import h2 {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+
+.student-invite p,
+.student-import p {
+  margin: 0;
+  color: var(--color-muted);
+  line-height: 1.45;
+}
+
+.student-invite label,
+.student-import label {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  font-weight: 800;
+}
+
+.student-invite select,
+.student-invite textarea,
+.student-import input {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 850;
+  padding: 0 var(--space-3);
+}
+
+.student-invite textarea {
+  min-height: 9rem;
+  padding-top: var(--space-3);
+  color: var(--color-muted);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.button-group--inline {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.button.is-disabled,
+.button[aria-disabled="true"] {
+  cursor: not-allowed;
+  filter: grayscale(0.25);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .student-card,
 .workout-card {
   display: grid;
@@ -839,6 +911,19 @@ h3 {
   gap: var(--space-5);
 }
 
+.profile-editor textarea {
+  min-height: 7rem;
+  padding-top: var(--space-3);
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.profile-editor__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
 .theme-editor__section {
   display: grid;
   gap: var(--space-3);
@@ -945,6 +1030,12 @@ h3 {
   gap: var(--space-5);
 }
 
+.profile-side-stack {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
 .profile-preview-card__identity {
   display: flex;
   gap: var(--space-4);
@@ -972,6 +1063,50 @@ h3 {
 .profile-preview-card__panel small,
 .profile-preview-card__panel span {
   color: var(--color-muted);
+}
+
+.account-card {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  padding: var(--space-5);
+  box-shadow: none;
+}
+
+.account-card h2,
+.account-card p {
+  margin: 0;
+}
+
+.account-card p {
+  color: var(--color-muted);
+  line-height: 1.45;
+}
+
+.account-usage {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.account-usage > div {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+}
+
+.account-usage strong {
+  color: var(--color-accent);
+  font-size: var(--text-xl);
+}
+
+.account-usage small {
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 850;
 }
 
 .form-status {
@@ -1142,6 +1277,7 @@ h3 {
   .topbar,
   .hero,
   .workout-builder,
+  .student-tools-grid,
   .dashboard-grid,
   .message-grid,
   .appearance-grid,
@@ -1191,6 +1327,12 @@ h3 {
   }
 
   .theme-editor__colors {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-editor__fields,
+  .button-group--inline,
+  .account-usage {
     grid-template-columns: 1fr;
   }
 

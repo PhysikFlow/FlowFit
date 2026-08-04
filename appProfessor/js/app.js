@@ -37,13 +37,37 @@ const workoutSyncStatus = document.querySelector("[data-workout-sync-status]");
 const authGate = document.querySelector("[data-auth-gate]");
 const authForm = document.querySelector("[data-auth-form]");
 const authStatus = document.querySelector("[data-auth-status]");
+const authTitle = document.querySelector("[data-auth-title]");
+const authCopy = document.querySelector("[data-auth-copy]");
+const authSubmit = document.querySelector("[data-auth-submit]");
+const authSecondary = document.querySelector("[data-auth-secondary]");
 const authUser = document.querySelector("[data-auth-user]");
 const coachProfileForm = document.querySelector("[data-coach-profile-form]");
 const coachProfileStatus = document.querySelector("[data-coach-profile-status]");
 const coachNameInput = document.querySelector("[data-coach-name-input]");
 const coachHeadlineInput = document.querySelector("[data-coach-headline-input]");
+const coachBioInput = document.querySelector("[data-coach-bio-input]");
+const coachCityInput = document.querySelector("[data-coach-city-input]");
+const coachCrefInput = document.querySelector("[data-coach-cref-input]");
+const coachContactEmailInput = document.querySelector("[data-coach-contact-email-input]");
+const coachWhatsappInput = document.querySelector("[data-coach-whatsapp-input]");
+const coachPhoneInput = document.querySelector("[data-coach-phone-input]");
 const contrastStatus = document.querySelector("[data-contrast-status]");
 const saveThemeButton = document.querySelector("[data-save-theme]");
+const inviteStudentOptions = document.querySelector("[data-invite-student-options]");
+const inviteMessage = document.querySelector("[data-invite-message]");
+const inviteStatus = document.querySelector("[data-invite-status]");
+const whatsappInvite = document.querySelector("[data-whatsapp-invite]");
+const copyInviteButton = document.querySelector("[data-copy-invite]");
+const studentImportForm = document.querySelector("[data-student-import-form]");
+const studentImportInput = document.querySelector("[data-student-import-input]");
+const studentImportFile = document.querySelector("[data-student-import-file]");
+const studentImportStatus = document.querySelector("[data-student-import-status]");
+
+const ACCOUNT_PLAN = {
+  name: "Plano piloto",
+  activeStudentLimit: 20
+};
 
 let toastTimer;
 let themeSaveTimer;
@@ -109,6 +133,8 @@ const setStudentSyncStatus = (message, state = "") => setStatus(studentSyncStatu
 const setWorkoutSyncStatus = (message, state = "") => setStatus(workoutSyncStatus, message, state);
 const setAuthStatus = (message, state = "") => setStatus(authStatus, message, state);
 const setCoachProfileStatus = (message, state = "") => setStatus(coachProfileStatus, message, state);
+const setInviteStatus = (message, state = "") => setStatus(inviteStatus, message, state);
+const setStudentImportStatus = (message, state = "") => setStatus(studentImportStatus, message, state);
 
 const HEX_PATTERN = /^#[0-9a-f]{6}$/i;
 
@@ -166,7 +192,163 @@ const getAuthRedirectUrl = () => {
   return url.href;
 };
 
-const getProviderLabel = (provider) => provider === "apple" ? "Apple" : "Google";
+const getProviderLabel = () => "Google";
+
+const authModeContent = {
+  signin: {
+    title: "Entrar no painel",
+    copy: "Gerencie alunos, treinos e marca em um só lugar.",
+    submit: "Entrar",
+    status: "Acesse sua conta de professor.",
+    secondary: "Não tem conta? Use “Criar conta”."
+  },
+  signup: {
+    title: "Criar conta de professor",
+    copy: "Comece seu painel com email, senha e nome profissional.",
+    submit: "Criar conta",
+    status: "Crie sua conta para liberar o painel.",
+    secondary: "Já tem conta? Volte para “Entrar”."
+  }
+};
+
+const syncAuthMode = (mode = authAction, { preserveStatus = false } = {}) => {
+  authAction = mode === "signup" ? "signup" : "signin";
+  const content = authModeContent[authAction];
+  if (authForm) authForm.dataset.authMode = authAction;
+  if (authTitle) authTitle.textContent = content.title;
+  if (authCopy) authCopy.textContent = content.copy;
+  if (authSubmit) authSubmit.textContent = content.submit;
+  if (authSecondary) authSecondary.textContent = content.secondary;
+  authForm?.querySelector('input[name="password"]')?.setAttribute("autocomplete", authAction === "signup" ? "new-password" : "current-password");
+  authForm?.querySelectorAll("[data-auth-mode-button]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.authModeButton === authAction);
+  });
+  if (!preserveStatus) setAuthStatus(content.status, "");
+};
+
+const handlePasswordReset = async () => {
+  const email = authForm?.querySelector('input[name="email"]')?.value;
+  if (!email) {
+    setAuthStatus("Informe seu email para recuperar a senha.", "warning");
+    return;
+  }
+
+  setAuthStatus("Enviando email de recuperação...", "");
+  const result = await authRepository.resetPassword({ email, redirectTo: getAuthRedirectUrl() });
+  setAuthStatus(
+    result.ok ? "Enviamos o link de recuperação para seu email." : result.message || "Não foi possível enviar a recuperação.",
+    result.ok ? "synced" : "warning"
+  );
+};
+
+const getActiveStudentCount = () => students.filter((student) => student.status === "Ativo").length;
+
+const getStudentAppUrl = (student) => {
+  const url = new URL("../appAluno/", window.location.href);
+  if (student?.email) url.searchParams.set("email", student.email);
+  return url.href;
+};
+
+const getCoachPublicName = () => authContext?.profile?.name
+  || authContext?.user?.user_metadata?.display_name
+  || authContext?.email
+  || "seu personal";
+
+const buildInviteMessage = (student) => {
+  if (!student) return "";
+  const brandName = brandInput?.value?.trim() || DEFAULT_BRAND_THEME.brandName;
+  const emailLine = student.email ? `Entre usando este email: ${student.email}.` : "Entre usando o email cadastrado pelo seu personal.";
+  return [
+    `Oi, ${student.name}!`,
+    `${getCoachPublicName()} liberou seu acesso ao ${brandName}.`,
+    `Acesse: ${getStudentAppUrl(student)}`,
+    emailLine
+  ].join("\n");
+};
+
+const detectCsvDelimiter = (text) => {
+  const firstLine = String(text || "").split(/\r?\n/)[0] || "";
+  return (firstLine.match(/;/g) || []).length > (firstLine.match(/,/g) || []).length ? ";" : ",";
+};
+
+const parseDelimitedRows = (text, delimiter) => {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  const source = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    const next = source[index + 1];
+
+    if (char === '"') {
+      if (quoted && next === '"') {
+        cell += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+      continue;
+    }
+
+    if (char === delimiter && !quoted) {
+      row.push(cell.trim());
+      cell = "";
+      continue;
+    }
+
+    if (char === "\n" && !quoted) {
+      row.push(cell.trim());
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+
+    cell += char;
+  }
+
+  row.push(cell.trim());
+  if (row.some(Boolean)) rows.push(row);
+  return rows;
+};
+
+const normalizeCsvKey = (value) => String(value || "")
+  .trim()
+  .toLowerCase()
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .replace(/[^a-z0-9]+/g, "");
+
+const parseStudentCsv = (text) => {
+  const rows = parseDelimitedRows(text, detectCsvDelimiter(text));
+  if (!rows.length) return [];
+
+  const firstRowKeys = rows[0].map(normalizeCsvKey);
+  const hasHeader = firstRowKeys.some((key) => ["nome", "name", "email", "objetivo", "goal", "status"].includes(key));
+  const header = hasHeader ? firstRowKeys : ["nome", "email", "objetivo", "status"];
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+
+  const indexOf = (...keys) => {
+    const normalizedKeys = keys.map(normalizeCsvKey);
+    return header.findIndex((key) => normalizedKeys.includes(key));
+  };
+
+  const nameIndex = indexOf("nome", "name", "aluno", "student");
+  const emailIndex = indexOf("email", "e-mail", "mail");
+  const goalIndex = indexOf("objetivo", "goal");
+  const statusIndex = indexOf("status", "situacao", "situação");
+
+  return dataRows
+    .map((row) => ({
+      name: row[nameIndex] || "",
+      email: row[emailIndex] || "",
+      goal: row[goalIndex] || "Hipertrofia",
+      status: row[statusIndex] || "Ativo"
+    }))
+    .filter((student) => student.name && student.email);
+};
 
 const handleOAuthSignIn = async (provider) => {
   const label = getProviderLabel(provider);
@@ -231,7 +413,7 @@ const handleLocalAssetInput = async (input, type) => {
     return;
   }
   if (file.size > 1024 * 1024) {
-    showToast("Imagem muito grande. Use um arquivo de até 1MB por enquanto.");
+    showToast("Imagem muito grande. Use até 1MB.");
     return;
   }
 
@@ -285,10 +467,10 @@ const saveThemeNow = async ({ silent = false } = {}) => {
   setThemeStatus("Salvando marca branca...", "");
   const result = await themeRepository.saveBrandTheme(readTheme());
   const message = result.synced && result.partial
-    ? "Tema básico sincronizado. Rode o schema.sql atualizado para salvar todas as opções."
+    ? "Tema salvo parcialmente. Recarregue e tente salvar novamente."
     : result.synced
-    ? "Marca branca sincronizada com Supabase."
-    : "Marca branca salva localmente. Verifique a conexão com Supabase.";
+    ? "Marca sincronizada."
+    : "Marca salva neste aparelho. Verifique a conexão.";
   setThemeStatus(message, result.synced && !result.partial ? "synced" : "warning");
   if (!silent) showToast(result.synced && !result.partial ? "Tema sincronizado." : "Tema salvo com aviso.");
   return result;
@@ -325,6 +507,23 @@ const navigate = (name, updateHash = true) => {
 const focusWorkoutForm = () => {
   workoutForm?.scrollIntoView({ behavior: "smooth", block: "start" });
   window.setTimeout(() => workoutForm?.querySelector("select, input, textarea")?.focus(), 260);
+};
+
+const mergeStudentDraftWithExisting = (draft) => {
+  const normalizedEmail = String(draft.email || "").trim().toLowerCase();
+  const existing = students.find((student) => (
+    normalizedEmail && student.email === normalizedEmail
+  ) || student.name.trim().toLowerCase() === String(draft.name || "").trim().toLowerCase());
+  const next = createStudentFromProfessorForm(draft);
+  if (!existing) return next;
+  return {
+    ...existing,
+    ...next,
+    id: existing.id,
+    studentKey: existing.studentKey,
+    createdAt: existing.createdAt,
+    updatedAt: new Date().toISOString()
+  };
 };
 
 const formatUpdatedAt = (value) => {
@@ -387,7 +586,7 @@ const refreshStudents = async ({ silent = false } = {}) => {
   dataStatus = result.synced ? "Online" : "Local";
   applyStudents(result.students);
   setStudentSyncStatus(
-    result.synced ? "Alunos sincronizados com Supabase." : "Alunos em modo local. Verifique Supabase/rede.",
+    result.synced ? "Alunos atualizados." : "Alunos em modo offline.",
     result.synced ? "synced" : "warning"
   );
   return result;
@@ -400,7 +599,7 @@ const refreshPublishedWorkouts = async ({ silent = false } = {}) => {
   dataStatus = result.synced ? "Online" : dataStatus;
   applyPublishedWorkouts(result.workouts);
   setWorkoutSyncStatus(
-    result.synced ? "Treinos sincronizados com Supabase." : "Treinos em modo local. Verifique Supabase/rede.",
+    result.synced ? "Treinos atualizados." : "Treinos em modo offline.",
     result.synced ? "synced" : "warning"
   );
   return result;
@@ -419,10 +618,25 @@ const renderCoachProfile = () => {
   const fallbackName = authContext?.user?.user_metadata?.display_name || authContext?.email || "Personal";
   const name = profile?.name || fallbackName;
   const headline = profile?.headline || "Perfil do personal";
+  const bio = profile?.bio || "";
+  const city = profile?.city || "";
+  const contactEmail = profile?.contactEmail || "";
+  const phone = profile?.phone || "";
+  const whatsapp = profile?.whatsapp || "";
+  const cref = profile?.cref || "";
   const email = authContext?.email || "Entre para sincronizar";
+  const contactItems = [
+    city,
+    whatsapp ? `WhatsApp ${whatsapp}` : "",
+    phone ? `Tel. ${phone}` : "",
+    contactEmail
+  ].filter(Boolean);
 
   setAllText("[data-coach-name]", name);
   setAllText("[data-coach-headline]", headline);
+  setAllText("[data-coach-bio]", bio || "Bio profissional ainda não preenchida.");
+  setAllText("[data-coach-contact-line]", contactItems.length ? contactItems.join(" • ") : "Contato profissional não informado.");
+  setAllText("[data-coach-cref-line]", cref ? `CREF ${cref}` : "CREF não informado.");
   setAllText("[data-coach-email]", email);
   setAllText("[data-coach-initials]", initialsFromName(name));
   setText("[data-auth-user]", authContext?.email || "");
@@ -430,6 +644,12 @@ const renderCoachProfile = () => {
 
   if (coachNameInput && document.activeElement !== coachNameInput) coachNameInput.value = profile?.name || "";
   if (coachHeadlineInput && document.activeElement !== coachHeadlineInput) coachHeadlineInput.value = profile?.headline || "";
+  if (coachBioInput && document.activeElement !== coachBioInput) coachBioInput.value = bio;
+  if (coachCityInput && document.activeElement !== coachCityInput) coachCityInput.value = city;
+  if (coachCrefInput && document.activeElement !== coachCrefInput) coachCrefInput.value = cref;
+  if (coachContactEmailInput && document.activeElement !== coachContactEmailInput) coachContactEmailInput.value = contactEmail;
+  if (coachWhatsappInput && document.activeElement !== coachWhatsappInput) coachWhatsappInput.value = whatsapp;
+  if (coachPhoneInput && document.activeElement !== coachPhoneInput) coachPhoneInput.value = phone;
   renderLocalBrandAssets();
 };
 
@@ -517,20 +737,74 @@ const renderDashboard = () => {
     : pendingCount
       ? "Priorize alunos sem treino publicado, check-ins pendentes ou status financeiro manual."
       : "Alunos ativos possuem treino publicado e não há alertas operacionais agora.");
-  setText("[data-sync-eyebrow]", isOnline ? "Sincronizado com Supabase" : isSyncing ? "Sincronizando dados" : "Dados locais");
+  setText("[data-sync-eyebrow]", isOnline ? "Sincronizado" : isSyncing ? "Sincronizando" : "Offline");
   setText("[data-sync-chip]", isOnline ? "Online" : isSyncing ? "Sincronizando" : "Local");
-  setText("[data-sync-title]", isOnline ? "Dados sincronizados" : isSyncing ? "Sincronizando com Supabase" : "Modo local ativo");
+  setText("[data-sync-title]", isOnline ? "Dados sincronizados" : isSyncing ? "Sincronizando" : "Modo offline");
   setText("[data-sync-detail]", isOnline
-    ? "Alunos, treinos e marca branca estão sendo lidos do Supabase."
+    ? "Tudo atualizado."
     : isSyncing
-      ? "Buscando alunos, treinos e tema publicados. Isso deve levar poucos segundos."
-      : "Entre e sincronize com Supabase para compartilhar dados entre dispositivos.");
+      ? "Atualizando dados..."
+      : "As alterações ficam neste aparelho até reconectar.");
 
   const syncStatus = document.querySelector("[data-sync-chip]")?.closest(".sync-status");
   syncStatus?.classList.toggle("is-online", isOnline);
   syncStatus?.classList.toggle("is-syncing", isSyncing);
   renderTasks();
   renderActivities();
+  renderAccount();
+};
+
+const renderAccount = () => {
+  const activeCount = getActiveStudentCount();
+  const limit = ACCOUNT_PLAN.activeStudentLimit;
+  const usage = limit ? Math.min(100, Math.round((activeCount / limit) * 100)) : 0;
+  setText("[data-account-plan]", ACCOUNT_PLAN.name);
+  setText("[data-account-active-students]", activeCount);
+  setText("[data-account-student-limit]", limit);
+
+  const progress = document.querySelector("[data-account-limit-progress]");
+  if (progress) progress.style.setProperty("--progress", `${usage}%`);
+
+  const exceeded = activeCount > limit;
+  const nearLimit = activeCount >= Math.max(1, Math.round(limit * 0.8));
+  setStatus(
+    document.querySelector("[data-account-status]"),
+    exceeded
+      ? `Limite excedido em ${activeCount - limit} aluno(s). Plano real/billing ainda não está conectado.`
+      : nearLimit
+        ? `Você está usando ${activeCount} de ${limit} alunos ativos do plano piloto.`
+        : "Você está no plano piloto. Upgrade e cobrança entram depois.",
+    exceeded || nearLimit ? "warning" : ""
+  );
+};
+
+const renderInviteTools = () => {
+  if (!inviteStudentOptions || !inviteMessage || !whatsappInvite) return;
+  const previousValue = inviteStudentOptions.value;
+  const hasStudents = students.length > 0;
+
+  inviteStudentOptions.disabled = !hasStudents;
+  copyInviteButton?.toggleAttribute("disabled", !hasStudents);
+  whatsappInvite.classList.toggle("is-disabled", !hasStudents);
+  whatsappInvite.setAttribute("aria-disabled", String(!hasStudents));
+
+  if (!hasStudents) {
+    inviteStudentOptions.innerHTML = `<option value="">Cadastre um aluno primeiro</option>`;
+    inviteMessage.value = "";
+    whatsappInvite.href = "#";
+    setInviteStatus("Cadastre um aluno para gerar o primeiro convite.", "");
+    return;
+  }
+
+  inviteStudentOptions.innerHTML = students.map((student) => `<option value="${escapeHtml(student.id)}">${escapeHtml(student.name)}${student.email ? ` - ${escapeHtml(student.email)}` : ""}</option>`).join("");
+  if (students.some((student) => student.id === previousValue)) inviteStudentOptions.value = previousValue;
+
+  const selected = students.find((student) => student.id === inviteStudentOptions.value) || students[0];
+  if (selected) inviteStudentOptions.value = selected.id;
+  const message = buildInviteMessage(selected);
+  inviteMessage.value = message;
+  whatsappInvite.href = `https://wa.me/?text=${encodeURIComponent(message)}`;
+  setInviteStatus(`Convite pronto para ${selected.name}.`, "synced");
 };
 
 const renderStudentOptions = () => {
@@ -541,6 +815,7 @@ const renderStudentOptions = () => {
     select.innerHTML = `<option value="">Cadastre um aluno primeiro</option>`;
     select.disabled = true;
     if (submitButton) submitButton.disabled = true;
+    renderInviteTools();
     return;
   }
 
@@ -549,6 +824,7 @@ const renderStudentOptions = () => {
   if (submitButton) submitButton.disabled = false;
   select.innerHTML = students.map((student) => `<option value="${escapeHtml(student.id)}">${escapeHtml(student.name)}${student.email ? ` - ${escapeHtml(student.email)}` : ""}</option>`).join("");
   if (students.some((student) => student.id === previousValue)) select.value = previousValue;
+  renderInviteTools();
 };
 
 const renderStudents = () => {
@@ -708,6 +984,7 @@ const applyTheme = (overrides = {}) => {
   setText("[data-preview-brand]", nextTheme.brandName);
   setText("[data-preview-tagline]", nextTheme.tagline);
   renderLocalBrandAssets();
+  renderInviteTools();
 };
 
 const renderAll = () => {
@@ -745,16 +1022,110 @@ document.querySelector("[data-student-form]")?.addEventListener("submit", async 
   const student = createStudentFromProfessorForm(Object.fromEntries(new FormData(event.currentTarget)));
   const savedStudent = studentRepository.saveStudent({ ...student, coachId: authContext.coachId });
   applyStudents([savedStudent, ...students.filter((item) => item.id !== savedStudent.id)]);
-  setStudentSyncStatus("Aluno salvo localmente. Sincronizando com Supabase...", "");
+  setStudentSyncStatus("Aluno salvo. Sincronizando...", "");
   showToast("Aluno salvo.");
+  if (getActiveStudentCount() > ACCOUNT_PLAN.activeStudentLimit) {
+    setStudentSyncStatus("Aluno salvo, mas o limite do plano piloto foi excedido.", "warning");
+  }
 
   const result = await studentRepository.syncStudent(savedStudent);
+  const limitExceeded = getActiveStudentCount() > ACCOUNT_PLAN.activeStudentLimit;
   setStudentSyncStatus(
-    result.synced ? "Aluno sincronizado com Supabase." : "Aluno salvo localmente. Supabase indisponível.",
-    result.synced ? "synced" : "warning"
+    result.synced
+      ? limitExceeded
+        ? "Aluno sincronizado, mas o limite do plano piloto foi excedido."
+        : "Aluno sincronizado."
+      : "Aluno salvo neste aparelho.",
+    result.synced && !limitExceeded ? "synced" : "warning"
   );
   if (result.synced) showToast("Aluno sincronizado.");
   event.currentTarget.reset();
+});
+
+inviteStudentOptions?.addEventListener("change", renderInviteTools);
+
+copyInviteButton?.addEventListener("click", async () => {
+  const message = inviteMessage?.value || "";
+  if (!message) {
+    setInviteStatus("Cadastre e selecione um aluno antes de copiar.", "warning");
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(message);
+    setInviteStatus("Convite copiado para a área de transferência.", "synced");
+    showToast("Convite copiado.");
+  } catch {
+    inviteMessage?.focus();
+    inviteMessage?.select();
+    setInviteStatus("Não consegui copiar automaticamente. Selecione o texto e copie manualmente.", "warning");
+  }
+});
+
+studentImportInput?.addEventListener("change", () => {
+  const file = studentImportInput.files?.[0];
+  setText("[data-student-import-file]", file?.name || "Nenhum arquivo selecionado");
+});
+
+studentImportForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!authContext?.user) {
+    showToast("Entre como professor antes de importar alunos.");
+    setAuthLocked(true);
+    return;
+  }
+
+  const file = studentImportInput?.files?.[0];
+  if (!file) {
+    setStudentImportStatus("Escolha um arquivo CSV antes de importar.", "warning");
+    return;
+  }
+  if (file.size > 400 * 1024) {
+    setStudentImportStatus("Arquivo grande demais. Use até 400KB.", "warning");
+    return;
+  }
+
+  setStudentImportStatus("Lendo planilha...", "");
+  const parsedStudents = parseStudentCsv(await file.text());
+  if (!parsedStudents.length) {
+    setStudentImportStatus("Nenhum aluno válido encontrado. Use colunas nome,email,objetivo,status.", "warning");
+    return;
+  }
+
+  const uniqueDrafts = [];
+  const seenDrafts = new Set();
+  parsedStudents.forEach((draft) => {
+    const key = (draft.email || draft.name).trim().toLowerCase();
+    if (!key || seenDrafts.has(key)) return;
+    seenDrafts.add(key);
+    uniqueDrafts.push(draft);
+  });
+
+  const savedStudents = uniqueDrafts.map((draft) => {
+    const merged = mergeStudentDraftWithExisting(draft);
+    return studentRepository.saveStudent({ ...merged, coachId: authContext.coachId });
+  });
+  applyStudents([
+    ...savedStudents,
+    ...students.filter((student) => !savedStudents.some((saved) => saved.id === student.id))
+  ]);
+  setStudentImportStatus(`${savedStudents.length} aluno(s) importado(s). Sincronizando...`, "");
+  showToast("Importação concluída.");
+
+  const syncResults = await Promise.allSettled(savedStudents.map((student) => studentRepository.syncStudent(student)));
+  const syncedCount = syncResults.filter((result) => result.status === "fulfilled" && result.value?.synced).length;
+  const limitExceeded = getActiveStudentCount() > ACCOUNT_PLAN.activeStudentLimit;
+  setStudentImportStatus(
+    syncedCount === savedStudents.length
+      ? limitExceeded
+        ? `${syncedCount} aluno(s) sincronizado(s). Limite do plano piloto excedido.`
+        : `${syncedCount} aluno(s) sincronizado(s).`
+      : `${savedStudents.length} aluno(s) salvos; ${syncedCount} sincronizado(s).`,
+    syncedCount === savedStudents.length && !limitExceeded ? "synced" : "warning"
+  );
+
+  studentImportForm.reset();
+  setText("[data-student-import-file]", "Nenhum arquivo selecionado");
 });
 
 workoutForm?.addEventListener("submit", async (event) => {
@@ -794,12 +1165,12 @@ workoutForm?.addEventListener("submit", async (event) => {
   }
 
   applyPublishedWorkouts([savedWorkout, ...workouts.filter((item) => item.id !== savedWorkout.id)]);
-  setWorkoutSyncStatus("Treino salvo localmente. Sincronizando com Supabase...", "");
+  setWorkoutSyncStatus("Treino salvo. Sincronizando...", "");
   showToast("Treino publicado.");
 
   const result = await workoutRepository.syncPublishedWorkout(savedWorkout, linkedStudent);
   setWorkoutSyncStatus(
-    result.synced ? "Treino sincronizado com Supabase." : "Treino salvo localmente. Supabase indisponível.",
+    result.synced ? "Treino sincronizado." : "Treino salvo neste aparelho.",
     result.synced ? "synced" : "warning"
   );
   if (result.synced) showToast("Treino sincronizado.");
@@ -891,7 +1262,7 @@ document.querySelector("[data-reset-theme]")?.addEventListener("click", async ()
   setThemeStatus(
     result.synced && !result.partial
       ? "Tema restaurado para o padrão FlowFit validado e sincronizado."
-      : "Tema restaurado localmente. Sincronize quando Supabase estiver disponível.",
+      : "Tema restaurado neste aparelho.",
     result.synced && !result.partial ? "synced" : "warning"
   );
   showToast("Tema padrão restaurado.");
@@ -909,7 +1280,13 @@ coachProfileForm?.addEventListener("submit", async (event) => {
   setCoachProfileStatus("Salvando perfil...", "");
   const result = await authRepository.updateProfile({
     name: data.name,
-    headline: data.headline
+    headline: data.headline,
+    bio: data.bio,
+    city: data.city,
+    contactEmail: data.contactEmail,
+    phone: data.phone,
+    whatsapp: data.whatsapp,
+    cref: data.cref
   });
 
   if (!result.synced || !result.profile) {
@@ -918,17 +1295,24 @@ coachProfileForm?.addEventListener("submit", async (event) => {
     return;
   }
 
+  const previousProfile = authContext.profile || {};
   authContext = {
     ...authContext,
-    profile: {
-      ...authContext.profile,
-      ...result.profile,
-      headline: result.partial ? authContext.profile?.headline || "" : result.profile.headline
-    }
+    profile: result.partial
+      ? {
+        ...previousProfile,
+        name: result.profile?.name || previousProfile.name,
+        headline: result.profile?.headline || previousProfile.headline || ""
+      }
+      : {
+        ...previousProfile,
+        ...result.profile
+      }
   };
   renderCoachProfile();
+  renderInviteTools();
   setCoachProfileStatus(
-    result.partial ? "Nome salvo. Rode o schema.sql atualizado para salvar a descrição curta." : "Perfil sincronizado com Supabase.",
+    result.partial ? "Perfil salvo parcialmente. Recarregue e tente salvar novamente." : "Perfil profissional sincronizado.",
     result.partial ? "warning" : "synced"
   );
   showToast("Perfil atualizado.");
@@ -972,8 +1356,18 @@ authForm?.addEventListener("click", async (event) => {
     return;
   }
 
-  const button = event.target.closest("[data-auth-action]");
-  if (button) authAction = button.dataset.authAction;
+  const modeButton = event.target.closest("[data-auth-mode-button]");
+  if (modeButton) {
+    event.preventDefault();
+    syncAuthMode(modeButton.dataset.authModeButton);
+    return;
+  }
+
+  const resetButton = event.target.closest("[data-auth-reset]");
+  if (resetButton) {
+    event.preventDefault();
+    await handlePasswordReset();
+  }
 });
 
 authForm?.addEventListener("submit", async (event) => {
@@ -1007,14 +1401,15 @@ document.querySelector("[data-sign-out]")?.addEventListener("click", async () =>
   dataStatus = "Local";
   renderAll();
   setAuthLocked(true);
-  setAuthStatus("Sessão encerrada. Entre novamente para ver dados reais.", "");
+  syncAuthMode("signin");
+  setAuthStatus("Sessão encerrada.", "");
 });
 
 const startAuthenticatedPanel = async () => {
   const session = await authRepository.getSession();
   if (!session?.user) {
     setAuthLocked(true);
-    setAuthStatus("Entre ou crie uma conta de professor para sincronizar dados reais.", "");
+    syncAuthMode("signin");
     return;
   }
 
@@ -1024,7 +1419,7 @@ const startAuthenticatedPanel = async () => {
   });
   if (!profileResult.synced && !profileResult.profile) {
     setAuthLocked(true);
-    setAuthStatus("Login ok, mas o banco ainda não aceitou profiles. Rode supabase/schema.sql no SQL Editor.", "warning");
+    setAuthStatus("Conta autenticada, mas o perfil não carregou. Recarregue a página.", "warning");
     return;
   }
   authContext = await authRepository.getAuthContext();
@@ -1058,6 +1453,7 @@ const startAuthenticatedPanel = async () => {
 };
 
 const boot = async () => {
+  syncAuthMode("signin", { preserveStatus: true });
   renderAll();
   navigate(location.hash.slice(1) || "dashboard", false);
   window.FlowFitProfessorReady = true;

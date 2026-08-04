@@ -14,19 +14,22 @@
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title">
-      <form class="auth-card card" data-auth-form>
+      <form class="auth-card card" data-auth-form data-auth-mode="signin">
         <span class="eyebrow">FlowFit professor</span>
-        <h1 id="professor-auth-title">Entre para gerenciar seus alunos</h1>
-        <p>Use email e senha ou entre com Google/Apple depois que os provedores estiverem configurados no Supabase.</p>
-        <label>Nome do personal <input name="name" autocomplete="name" placeholder="Seu nome ou marca" /></label>
+        <h1 id="professor-auth-title" data-auth-title>Entrar no painel</h1>
+        <p data-auth-copy>Gerencie alunos, treinos e marca em um só lugar.</p>
+        <div class="auth-mode-tabs" aria-label="Escolha entrar ou criar conta">
+          <button class="is-active" type="button" data-auth-mode-button="signin">Entrar</button>
+          <button type="button" data-auth-mode-button="signup">Criar conta</button>
+        </div>
+        <label data-signup-only>Nome do personal <input name="name" autocomplete="name" placeholder="Seu nome ou marca" /></label>
         <label>Email <input type="email" name="email" autocomplete="email" placeholder="você@email.com" required /></label>
         <label>Senha <input type="password" name="password" autocomplete="current-password" minlength="6" placeholder="Mínimo 6 caracteres" required /></label>
-        <p class="form-status" data-auth-status>Entre ou crie uma conta de professor para sincronizar dados reais.</p>
-        <div class="auth-card__actions">
-          <button class="button" type="submit" data-auth-action="signin">Entrar</button>
-          <button class="button button--quiet" type="submit" data-auth-action="signup">Criar conta</button>
-        </div>
-        <div class="auth-divider"><span>ou continue com</span></div>
+        <button class="auth-link-button" type="button" data-auth-reset>Esqueci minha senha</button>
+        <p class="form-status" data-auth-status>Acesse sua conta de professor.</p>
+        <button class="button button--block" type="submit" data-auth-submit>Entrar</button>
+        <p class="auth-secondary-action" data-auth-secondary>Não tem conta? Use “Criar conta”.</p>
+        <div class="auth-divider"><span>ou</span></div>
         <div class="oauth-grid" aria-label="Login social">
           <button class="button button--quiet" type="button" data-oauth-provider="google">
             <svg class="oauth-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -36,12 +39,6 @@
               <path fill="#ea4335" d="M12 6.1c1.5 0 2.8.5 3.8 1.5l2.8-2.8A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.9 5.6l3.3 2.6c.8-2.3 3-4.1 5.6-4.1Z" />
             </svg>
             Google
-          </button>
-          <button class="button button--quiet" type="button" data-oauth-provider="apple">
-            <svg class="oauth-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path fill="currentColor" d="M16.7 13.1c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.7-1.8-3.3-1.9-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-3-.8-1.5 0-2.9.9-3.7 2.2-1.6 2.8-.4 7 1.1 9.2.8 1.1 1.7 2.3 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.2.9-1.3 1.2-2.5 1.2-2.6-.1 0-2.6-1-2.6-3.5ZM14.5 6.3c.6-.7 1-1.7.9-2.7-.9 0-1.9.6-2.5 1.3-.6.7-1 1.6-.9 2.6.9.1 1.9-.5 2.5-1.2Z" />
-            </svg>
-            Apple
           </button>
         </div>
       </form>
@@ -113,7 +110,7 @@
           <div>
             <span class="chip" data-sync-chip>Dados locais</span>
             <strong data-sync-title>Modo local ativo</strong>
-            <small data-sync-detail>Entre e sincronize com Supabase para compartilhar dados entre dispositivos.</small>
+            <small data-sync-detail>Aguardando conexão.</small>
           </div>
         </article>
 
@@ -149,8 +146,37 @@
             </select>
           </label>
           <button class="button" type="submit">Salvar aluno</button>
-          <p class="form-status" data-student-sync-status>Alunos salvos localmente e sincronizados com Supabase quando disponível.</p>
+          <p class="form-status" data-student-sync-status>Pronto para salvar alunos.</p>
         </form>
+
+        <section class="student-tools-grid">
+          <article class="student-invite card">
+            <span class="eyebrow">Convite rápido</span>
+            <h2>Enviar acesso ao aluno</h2>
+            <p>Envie o acesso em poucos toques.</p>
+            <label>Aluno
+              <select data-invite-student-options></select>
+            </label>
+            <textarea readonly data-invite-message aria-label="Mensagem de convite"></textarea>
+            <div class="button-group button-group--inline">
+              <button class="button" type="button" data-copy-invite>Copiar convite</button>
+              <a class="button button--quiet" href="#" target="_blank" rel="noopener" data-whatsapp-invite>Abrir WhatsApp</a>
+            </div>
+            <p class="form-status" data-invite-status>Cadastre um aluno para gerar o primeiro convite.</p>
+          </article>
+
+          <form class="student-import card" data-student-import-form>
+            <span class="eyebrow">Importação simples</span>
+            <h2>Importar alunos por CSV</h2>
+            <p>Use uma planilha exportada como CSV. Colunas aceitas: nome, email, objetivo e status.</p>
+            <label class="file-picker">Arquivo CSV
+              <input type="file" accept=".csv,text/csv" data-student-import-input />
+              <small data-student-import-file>Nenhum arquivo selecionado</small>
+            </label>
+            <button class="button button--block" type="submit">Importar alunos</button>
+            <p class="form-status" data-student-import-status>Formato: nome,email,objetivo,status</p>
+          </form>
+        </section>
 
         <section class="student-list" data-student-list aria-label="Lista de alunos"></section>
       </section>
@@ -160,7 +186,7 @@
           <div class="workout-builder__intro">
             <span class="eyebrow">Adicionar treino</span>
             <h2>Criar novo treino para um aluno</h2>
-            <p>Cadastre uma prescrição e publique no app do aluno. O treino fica salvo localmente e sincroniza com Supabase quando a conexão estiver disponível.</p>
+            <p>Monte a prescrição e publique para o aluno.</p>
             <aside class="workout-preview" data-workout-preview aria-live="polite">
               <div class="workout-preview__head">
                 <span class="surface-icon" aria-hidden="true" data-icon="dumbbell"></span>
@@ -175,7 +201,7 @@
                 <span><strong data-preview-minutes>0</strong><small>min</small></span>
               </div>
               <section class="workout-preview__list" data-preview-list aria-label="Exercícios interpretados"></section>
-              <p class="form-status" data-workout-sync-status>Modo local: configure o Supabase para sincronizar treinos entre dispositivos.</p>
+              <p class="form-status" data-workout-sync-status>Pronto para publicar.</p>
             </aside>
           </div>
           <form class="quick-form quick-form--stack" data-workout-form>
@@ -209,7 +235,7 @@
           </article>
           <article class="card panel">
             <h2>Envio de avisos</h2>
-            <p>Este módulo precisa de autenticação e notificações antes de ser liberado em produção.</p>
+            <p>Chat e avisos entram na próxima etapa.</p>
             <button class="button button--quiet button--block" type="button" disabled>Em desenvolvimento</button>
           </article>
         </section>
@@ -301,12 +327,12 @@
                 <input type="file" accept="image/*" data-photo-input />
                 <small data-photo-file-name>Nenhum arquivo selecionado</small>
               </label>
-              <p class="asset-note">Logo e foto ficam só neste navegador por enquanto. Não são enviados para Supabase nem para Storage.</p>
+              <p class="asset-note">Logo e foto ainda ficam apenas neste navegador.</p>
               <button class="button button--quiet button--block" type="button" data-clear-brand-assets>Limpar logo/foto local</button>
             </div>
 
-            <p class="theme-editor__hint">O app usa exatamente as cores escolhidas aqui. O modo claro/escuro é inferido automaticamente pelo fundo para o navegador lidar melhor com formulários e barras do sistema.</p>
-            <p class="form-status" data-theme-status>Altere a marca e salve para aplicar no app do aluno.</p>
+            <p class="theme-editor__hint">O app usa as cores escolhidas aqui.</p>
+            <p class="form-status" data-theme-status>Altere e salve para aplicar.</p>
             <button class="button button--block" type="button" data-save-theme>Salvar e aplicar no app do aluno</button>
             <button class="button button--quiet button--block reset-theme-button" type="button" data-reset-theme>Resetar para o padrão FlowFit validado</button>
           </form>
@@ -343,10 +369,22 @@
           <form class="profile-editor card" data-coach-profile-form>
             <span class="eyebrow">Perfil profissional</span>
             <h2>Dados do personal</h2>
-            <p>Separe a identidade profissional do email usado para login. Esses dados podem alimentar o painel, convites e futuramente a área pública do personal.</p>
+            <p>Dados exibidos no painel, convites e app do aluno.</p>
 
             <label>Nome público <input name="name" data-coach-name-input placeholder="Nome exibido no painel" required /></label>
             <label>Descrição curta <input name="headline" data-coach-headline-input placeholder="Ex: Hipertrofia e emagrecimento" /></label>
+            <label>Bio profissional
+              <textarea name="bio" data-coach-bio-input placeholder="Conte em poucas linhas sua especialidade, método ou público principal."></textarea>
+            </label>
+            <div class="profile-editor__fields">
+              <label>Cidade <input name="city" data-coach-city-input placeholder="Cidade/UF" /></label>
+              <label>CREF <input name="cref" data-coach-cref-input placeholder="Ex: 123456-G/SP" /></label>
+            </div>
+            <div class="profile-editor__fields">
+              <label>Email público <input type="email" name="contactEmail" data-coach-contact-email-input placeholder="email de contato profissional" /></label>
+              <label>WhatsApp <input type="tel" name="whatsapp" data-coach-whatsapp-input placeholder="+55 11 99999-9999" /></label>
+            </div>
+            <label>Telefone alternativo <input type="tel" name="phone" data-coach-phone-input placeholder="Telefone comercial ou recepção" /></label>
 
             <div class="profile-email-note">
               <span>Email de login</span>
@@ -357,21 +395,44 @@
             <button class="button button--block" type="submit">Salvar perfil</button>
           </form>
 
-          <article class="profile-preview-card card">
-            <span class="eyebrow">Preview</span>
-            <div class="profile-preview-card__identity">
-              <span class="sidebar-profile__avatar profile-preview-card__avatar" data-coach-initials>PF</span>
-              <div>
-                <h2 data-coach-name>Personal</h2>
-                <p data-coach-headline>Perfil do personal</p>
+          <div class="profile-side-stack">
+            <article class="profile-preview-card card">
+              <span class="eyebrow">Preview</span>
+              <div class="profile-preview-card__identity">
+                <span class="sidebar-profile__avatar profile-preview-card__avatar" data-coach-initials>PF</span>
+                <div>
+                  <h2 data-coach-name>Personal</h2>
+                  <p data-coach-headline>Perfil do personal</p>
+                </div>
               </div>
-            </div>
-            <div class="profile-preview-card__panel">
-              <small>Como isso deve aparecer no produto</small>
-              <strong data-coach-name>Personal</strong>
-              <span data-coach-headline>Perfil do personal</span>
-            </div>
-          </article>
+              <div class="profile-preview-card__panel">
+                <small>Como isso deve aparecer no produto</small>
+                <strong data-coach-name>Personal</strong>
+                <span data-coach-headline>Perfil do personal</span>
+                <span data-coach-bio>Bio profissional ainda não preenchida.</span>
+                <span data-coach-contact-line>Contato profissional não informado.</span>
+                <span data-coach-cref-line>CREF não informado.</span>
+              </div>
+            </article>
+
+            <article class="account-card card">
+              <span class="eyebrow">Conta FlowFit</span>
+              <h2 data-account-plan>Plano piloto</h2>
+              <p>Limite operacional temporário até conectarmos cobrança real.</p>
+              <div class="account-usage">
+                <div>
+                  <strong data-account-active-students>0</strong>
+                  <small>alunos ativos</small>
+                </div>
+                <div>
+                  <strong data-account-student-limit>20</strong>
+                  <small>limite do plano</small>
+                </div>
+              </div>
+              <div class="progress-track" aria-label="Uso do limite de alunos"><span data-account-limit-progress style="--progress: 0%"></span></div>
+              <p class="form-status" data-account-status>Você está no plano piloto. Upgrade e cobrança entram depois.</p>
+            </article>
+          </div>
         </section>
       </section>
     </main>

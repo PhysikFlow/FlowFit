@@ -19,6 +19,12 @@ create table if not exists public.profiles (
   role       text not null check (role in ('coach', 'student')),
   name       text not null,
   headline   text not null default 'Personal trainer',
+  bio        text not null default '',
+  city       text not null default '',
+  contact_email text not null default '',
+  phone      text not null default '',
+  whatsapp   text not null default '',
+  cref       text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -91,7 +97,13 @@ create table if not exists public.workout_exercises (
 
 -- Migração segura para bancos que já tinham o schema piloto antigo.
 alter table public.profiles
-  add column if not exists headline text not null default 'Personal trainer';
+  add column if not exists headline text not null default 'Personal trainer',
+  add column if not exists bio text not null default '',
+  add column if not exists city text not null default '',
+  add column if not exists contact_email text not null default '',
+  add column if not exists phone text not null default '',
+  add column if not exists whatsapp text not null default '',
+  add column if not exists cref text not null default '';
 
 alter table public.brand_theme
   add column if not exists background_color text not null default '#090b10',

@@ -2,12 +2,28 @@ import { getSupabase } from "../../core/supabase.js";
 
 const PROFILES_TABLE = "profiles";
 const PROFILE_COLUMNS_BASE = "user_id, role, name, created_at, updated_at";
-const PROFILE_COLUMNS_EXTENDED = "user_id, role, name, headline, created_at, updated_at";
+const PROFILE_COLUMNS_LEGACY_EXTENDED = "user_id, role, name, headline, created_at, updated_at";
+const PROFILE_COLUMNS_EXTENDED = [
+  "user_id",
+  "role",
+  "name",
+  "headline",
+  "bio",
+  "city",
+  "contact_email",
+  "phone",
+  "whatsapp",
+  "cref",
+  "created_at",
+  "updated_at"
+].join(", ");
 
 const normalizeEmail = (value) => String(value ?? "").trim().toLowerCase();
 
+const normalizeText = (value) => String(value ?? "").trim();
+
 const normalizeName = (value, fallback = "Usuário") => {
-  const text = String(value ?? "").trim();
+  const text = normalizeText(value);
   return text || fallback;
 };
 
@@ -26,13 +42,22 @@ const profileFromRow = (row) => row ? {
   role: row.role,
   name: row.name,
   headline: row.headline || "",
+  bio: row.bio || "",
+  city: row.city || "",
+  contactEmail: row.contact_email || "",
+  phone: row.phone || "",
+  whatsapp: row.whatsapp || "",
+  cref: row.cref || "",
   createdAt: row.created_at,
   updatedAt: row.updated_at
 } : null;
 
 const isMissingProfileColumn = (error) => {
   const message = String(error?.message || "");
-  return error?.code === "42703" || /column .* does not exist/i.test(message);
+  return error?.code === "42703"
+    || error?.code === "PGRST204"
+    || /column .* does not exist/i.test(message)
+    || /could not find .* column/i.test(message);
 };
 
 export const authRepository = {
@@ -66,11 +91,21 @@ export const authRepository = {
     if (isMissingProfileColumn(error)) {
       const fallback = await client
         .from(PROFILES_TABLE)
-        .select(PROFILE_COLUMNS_BASE)
+        .select(PROFILE_COLUMNS_LEGACY_EXTENDED)
         .eq("user_id", user.id)
         .maybeSingle();
       data = fallback.data;
       error = fallback.error;
+
+      if (isMissingProfileColumn(error)) {
+        const baseFallback = await client
+          .from(PROFILES_TABLE)
+          .select(PROFILE_COLUMNS_BASE)
+          .eq("user_id", user.id)
+          .maybeSingle();
+        data = baseFallback.data;
+        error = baseFallback.error;
+      }
     }
 
     if (error) return null;
@@ -105,19 +140,25 @@ export const authRepository = {
     return { synced: !error, error, profile: profileFromRow(data) };
   },
 
-  async updateProfile({ name, headline } = {}) {
+  async updateProfile({ name, headline, bio, city, contactEmail, phone, whatsapp, cref } = {}) {
     const client = await getSupabase();
     const user = await this.getUser();
     if (!client || !user) return { synced: false, profile: null, reason: "not-authenticated" };
 
     const safeName = normalizeName(name, user.email || "Usuário");
-    const safeHeadline = String(headline ?? "").trim();
+    const safeHeadline = normalizeText(headline);
     const now = new Date().toISOString();
     let { data, error } = await client
       .from(PROFILES_TABLE)
       .update({
         name: safeName,
         headline: safeHeadline,
+        bio: normalizeText(bio),
+        city: normalizeText(city),
+        contact_email: normalizeEmail(contactEmail),
+        phone: normalizeText(phone),
+        whatsapp: normalizeText(whatsapp),
+        cref: normalizeText(cref),
         updated_at: now
       })
       .eq("user_id", user.id)
@@ -129,12 +170,23 @@ export const authRepository = {
       partial = true;
       const fallback = await client
         .from(PROFILES_TABLE)
-        .update({ name: safeName, updated_at: now })
+        .update({ name: safeName, headline: safeHeadline, updated_at: now })
         .eq("user_id", user.id)
-        .select(PROFILE_COLUMNS_BASE)
+        .select(PROFILE_COLUMNS_LEGACY_EXTENDED)
         .maybeSingle();
       data = fallback.data;
       error = fallback.error;
+
+      if (isMissingProfileColumn(error)) {
+        const baseFallback = await client
+          .from(PROFILES_TABLE)
+          .update({ name: safeName, updated_at: now })
+          .eq("user_id", user.id)
+          .select(PROFILE_COLUMNS_BASE)
+          .maybeSingle();
+        data = baseFallback.data;
+        error = baseFallback.error;
+      }
     }
 
     return { synced: !error, error, partial, profile: profileFromRow(data) };
@@ -142,7 +194,7 @@ export const authRepository = {
 
   async signIn({ email, password, role, name } = {}) {
     const client = await getSupabase();
-    if (!client) return { ok: false, message: "Supabase não configurado." };
+    if (!client) return { ok: false, message: "Serviço indisponível." };
 
     const { data, error } = await client.auth.signInWithPassword({
       email: normalizeEmail(email),
@@ -162,7 +214,7 @@ export const authRepository = {
 
   async signUp({ email, password, role, name, redirectTo } = {}) {
     const client = await getSupabase();
-    if (!client) return { ok: false, message: "Supabase não configurado." };
+    if (!client) return { ok: false, message: "Serviço indisponível." };
 
     const safeName = normalizeName(name, normalizeEmail(email));
     const { data, error } = await client.auth.signUp({
@@ -192,10 +244,10 @@ export const authRepository = {
 
   async signInWithOAuth({ provider, redirectTo } = {}) {
     const client = await getSupabase();
-    if (!client) return { ok: false, message: "Supabase não configurado." };
+    if (!client) return { ok: false, message: "Serviço indisponível." };
 
     const safeProvider = String(provider || "").trim().toLowerCase();
-    if (!["google", "apple"].includes(safeProvider)) {
+    if (!["google"].includes(safeProvider)) {
       return { ok: false, message: "Provedor de login inválido." };
     }
 
@@ -204,6 +256,21 @@ export const authRepository = {
       options: {
         redirectTo: normalizeRedirectUrl(redirectTo)
       }
+    });
+
+    if (error) return { ok: false, error, message: error.message };
+    return { ok: true, data };
+  },
+
+  async resetPassword({ email, redirectTo } = {}) {
+    const client = await getSupabase();
+    if (!client) return { ok: false, message: "Serviço indisponível." };
+
+    const safeEmail = normalizeEmail(email);
+    if (!safeEmail) return { ok: false, message: "Informe seu email para recuperar a senha." };
+
+    const { data, error } = await client.auth.resetPasswordForEmail(safeEmail, {
+      redirectTo: normalizeRedirectUrl(redirectTo)
     });
 
     if (error) return { ok: false, error, message: error.message };
