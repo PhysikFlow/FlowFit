@@ -13,7 +13,7 @@ Base web, mobile-first e sem dependencias de framework para um produto de treino
 
 ## Estado atual
 
-- Login por email/senha, Google e Apple no app do aluno e no painel do professor usando Supabase Auth.
+- Login por email/senha e Google no app do aluno e no painel do professor usando Supabase Auth.
 - Professor cadastra alunos reais com email de acesso.
 - Professor publica treinos para alunos do proprio `coach_id`.
 - Aluno entra com o mesmo email cadastrado pelo professor e ve apenas os proprios dados.
@@ -42,9 +42,9 @@ O projeto roda em GitHub Pages sem backend proprio. Por isso, login e autorizaca
 6. Publique um treino para esse aluno.
 7. Abra `appAluno/`, crie/entre com uma conta de aluno usando o mesmo email cadastrado.
 
-## Login social: Google e Apple
+## Login social: Google
 
-O frontend ja chama `supabase.auth.signInWithOAuth()` para `google` e `apple`. Para funcionar em producao, os provedores tambem precisam estar configurados fora do codigo.
+O frontend chama `supabase.auth.signInWithOAuth()` apenas para `google`. Para funcionar em producao, o provedor tambem precisa estar configurado fora do codigo.
 
 ### Google
 
@@ -55,13 +55,6 @@ O frontend ja chama `supabase.auth.signInWithOAuth()` para `google` e `apple`. P
    - habilite o provider;
    - em Client IDs, cole o Client ID do Google, algo como `...apps.googleusercontent.com`;
    - em Client Secret, cole o secret do OAuth Client.
-
-### Apple
-
-1. Requer Apple Developer Account.
-2. Crie/configure App ID, Services ID, Key ID e chave privada `.p8`.
-3. Configure o dominio web `physikflow.github.io`.
-4. No Supabase > Authentication > Providers > Apple, preencha Client IDs/Services ID e dados de OAuth da Apple.
 
 Observacao: no campo `Client IDs` do Supabase nao vai o dominio do site. O dominio entra nas configuracoes do provedor e na URL Configuration do Supabase.
 

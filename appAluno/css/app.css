@@ -79,25 +79,27 @@ body.has-onboarding {
 }
 
 .onboarding__panel {
-  width: min(100%, 27.5rem);
+  width: min(100%, 25.5rem);
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--space-4));
   margin: auto 0;
-  padding: var(--space-4);
+  overflow-y: auto;
+  padding: var(--space-3);
 }
 
 .onboarding__panel h1 {
-  margin: var(--space-2) 0 0;
-  font-size: var(--text-2xl);
+  margin: var(--space-1) 0 0;
+  font-size: clamp(1.35rem, 5.4vw, 1.85rem);
   line-height: 1.05;
 }
 
 .onboarding__panel p {
-  margin: var(--space-2) 0 var(--space-4);
+  margin: var(--space-1) 0 var(--space-2);
   color: var(--color-muted);
-  line-height: 1.42;
+  line-height: 1.35;
 }
 
 .onboarding__panel p[data-auth-copy] {
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-2);
 }
 
 .onboarding-form .form-status,
@@ -139,7 +141,7 @@ body.has-onboarding {
 
 .onboarding-form {
   display: grid;
-  gap: var(--space-2);
+  gap: 0.6rem;
 }
 
 .onboarding-form label {
@@ -153,7 +155,7 @@ body.has-onboarding {
 .onboarding-form input,
 .onboarding-form select {
   width: 100%;
-  min-height: var(--student-control-height);
+  min-height: 2.48rem;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
   background: var(--color-bg-elevated);
@@ -173,7 +175,7 @@ body.has-onboarding {
 .auth-mode-tabs--student button {
   display: grid;
   gap: 0.08rem;
-  min-height: 2.75rem;
+  min-height: 2.45rem;
   align-content: center;
   border-radius: var(--radius-sm);
   line-height: 1.15;
@@ -191,32 +193,22 @@ body.has-onboarding {
 }
 
 .auth-social-block {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border: 1px solid var(--color-accent-line);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-accent-soft) 64%, transparent);
+  display: block;
 }
 
-.auth-social-block > span {
-  color: var(--color-accent);
-  font-size: var(--text-xs);
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.auth-social-block .button {
+.auth-social-block .oauth-button {
+  min-height: 2.35rem;
   border: 1px solid var(--color-line);
   background: var(--color-bg-elevated);
   color: var(--color-text);
+  font-size: var(--text-sm);
+  box-shadow: none;
 }
 
 .auth-divider {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   color: var(--color-muted);
   font-size: var(--text-xs);
   font-weight: 900;
