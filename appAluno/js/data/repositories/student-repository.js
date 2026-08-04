@@ -66,7 +66,9 @@ const mergeStudents = (...lists) => {
   const merged = new Map();
   lists.flat().filter(Boolean).forEach((item) => {
     const student = normalizeStudent(item);
-    const key = student.id || `${student.coachId}:${student.email || student.studentKey}`;
+    const key = student.email
+      ? `${student.coachId}:email:${student.email}`
+      : student.id || `${student.coachId}:key:${student.studentKey}`;
     const previous = merged.get(key);
     if (!previous || new Date(student.updatedAt) >= new Date(previous.updatedAt)) merged.set(key, student);
   });

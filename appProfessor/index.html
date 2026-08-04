@@ -146,7 +146,7 @@
             </select>
           </label>
           <button class="button" type="submit">Salvar aluno</button>
-          <p class="form-status" data-student-sync-status>Pronto para salvar alunos.</p>
+          <p class="form-status" data-student-sync-status>Mesmo email neste personal atualiza o aluno; em outro personal vira outro vínculo.</p>
         </form>
 
         <section class="student-tools-grid">
@@ -184,9 +184,9 @@
       <section class="page" data-page="workouts" aria-label="Treinos, modelos e ajustes">
         <div class="workout-builder card" id="add-workout">
           <div class="workout-builder__intro">
-            <span class="eyebrow">Adicionar treino</span>
-            <h2>Criar novo treino para um aluno</h2>
-            <p>Monte a prescrição e publique para o aluno.</p>
+            <span class="eyebrow" data-workout-builder-mode>Adicionar treino</span>
+            <h2 data-workout-builder-title>Criar novo treino para um aluno</h2>
+            <p data-workout-builder-copy>Ao publicar, o aluno recebe esse treino no app na próxima abertura ou atualização.</p>
             <aside class="workout-preview" data-workout-preview aria-live="polite">
               <div class="workout-preview__head">
                 <span class="surface-icon" aria-hidden="true" data-icon="dumbbell"></span>
@@ -219,7 +219,10 @@
             <label>Exercícios iniciais
               <textarea name="blocks" placeholder="Supino reto 4x10&#10;Crucifixo 3x12&#10;Tríceps corda 3x15" required></textarea>
             </label>
-            <button class="button button--block" type="submit">Publicar treino para o aluno</button>
+            <div class="button-group workout-form-actions">
+              <button class="button button--block" type="submit" data-workout-submit>Publicar treino para o aluno</button>
+              <button class="button button--quiet button--block" type="button" data-cancel-workout-edit hidden>Cancelar edição</button>
+            </div>
           </form>
         </div>
 

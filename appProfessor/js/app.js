@@ -29,6 +29,11 @@ const photoInput = document.querySelector("[data-photo-input]");
 const themeStatus = document.querySelector("[data-theme-status]");
 const studentSyncStatus = document.querySelector("[data-student-sync-status]");
 const workoutForm = document.querySelector("[data-workout-form]");
+const workoutBuilderMode = document.querySelector("[data-workout-builder-mode]");
+const workoutBuilderTitle = document.querySelector("[data-workout-builder-title]");
+const workoutBuilderCopy = document.querySelector("[data-workout-builder-copy]");
+const workoutSubmit = document.querySelector("[data-workout-submit]");
+const cancelWorkoutEditButton = document.querySelector("[data-cancel-workout-edit]");
 const previewExercises = document.querySelector("[data-preview-exercises]");
 const previewSets = document.querySelector("[data-preview-sets]");
 const previewMinutes = document.querySelector("[data-preview-minutes]");
@@ -76,6 +81,7 @@ let workouts = workoutRepository.listPublishedWorkouts();
 let dataStatus = "Local";
 let authContext = null;
 let authAction = "signin";
+let editingWorkoutId = "";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -509,11 +515,20 @@ const focusWorkoutForm = () => {
   window.setTimeout(() => workoutForm?.querySelector("select, input, textarea")?.focus(), 260);
 };
 
+const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
+
+const findExistingStudentForDraft = (draft) => {
+  const normalizedEmail = normalizeEmail(draft.email);
+  const normalizedName = String(draft.name || "").trim().toLowerCase();
+  return students.find((student) => (
+    normalizedEmail && normalizeEmail(student.email) === normalizedEmail
+  ) || (
+    !normalizedEmail && normalizedName && student.name.trim().toLowerCase() === normalizedName
+  )) || null;
+};
+
 const mergeStudentDraftWithExisting = (draft) => {
-  const normalizedEmail = String(draft.email || "").trim().toLowerCase();
-  const existing = students.find((student) => (
-    normalizedEmail && student.email === normalizedEmail
-  ) || student.name.trim().toLowerCase() === String(draft.name || "").trim().toLowerCase());
+  const existing = findExistingStudentForDraft(draft);
   const next = createStudentFromProfessorForm(draft);
   if (!existing) return next;
   return {
@@ -545,11 +560,15 @@ const getWorkoutBlocks = (workout) => {
   return ["Sem exercícios cadastrados"];
 };
 
-const getPublishedWorkoutForStudent = (student) => workouts.find((workout) => workout.studentKey === student.studentKey);
+const getPublishedWorkoutForStudent = (student) => workouts.find((workout) => workout.studentId === student.id)
+  || workouts.find((workout) => workout.studentKey === student.studentKey);
 
 const syncStudentWorkout = (workout) => {
   students = students.map((student) => {
-    if (student.studentKey !== workout.studentKey) return student;
+    const matchesStudent = workout.studentId
+      ? student.id === workout.studentId
+      : student.studentKey === workout.studentKey;
+    if (!matchesStudent) return student;
     return {
       ...student,
       workout: `Treino ${workout.code} - ${workout.title}`,
@@ -827,6 +846,49 @@ const renderStudentOptions = () => {
   renderInviteTools();
 };
 
+const setWorkoutEditingMode = (workout = null) => {
+  editingWorkoutId = workout?.id || "";
+  if (workoutBuilderMode) workoutBuilderMode.textContent = workout ? "Editar treino publicado" : "Adicionar treino";
+  if (workoutBuilderTitle) workoutBuilderTitle.textContent = workout ? `Editando treino de ${workout.owner}` : "Criar novo treino para um aluno";
+  if (workoutBuilderCopy) {
+    workoutBuilderCopy.textContent = workout
+      ? "Salvar alterações republica o treino para o mesmo aluno. Ele recebe na próxima abertura ou atualização do app."
+      : "Ao publicar, o aluno recebe esse treino no app na próxima abertura ou atualização.";
+  }
+  if (workoutSubmit) workoutSubmit.textContent = workout ? "Salvar alterações e republicar" : "Publicar treino para o aluno";
+  cancelWorkoutEditButton?.toggleAttribute("hidden", !workout);
+};
+
+const workoutToEditableTitle = (workout) => `Treino ${workout.code || "A"} - ${workout.title || "Novo treino"}`;
+
+const workoutToEditableBlocks = (workout) => (workout.exercises || [])
+  .map((exercise) => `${exercise.name} ${exercise.prescription}`)
+  .join("\n");
+
+const loadWorkoutForEditing = (workout) => {
+  if (!workoutForm || !workout) return;
+  const studentSelect = workoutForm.querySelector("[name='student']");
+  const titleInput = workoutForm.querySelector("[name='title']");
+  const templateInput = workoutForm.querySelector("[name='template']");
+  const blocksInput = workoutForm.querySelector("[name='blocks']");
+
+  if (studentSelect && students.some((student) => student.id === workout.studentId)) studentSelect.value = workout.studentId;
+  if (titleInput) titleInput.value = workoutToEditableTitle(workout);
+  if (templateInput) templateInput.value = workout.focus || templateInput.value;
+  if (blocksInput) blocksInput.value = workoutToEditableBlocks(workout);
+
+  setWorkoutEditingMode(workout);
+  setWorkoutSyncStatus("Editando treino publicado. Salve para atualizar o app do aluno.", "");
+  renderWorkoutPreview();
+  focusWorkoutForm();
+};
+
+const resetWorkoutFormMode = ({ resetForm = false } = {}) => {
+  if (resetForm) workoutForm?.reset();
+  setWorkoutEditingMode(null);
+  renderWorkoutPreview();
+};
+
 const renderStudents = () => {
   const target = document.querySelector("[data-student-list]");
   if (!target) {
@@ -841,26 +903,35 @@ const renderStudents = () => {
     return;
   }
 
-  target.innerHTML = students.map((student) => `
-    <article class="student-card card">
-      <span class="avatar">${escapeHtml(student.initials)}</span>
-      <div class="student-card__main">
-        <div>
-          <h2>${escapeHtml(student.name)}</h2>
-          <p>${escapeHtml(student.goal)} - ${escapeHtml(student.plan)}</p>
+  target.innerHTML = students.map((student) => {
+    const publishedWorkout = getPublishedWorkoutForStudent(student);
+    const actionLabel = publishedWorkout ? "Editar treino publicado" : "Criar primeiro treino";
+    const workoutLabel = publishedWorkout
+      ? `Treino ${publishedWorkout.code} - ${publishedWorkout.title}`
+      : "Sem treino publicado";
+    const accessLabel = student.email ? `Acesso: ${student.email}` : "Sem email de acesso";
+    return `
+      <article class="student-card card">
+        <span class="avatar">${escapeHtml(student.initials)}</span>
+        <div class="student-card__main">
+          <div>
+            <h2>${escapeHtml(student.name)}</h2>
+            <p>${escapeHtml(student.goal)} - ${escapeHtml(student.plan)}</p>
+            <small class="student-card__access">${escapeHtml(accessLabel)}</small>
+          </div>
+          <span class="chip">${escapeHtml(student.status)}</span>
         </div>
-        <span class="chip">${escapeHtml(student.status)}</span>
-      </div>
-      <div class="student-card__meta">
-        <span>${escapeHtml(student.workout)}</span>
-        <span>${student.adherence}% aderência</span>
-      </div>
-      <div class="progress-track" aria-label="${student.adherence} por cento de aderência"><span style="--progress: ${student.adherence}%"></span></div>
-      <button class="button button--quiet button--block" type="button" data-student-action="${escapeHtml(student.id)}">
-        ${escapeHtml(student.nextAction)} ${svgIcon("arrow-right")}
-      </button>
-    </article>
-  `).join("");
+        <div class="student-card__meta">
+          <span>${escapeHtml(workoutLabel)}</span>
+          <span>${student.adherence}% aderência</span>
+        </div>
+        <div class="progress-track" aria-label="${student.adherence} por cento de aderência"><span style="--progress: ${student.adherence}%"></span></div>
+        <button class="button button--quiet button--block" type="button" data-student-action="${escapeHtml(student.id)}">
+          ${escapeHtml(actionLabel)} ${svgIcon("arrow-right")}
+        </button>
+      </article>
+    `;
+  }).join("");
   renderStudentOptions();
   renderWorkoutPreview();
 };
@@ -937,10 +1008,10 @@ const renderWorkouts = () => {
           </div>
           <h2>${escapeHtml(workout.title)}</h2>
           <p>${blocks}</p>
-          <small>Atualizado: ${escapeHtml(formatUpdatedAt(workout.updatedAt))}</small>
+          <small>Atualizado: ${escapeHtml(formatUpdatedAt(workout.updatedAt))} - aluno recebe ao abrir ou atualizar o app</small>
         </div>
-        <button class="icon-button" type="button" aria-label="Editar ${escapeHtml(workout.title)}" data-workout-action="${escapeHtml(workout.id)}">
-          ${svgIcon("chevron-right")}
+        <button class="button button--quiet" type="button" aria-label="Editar ${escapeHtml(workout.title)}" data-workout-action="${escapeHtml(workout.id)}">
+          Editar
         </button>
       </article>
     `;
@@ -1019,11 +1090,13 @@ document.querySelector("[data-student-form]")?.addEventListener("submit", async 
     setAuthLocked(true);
     return;
   }
-  const student = createStudentFromProfessorForm(Object.fromEntries(new FormData(event.currentTarget)));
+  const draft = Object.fromEntries(new FormData(event.currentTarget));
+  const existingStudent = findExistingStudentForDraft(draft);
+  const student = mergeStudentDraftWithExisting(draft);
   const savedStudent = studentRepository.saveStudent({ ...student, coachId: authContext.coachId });
   applyStudents([savedStudent, ...students.filter((item) => item.id !== savedStudent.id)]);
-  setStudentSyncStatus("Aluno salvo. Sincronizando...", "");
-  showToast("Aluno salvo.");
+  setStudentSyncStatus(existingStudent ? "Aluno já existia neste personal. Atualizando cadastro..." : "Aluno criado. Sincronizando...", "");
+  showToast(existingStudent ? "Aluno atualizado." : "Aluno criado.");
   if (getActiveStudentCount() > ACCOUNT_PLAN.activeStudentLimit) {
     setStudentSyncStatus("Aluno salvo, mas o limite do plano piloto foi excedido.", "warning");
   }
@@ -1034,7 +1107,9 @@ document.querySelector("[data-student-form]")?.addEventListener("submit", async 
     result.synced
       ? limitExceeded
         ? "Aluno sincronizado, mas o limite do plano piloto foi excedido."
-        : "Aluno sincronizado."
+        : existingStudent
+          ? "Aluno atualizado neste personal. Outros personais com o mesmo aluno não foram alterados."
+          : "Aluno sincronizado. Agora publique um treino e envie o convite."
       : "Aluno salvo neste aparelho.",
     result.synced && !limitExceeded ? "synced" : "warning"
   );
@@ -1101,6 +1176,7 @@ studentImportForm?.addEventListener("submit", async (event) => {
     uniqueDrafts.push(draft);
   });
 
+  const updatedExistingCount = uniqueDrafts.filter((draft) => findExistingStudentForDraft(draft)).length;
   const savedStudents = uniqueDrafts.map((draft) => {
     const merged = mergeStudentDraftWithExisting(draft);
     return studentRepository.saveStudent({ ...merged, coachId: authContext.coachId });
@@ -1109,7 +1185,7 @@ studentImportForm?.addEventListener("submit", async (event) => {
     ...savedStudents,
     ...students.filter((student) => !savedStudents.some((saved) => saved.id === student.id))
   ]);
-  setStudentImportStatus(`${savedStudents.length} aluno(s) importado(s). Sincronizando...`, "");
+  setStudentImportStatus(`${savedStudents.length} aluno(s) processado(s), ${updatedExistingCount} atualizado(s). Sincronizando...`, "");
   showToast("Importação concluída.");
 
   const syncResults = await Promise.allSettled(savedStudents.map((student) => studentRepository.syncStudent(student)));
@@ -1119,7 +1195,7 @@ studentImportForm?.addEventListener("submit", async (event) => {
     syncedCount === savedStudents.length
       ? limitExceeded
         ? `${syncedCount} aluno(s) sincronizado(s). Limite do plano piloto excedido.`
-        : `${syncedCount} aluno(s) sincronizado(s).`
+        : `${syncedCount} aluno(s) sincronizado(s). ${updatedExistingCount} já existiam neste personal.`
       : `${savedStudents.length} aluno(s) salvos; ${syncedCount} sincronizado(s).`,
     syncedCount === savedStudents.length && !limitExceeded ? "synced" : "warning"
   );
@@ -1146,12 +1222,15 @@ workoutForm?.addEventListener("submit", async (event) => {
     return;
   }
 
+  const selectedStudent = students.find((student) => student.id === data.get("student"));
+  const editingWorkout = workouts.find((item) => item.id === editingWorkoutId);
   const workout = createWorkoutFromProfessorForm({
-    student: students.find((student) => student.id === data.get("student")),
+    student: selectedStudent,
     coachId: authContext.coachId,
     title: data.get("title"),
     template: data.get("template"),
-    blocks: data.get("blocks")
+    blocks: data.get("blocks"),
+    workoutId: editingWorkout?.id
   });
   const savedWorkout = workoutRepository.savePublishedWorkout(workout);
   const linkedStudent = students.find((student) => student.id === savedWorkout.studentId);
@@ -1165,16 +1244,18 @@ workoutForm?.addEventListener("submit", async (event) => {
   }
 
   applyPublishedWorkouts([savedWorkout, ...workouts.filter((item) => item.id !== savedWorkout.id)]);
-  setWorkoutSyncStatus("Treino salvo. Sincronizando...", "");
-  showToast("Treino publicado.");
+  setWorkoutSyncStatus(editingWorkout ? "Treino atualizado. Republicando para o aluno..." : "Treino salvo. Sincronizando...", "");
+  showToast(editingWorkout ? "Treino republicado." : "Treino publicado.");
 
   const result = await workoutRepository.syncPublishedWorkout(savedWorkout, linkedStudent);
   setWorkoutSyncStatus(
-    result.synced ? "Treino sincronizado." : "Treino salvo neste aparelho.",
+    result.synced
+      ? "Treino sincronizado. O aluno recebe na próxima abertura ou atualização do app."
+      : "Treino salvo neste aparelho. O aluno recebe quando sincronizar.",
     result.synced ? "synced" : "warning"
   );
   if (result.synced) showToast("Treino sincronizado.");
-  renderWorkoutPreview();
+  resetWorkoutFormMode({ resetForm: true });
 });
 
 workoutForm?.addEventListener("input", renderWorkoutPreview);
@@ -1324,16 +1405,29 @@ document.addEventListener("click", (event) => {
     const student = students.find((item) => item.id === studentAction.dataset.studentAction);
     navigate("workouts");
     if (student) {
+      const publishedWorkout = getPublishedWorkoutForStudent(student);
+      if (publishedWorkout) {
+        loadWorkoutForEditing(publishedWorkout);
+        return;
+      }
       const studentSelect = document.querySelector("[data-student-options]");
       if (studentSelect) studentSelect.value = student.id;
+      resetWorkoutFormMode();
       renderWorkoutPreview();
     }
     focusWorkoutForm();
   }
 
-  if (event.target.closest("[data-workout-action]")) {
-    showToast("Edição detalhada de treino ainda não implementada.");
+  const workoutAction = event.target.closest("[data-workout-action]");
+  if (workoutAction) {
+    const workout = workouts.find((item) => item.id === workoutAction.dataset.workoutAction);
+    if (workout) loadWorkoutForEditing(workout);
   }
+});
+
+cancelWorkoutEditButton?.addEventListener("click", () => {
+  resetWorkoutFormMode({ resetForm: true });
+  setWorkoutSyncStatus("Edição cancelada. Pronto para publicar novo treino.", "");
 });
 
 window.addEventListener("hashchange", () => navigate(location.hash.slice(1), false));

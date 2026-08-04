@@ -142,7 +142,7 @@ const readPublishedWorkouts = () => {
 
 const writePublishedWorkouts = (items) => Platform.storage.set(PUBLISHED_WORKOUTS_KEY, items);
 
-export const createWorkoutFromProfessorForm = ({ student, studentName, studentId, studentKey, coachId, title, template, blocks }) => {
+export const createWorkoutFromProfessorForm = ({ student, studentName, studentId, studentKey, coachId, title, template, blocks, workoutId }) => {
   const owner = normalizeText(student?.name || studentName, "Aluno");
   const resolvedStudentKey = normalizeText(student?.studentKey || studentKey, studentKeyFromName(owner));
   const resolvedStudentId = normalizeText(student?.id || studentId, fallbackStudentIdFromKey(resolvedStudentKey));
@@ -153,7 +153,7 @@ export const createWorkoutFromProfessorForm = ({ student, studentName, studentId
     .filter(Boolean)
     .slice(0, 12);
   if (!sourceLines.length) sourceLines.push("Exercício livre 3x10");
-  const id = `published-${Date.now()}`;
+  const id = normalizeText(workoutId, `published-${Date.now()}`);
   const exercises = sourceLines.map((line, index) => parseExerciseLine(line, index, id));
 
   return {
