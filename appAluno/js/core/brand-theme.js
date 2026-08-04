@@ -34,18 +34,22 @@ const isValidHex = (value) => /^#[0-9a-f]{6}$/i.test(String(value || ""));
 const allowed = (value, options, fallback) => options.includes(value) ? value : fallback;
 
 const FONT_STACKS = {
-  system: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-  rounded: '"Segoe UI Rounded", "Nunito", "Aptos Rounded", ui-rounded, system-ui, sans-serif',
-  geometric: '"Montserrat", "Aptos", "Segoe UI", ui-sans-serif, system-ui, sans-serif',
-  editorial: 'Georgia, "Times New Roman", ui-serif, serif',
+  system: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  serif: 'Georgia, "Times New Roman", ui-serif, serif',
   mono: '"SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace'
 };
 
 const RADIUS_PRESETS = {
-  sharp: { sm: "0.35rem", md: "0.55rem", lg: "0.8rem", pill: "0.8rem" },
+  sharp: { sm: "0.35rem", md: "0.55rem", lg: "0.8rem", pill: "999px" },
   soft: { sm: "0.7rem", md: "1rem", lg: "1.35rem", pill: "999px" },
   round: { sm: "1rem", md: "1.45rem", lg: "2rem", pill: "999px" },
   pill: { sm: "1.2rem", md: "1.8rem", lg: "2.4rem", pill: "999px" }
+};
+
+const FONT_ALIASES = {
+  editorial: "serif",
+  rounded: "system",
+  geometric: "system"
 };
 
 const backgroundEffects = {
@@ -81,13 +85,20 @@ export const inferModeFromColor = (hex) => relativeLuminance(hex) > 0.56 ? "ligh
 
 const readableOnColor = (hex) => relativeLuminance(hex) > 0.5 ? "#10131a" : "#ffffff";
 
+export const contrastRatio = (foreground, background) => {
+  const lighter = Math.max(relativeLuminance(foreground), relativeLuminance(background));
+  const darker = Math.min(relativeLuminance(foreground), relativeLuminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+};
+
 export const normalizeBrandTheme = (theme = {}) => {
   const rawBackground = theme.backgroundColor || theme.background_color;
   const mode = theme.mode === "light" || theme.mode === "dark"
     ? theme.mode
     : inferModeFromColor(isValidHex(rawBackground) ? rawBackground : DEFAULT_BRAND_THEME.backgroundColor);
   const palette = MODE_PALETTES[mode];
-  const fontPreset = allowed(theme.fontPreset || theme.font_preset, Object.keys(FONT_STACKS), DEFAULT_BRAND_THEME.fontPreset);
+  const rawFontPreset = theme.fontPreset || theme.font_preset;
+  const fontPreset = allowed(FONT_ALIASES[rawFontPreset] || rawFontPreset, Object.keys(FONT_STACKS), DEFAULT_BRAND_THEME.fontPreset);
   const radiusPreset = allowed(theme.radiusPreset || theme.radius_preset, Object.keys(RADIUS_PRESETS), DEFAULT_BRAND_THEME.radiusPreset);
   const backgroundStyle = allowed(theme.backgroundStyle || theme.background_style, Object.keys(backgroundEffects), DEFAULT_BRAND_THEME.backgroundStyle);
 
@@ -155,7 +166,7 @@ export const applyThemeTokens = (theme) => {
   root.style.setProperty("--color-surface-glass", `color-mix(in srgb, ${normalized.surfaceColor} 82%, transparent)`);
   root.style.setProperty("--color-text", normalized.textColor);
   root.style.setProperty("--color-muted", `color-mix(in srgb, ${normalized.textColor} 68%, ${normalized.backgroundColor})`);
-  root.style.setProperty("--color-subtle", `color-mix(in srgb, ${normalized.textColor} 45%, ${normalized.backgroundColor})`);
+  root.style.setProperty("--color-subtle", `color-mix(in srgb, ${normalized.textColor} 58%, ${normalized.backgroundColor})`);
   root.style.setProperty("--color-line", `color-mix(in srgb, ${normalized.accent} 18%, transparent)`);
   root.style.setProperty("--color-on-accent", readableOnColor(normalized.accent));
   root.style.setProperty("--font-sans", FONT_STACKS[normalized.fontPreset]);

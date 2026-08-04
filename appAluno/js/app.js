@@ -95,6 +95,13 @@ const formatDelta = (current, previous, unit) => {
   return `${sign}${formatDecimal(delta)} ${unit}`;
 };
 
+const deltaTone = (current, previous) => {
+  const delta = Number(current) - Number(previous);
+  if (delta > 0) return "up";
+  if (delta < 0) return "down";
+  return "neutral";
+};
+
 const notificationActionPage = {
   "Ver treino": "workout",
   "Abrir agenda": "schedule",
@@ -433,9 +440,9 @@ const renderProgress = () => {
   const maxWeight = Math.max(...weights);
   const span = Math.max(maxWeight - minWeight, 1);
   const metrics = [
-    { icon: "scale", label: "Peso", helper: "Meta: 78 kg", value: `${formatDecimal(latest.weight)} kg`, delta: formatDelta(latest.weight, previous.weight, "kg") },
-    { icon: "ruler", label: "Cintura", helper: "Medida atual", value: `${formatDecimal(latest.waist)} cm`, delta: formatDelta(latest.waist, previous.waist, "cm") },
-    { icon: "weight", label: "Braço", helper: "Medida atual", value: `${formatDecimal(latest.arm)} cm`, delta: formatDelta(latest.arm, previous.arm, "cm") }
+    { icon: "scale", label: "Peso", helper: "Meta: 78 kg", value: `${formatDecimal(latest.weight)} kg`, delta: formatDelta(latest.weight, previous.weight, "kg"), tone: deltaTone(latest.weight, previous.weight) },
+    { icon: "ruler", label: "Cintura", helper: "Medida atual", value: `${formatDecimal(latest.waist)} cm`, delta: formatDelta(latest.waist, previous.waist, "cm"), tone: deltaTone(latest.waist, previous.waist) },
+    { icon: "weight", label: "Braço", helper: "Medida atual", value: `${formatDecimal(latest.arm)} cm`, delta: formatDelta(latest.arm, previous.arm, "cm"), tone: deltaTone(latest.arm, previous.arm) }
   ];
 
   document.querySelector("[data-chart]").innerHTML = recentEntries.map((entry) => {
@@ -447,7 +454,7 @@ const renderProgress = () => {
     <article class="metric card">
       <span class="surface-icon">${svgIcon(metric.icon)}</span>
       <div><strong>${metric.label}</strong><small>${metric.helper}</small></div>
-      <div class="metric__value"><strong>${metric.value}</strong><small>${metric.delta}</small></div>
+      <div class="metric__value" data-delta-tone="${metric.tone}"><strong>${metric.value}</strong><small>${metric.delta}</small></div>
     </article>
   `).join("");
   document.querySelector("[data-measurement-history]").innerHTML = [...entries].reverse().slice(0, 6).map((entry) => `

@@ -1,6 +1,6 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js";
 import { Platform } from "../../appAluno/js/core/platform.js";
-import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js";
+import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js";
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js";
@@ -17,6 +17,10 @@ const accentInput = document.querySelector("[data-accent-input]");
 const backgroundInput = document.querySelector("[data-background-input]");
 const surfaceInput = document.querySelector("[data-surface-input]");
 const textInput = document.querySelector("[data-text-input]");
+const accentHexInput = document.querySelector("[data-accent-hex]");
+const backgroundHexInput = document.querySelector("[data-background-hex]");
+const surfaceHexInput = document.querySelector("[data-surface-hex]");
+const textHexInput = document.querySelector("[data-text-hex]");
 const fontInput = document.querySelector("[data-font-input]");
 const radiusInput = document.querySelector("[data-radius-input]");
 const backgroundStyleInput = document.querySelector("[data-background-style-input]");
@@ -38,6 +42,8 @@ const coachProfileForm = document.querySelector("[data-coach-profile-form]");
 const coachProfileStatus = document.querySelector("[data-coach-profile-status]");
 const coachNameInput = document.querySelector("[data-coach-name-input]");
 const coachHeadlineInput = document.querySelector("[data-coach-headline-input]");
+const contrastStatus = document.querySelector("[data-contrast-status]");
+const saveThemeButton = document.querySelector("[data-save-theme]");
 
 let toastTimer;
 let themeSaveTimer;
@@ -103,6 +109,56 @@ const setStudentSyncStatus = (message, state = "") => setStatus(studentSyncStatu
 const setWorkoutSyncStatus = (message, state = "") => setStatus(workoutSyncStatus, message, state);
 const setAuthStatus = (message, state = "") => setStatus(authStatus, message, state);
 const setCoachProfileStatus = (message, state = "") => setStatus(coachProfileStatus, message, state);
+
+const HEX_PATTERN = /^#[0-9a-f]{6}$/i;
+
+const normalizeHexInput = (value) => {
+  const text = String(value || "").trim();
+  const withHash = text.startsWith("#") ? text : `#${text}`;
+  return HEX_PATTERN.test(withHash) ? withHash.toLowerCase() : "";
+};
+
+const formatContrast = (ratio) => ratio.toLocaleString("pt-BR", {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1
+});
+
+const colorHexPairs = [
+  [accentInput, accentHexInput],
+  [backgroundInput, backgroundHexInput],
+  [surfaceInput, surfaceHexInput],
+  [textInput, textHexInput]
+].filter(([color, hex]) => color && hex);
+
+const syncHexInputsFromColors = () => {
+  colorHexPairs.forEach(([color, hex]) => {
+    hex.value = String(color.value || "").toLowerCase();
+    hex.classList.remove("is-invalid");
+  });
+};
+
+const updateContrastStatus = () => {
+  const hasInvalidHex = colorHexPairs.some(([, hex]) => !normalizeHexInput(hex.value));
+  const text = normalizeHexInput(textInput?.value) || DEFAULT_BRAND_THEME.textColor;
+  const background = normalizeHexInput(backgroundInput?.value) || DEFAULT_BRAND_THEME.backgroundColor;
+  const surface = normalizeHexInput(surfaceInput?.value) || DEFAULT_BRAND_THEME.surfaceColor;
+  const backgroundRatio = contrastRatio(text, background);
+  const surfaceRatio = contrastRatio(text, surface);
+  const isReadable = !hasInvalidHex && backgroundRatio >= 4.5 && surfaceRatio >= 4.5;
+
+  if (contrastStatus) {
+    contrastStatus.textContent = hasInvalidHex
+      ? "Digite cores hex válidas para salvar o tema."
+      : isReadable
+        ? `Contraste aprovado: fundo ${formatContrast(backgroundRatio)}:1, cards ${formatContrast(surfaceRatio)}:1.`
+        : `Contraste insuficiente: fundo ${formatContrast(backgroundRatio)}:1, cards ${formatContrast(surfaceRatio)}:1. Use pelo menos 4,5:1.`;
+    contrastStatus.classList.toggle("is-warning", !isReadable);
+    contrastStatus.classList.toggle("is-synced", isReadable);
+  }
+
+  if (saveThemeButton) saveThemeButton.disabled = !isReadable;
+  return isReadable;
+};
 
 const getAuthRedirectUrl = () => {
   const url = new URL(window.location.href);
@@ -214,11 +270,18 @@ const fillThemeInputs = (theme) => {
   if (fontInput) fontInput.value = normalized.fontPreset;
   if (radiusInput) radiusInput.value = normalized.radiusPreset;
   if (backgroundStyleInput) backgroundStyleInput.value = normalized.backgroundStyle;
+  syncHexInputsFromColors();
+  updateContrastStatus();
   return normalized;
 };
 
 const saveThemeNow = async ({ silent = false } = {}) => {
   clearTimeout(themeSaveTimer);
+  if (!updateContrastStatus()) {
+    setThemeStatus("Ajuste o contraste antes de salvar o tema.", "warning");
+    if (!silent) showToast("Contraste insuficiente para salvar o tema.");
+    return { synced: false, blocked: true, theme: readTheme() };
+  }
   setThemeStatus("Salvando marca branca...", "");
   const result = await themeRepository.saveBrandTheme(readTheme());
   const message = result.synced && result.partial
@@ -312,8 +375,14 @@ const applyPublishedWorkouts = (publishedWorkouts = workoutRepository.listPublis
   renderDashboard();
 };
 
+const updateDataStatus = (status) => {
+  dataStatus = status;
+  renderDashboard();
+};
+
 const refreshStudents = async ({ silent = false } = {}) => {
   if (!silent) setStudentSyncStatus("Buscando alunos...", "");
+  updateDataStatus("Sincronizando");
   const result = await studentRepository.fetchStudents();
   dataStatus = result.synced ? "Online" : "Local";
   applyStudents(result.students);
@@ -326,6 +395,7 @@ const refreshStudents = async ({ silent = false } = {}) => {
 
 const refreshPublishedWorkouts = async ({ silent = false } = {}) => {
   if (!silent) setWorkoutSyncStatus("Buscando treinos publicados...", "");
+  updateDataStatus("Sincronizando");
   const result = await workoutRepository.fetchPublishedWorkouts();
   dataStatus = result.synced ? "Online" : dataStatus;
   applyPublishedWorkouts(result.workouts);
@@ -341,6 +411,7 @@ const renderIcons = () => {
     target.innerHTML = svgIcon(target.dataset.icon);
   });
   setHtml("[data-brand-icon]", svgIcon("dumbbell"));
+  setHtml("[data-brand-icon-mobile]", svgIcon("dumbbell"));
 };
 
 const renderCoachProfile = () => {
@@ -432,10 +503,32 @@ const renderActivities = () => {
 const renderDashboard = () => {
   const activeStudents = students.filter((student) => student.status !== "Inadimplente").length;
   const pendingCount = students.filter((student) => student.status !== "Ativo" || !getPublishedWorkoutForStudent(student)).length;
+  const isOnline = dataStatus === "Online";
+  const isSyncing = dataStatus === "Sincronizando";
   setText("[data-kpi-students]", activeStudents);
   setText("[data-kpi-workouts]", workouts.length);
   setText("[data-kpi-pending]", pendingCount);
-  setText("[data-kpi-sync]", dataStatus);
+  setText("[data-hero-pending]", pendingCount);
+  setText("[data-dashboard-headline]", pendingCount
+    ? `${pendingCount} pendência(s) para revisar hoje.`
+    : "Operação em dia.");
+  setText("[data-dashboard-summary]", !students.length
+    ? "Cadastre o primeiro aluno e publique um treino para liberar o app do aluno."
+    : pendingCount
+      ? "Priorize alunos sem treino publicado, check-ins pendentes ou status financeiro manual."
+      : "Alunos ativos possuem treino publicado e não há alertas operacionais agora.");
+  setText("[data-sync-eyebrow]", isOnline ? "Sincronizado com Supabase" : isSyncing ? "Sincronizando dados" : "Dados locais");
+  setText("[data-sync-chip]", isOnline ? "Online" : isSyncing ? "Sincronizando" : "Local");
+  setText("[data-sync-title]", isOnline ? "Dados sincronizados" : isSyncing ? "Sincronizando com Supabase" : "Modo local ativo");
+  setText("[data-sync-detail]", isOnline
+    ? "Alunos, treinos e marca branca estão sendo lidos do Supabase."
+    : isSyncing
+      ? "Buscando alunos, treinos e tema publicados. Isso deve levar poucos segundos."
+      : "Entre e sincronize com Supabase para compartilhar dados entre dispositivos.");
+
+  const syncStatus = document.querySelector("[data-sync-chip]")?.closest(".sync-status");
+  syncStatus?.classList.toggle("is-online", isOnline);
+  syncStatus?.classList.toggle("is-syncing", isSyncing);
   renderTasks();
   renderActivities();
 };
@@ -716,20 +809,58 @@ workoutForm?.addEventListener("submit", async (event) => {
 workoutForm?.addEventListener("input", renderWorkoutPreview);
 workoutForm?.addEventListener("change", renderWorkoutPreview);
 
+const handleThemeControlChange = () => {
+  applyTheme();
+  if (updateContrastStatus()) {
+    queueThemeSave();
+    return;
+  }
+
+  clearTimeout(themeSaveTimer);
+  setThemeStatus("Ajuste o contraste antes de salvar o tema.", "warning");
+};
+
 const themeInputs = [
   brandInput,
   taglineInput,
-  accentInput,
-  backgroundInput,
-  surfaceInput,
-  textInput,
   fontInput,
   radiusInput,
   backgroundStyleInput
 ].filter(Boolean);
 
-themeInputs.forEach((input) => input.addEventListener("input", () => { applyTheme(); queueThemeSave(); }));
-themeInputs.forEach((input) => input.addEventListener("change", () => { applyTheme(); queueThemeSave(); }));
+themeInputs.forEach((input) => input.addEventListener("input", handleThemeControlChange));
+themeInputs.forEach((input) => input.addEventListener("change", handleThemeControlChange));
+
+colorHexPairs.forEach(([color, hex]) => {
+  const syncFromColor = () => {
+    hex.value = String(color.value || "").toLowerCase();
+    hex.classList.remove("is-invalid");
+    handleThemeControlChange();
+  };
+
+  color.addEventListener("input", syncFromColor);
+  color.addEventListener("change", syncFromColor);
+  hex.addEventListener("input", () => {
+    const normalized = normalizeHexInput(hex.value);
+    hex.classList.toggle("is-invalid", !normalized && hex.value.trim().length > 0);
+    if (!normalized) {
+      updateContrastStatus();
+      clearTimeout(themeSaveTimer);
+      setThemeStatus("Digite uma cor hex válida, ex: #7667ff.", "warning");
+      return;
+    }
+
+    color.value = normalized;
+    hex.value = normalized;
+    handleThemeControlChange();
+  });
+  hex.addEventListener("blur", () => {
+    const normalized = normalizeHexInput(hex.value);
+    hex.value = normalized || String(color.value || "").toLowerCase();
+    hex.classList.remove("is-invalid");
+    updateContrastStatus();
+  });
+});
 
 logoInput?.addEventListener("change", () => handleLocalAssetInput(logoInput, "logo"));
 photoInput?.addEventListener("change", () => handleLocalAssetInput(photoInput, "photo"));
@@ -741,7 +872,14 @@ document.querySelector("[data-clear-brand-assets]")?.addEventListener("click", (
   setThemeStatus("Logo e foto locais removidos deste navegador.", "warning");
   showToast("Assets locais removidos.");
 });
-document.querySelector("[data-save-theme]")?.addEventListener("click", () => saveThemeNow());
+saveThemeButton?.addEventListener("click", () => {
+  if (!updateContrastStatus()) {
+    setThemeStatus("Ajuste o contraste antes de salvar o tema.", "warning");
+    showToast("Contraste insuficiente para salvar.");
+    return;
+  }
+  saveThemeNow();
+});
 document.querySelector("[data-reset-theme]")?.addEventListener("click", async () => {
   Platform.storage.set(LOCAL_BRAND_ASSETS_KEY, {});
   if (logoInput) logoInput.value = "";

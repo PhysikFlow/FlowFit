@@ -28,8 +28,21 @@
         </div>
         <div class="auth-divider"><span>ou continue com</span></div>
         <div class="oauth-grid" aria-label="Login social">
-          <button class="button button--quiet" type="button" data-oauth-provider="google">Google</button>
-          <button class="button button--quiet" type="button" data-oauth-provider="apple">Apple</button>
+          <button class="button button--quiet" type="button" data-oauth-provider="google">
+            <svg class="oauth-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path fill="#4285f4" d="M21.6 12.2c0-.7-.1-1.3-.2-1.9H12v3.6h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.2 3-7.2Z" />
+              <path fill="#34a853" d="M12 22c2.7 0 5-.9 6.6-2.5L15.4 17c-.9.6-2 .9-3.4.9-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z" />
+              <path fill="#fbbc05" d="M6.4 13.8a6 6 0 0 1 0-3.6V7.6H3.1a10 10 0 0 0 0 8.8l3.3-2.6Z" />
+              <path fill="#ea4335" d="M12 6.1c1.5 0 2.8.5 3.8 1.5l2.8-2.8A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.9 5.6l3.3 2.6c.8-2.3 3-4.1 5.6-4.1Z" />
+            </svg>
+            Google
+          </button>
+          <button class="button button--quiet" type="button" data-oauth-provider="apple">
+            <svg class="oauth-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path fill="currentColor" d="M16.7 13.1c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.7-1.8-3.3-1.9-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-3-.8-1.5 0-2.9.9-3.7 2.2-1.6 2.8-.4 7 1.1 9.2.8 1.1 1.7 2.3 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.2.9-1.3 1.2-2.5 1.2-2.6-.1 0-2.6-1-2.6-3.5ZM14.5 6.3c.6-.7 1-1.7.9-2.7-.9 0-1.9.6-2.5 1.3-.6.7-1 1.6-.9 2.6.9.1 1.9-.5 2.5-1.2Z" />
+            </svg>
+            Apple
+          </button>
         </div>
       </form>
     </section>
@@ -64,7 +77,8 @@
     <main class="admin-shell">
       <header class="topbar">
         <div>
-          <span class="eyebrow">Dados reais sincronizados</span>
+          <span class="mobile-topbar-brand"><span aria-hidden="true" data-brand-icon-mobile></span><strong data-brand-name>FlowFit</strong></span>
+          <span class="eyebrow" data-sync-eyebrow>Dados locais</span>
           <h1 data-page-title>Dashboard</h1>
         </div>
         <div class="topbar__actions">
@@ -78,14 +92,13 @@
       <section class="page is-active" data-page="dashboard" aria-labelledby="dashboard-title">
         <div class="hero card">
           <div>
-            <span class="eyebrow">Visão geral</span>
-            <h2 id="dashboard-title">Economize tempo montando, copiando e ajustando treinos.</h2>
-            <p>Use este painel para cadastrar alunos, publicar treinos e controlar a marca exibida no app do aluno.</p>
+            <span class="eyebrow">Operação de hoje</span>
+            <h2 id="dashboard-title" data-dashboard-headline>Cadastre o primeiro aluno para iniciar.</h2>
+            <p data-dashboard-summary>Depois publique um treino para liberar o app do aluno.</p>
           </div>
           <div class="hero__stack">
-            <span class="chip">Web primeiro</span>
-            <span class="chip">PWA depois</span>
-            <span class="chip">WebView futuro</span>
+            <strong data-hero-pending>0</strong>
+            <small>pendências</small>
           </div>
         </div>
 
@@ -93,8 +106,16 @@
           <article class="kpi card"><span class="surface-icon" data-icon="users"></span><div><strong data-kpi-students>0</strong><small>alunos ativos</small></div></article>
           <article class="kpi card"><span class="surface-icon" data-icon="dumbbell"></span><div><strong data-kpi-workouts>0</strong><small>treinos cadastrados</small></div></article>
           <article class="kpi card"><span class="surface-icon" data-icon="calendar"></span><div><strong data-kpi-pending>0</strong><small>pendências</small></div></article>
-          <article class="kpi card"><span class="surface-icon" data-icon="wallet"></span><div><strong data-kpi-sync>Local</strong><small>status de dados</small></div></article>
         </section>
+
+        <article class="sync-status card">
+          <span class="surface-icon" data-icon="database"></span>
+          <div>
+            <span class="chip" data-sync-chip>Dados locais</span>
+            <strong data-sync-title>Modo local ativo</strong>
+            <small data-sync-detail>Entre e sincronize com Supabase para compartilhar dados entre dispositivos.</small>
+          </div>
+        </article>
 
         <div class="dashboard-grid">
           <article class="card panel">
@@ -214,21 +235,40 @@
             <div class="theme-editor__section">
               <span class="eyebrow">Cores</span>
               <div class="theme-editor__colors">
-                <label>Cor de destaque <input type="color" name="accent" value="#7667ff" data-accent-input /></label>
-                <label>Fundo do app <input type="color" name="background" value="#090b10" data-background-input /></label>
-                <label>Cards/superfícies <input type="color" name="surface" value="#151922" data-surface-input /></label>
-                <label>Texto principal <input type="color" name="text" value="#f7f7fa" data-text-input /></label>
+                <label class="color-field">Cor de destaque
+                  <span>
+                    <input type="color" name="accent" value="#7667ff" data-accent-input />
+                    <input type="text" value="#7667ff" maxlength="7" spellcheck="false" data-accent-hex aria-label="Hex da cor de destaque" />
+                  </span>
+                </label>
+                <label class="color-field">Fundo do app
+                  <span>
+                    <input type="color" name="background" value="#090b10" data-background-input />
+                    <input type="text" value="#090b10" maxlength="7" spellcheck="false" data-background-hex aria-label="Hex da cor de fundo" />
+                  </span>
+                </label>
+                <label class="color-field">Cards/superfícies
+                  <span>
+                    <input type="color" name="surface" value="#151922" data-surface-input />
+                    <input type="text" value="#151922" maxlength="7" spellcheck="false" data-surface-hex aria-label="Hex da cor dos cards" />
+                  </span>
+                </label>
+                <label class="color-field">Texto principal
+                  <span>
+                    <input type="color" name="text" value="#f7f7fa" data-text-input />
+                    <input type="text" value="#f7f7fa" maxlength="7" spellcheck="false" data-text-hex aria-label="Hex da cor do texto principal" />
+                  </span>
+                </label>
               </div>
+              <p class="contrast-meter form-status is-synced" data-contrast-status>Contraste aprovado.</p>
             </div>
 
             <div class="theme-editor__section">
               <span class="eyebrow">Tipografia e forma</span>
               <label>Fonte
                 <select name="font" data-font-input>
-                  <option value="system">Sistema / Inter</option>
-                  <option value="rounded">Arredondada</option>
-                  <option value="geometric">Geométrica</option>
-                  <option value="editorial">Editorial serifada</option>
+                  <option value="system">Sistema do aparelho</option>
+                  <option value="serif">Serifada nativa</option>
                   <option value="mono">Técnica mono</option>
                 </select>
               </label>

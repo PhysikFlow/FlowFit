@@ -30,6 +30,11 @@ const iconPaths = {
     '<circle cx="12" cy="12" r="8" />',
     '<path d="M12 8v5l3 2" />'
   ],
+  database: [
+    '<ellipse cx="12" cy="5" rx="7" ry="3" />',
+    '<path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5" />',
+    '<path d="M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />'
+  ],
   dumbbell: [
     '<path d="M6 7v10" />',
     '<path d="M18 7v10" />',
