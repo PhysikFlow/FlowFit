@@ -194,10 +194,10 @@ export const authRepository = {
     return session?.user || null;
   },
 
-  async getProfile() {
+  async getProfileResult() {
     const client = await getSupabase();
     const user = await this.getUser();
-    if (!client || !user) return null;
+    if (!client || !user) return { profile: null, error: null, reason: "not-authenticated" };
 
     let { data, error } = await client
       .from(PROFILES_TABLE)
@@ -225,8 +225,13 @@ export const authRepository = {
       }
     }
 
-    if (error) return null;
-    return profileFromRow(data);
+    if (error) return { profile: null, error };
+    return { profile: profileFromRow(data), error: null };
+  },
+
+  async getProfile() {
+    const result = await this.getProfileResult();
+    return result.profile;
   },
 
   async ensureProfile({ role = AUTH_ROLES.STUDENT, name, createIfMissing = true, coachStatus = COACH_STATUS.TRIAL } = {}) {
@@ -439,11 +444,13 @@ export const authRepository = {
   async getAuthContext() {
     const session = await this.getSession();
     if (!session?.user) return null;
-    const profile = await this.getProfile();
+    const profileResult = await this.getProfileResult();
+    const profile = profileResult.profile;
     return {
       session,
       user: session.user,
       profile,
+      profileError: profileResult.error || null,
       role: profile?.role || null,
       coachId: session.user.id,
       email: normalizeEmail(session.user.email)

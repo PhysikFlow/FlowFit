@@ -742,6 +742,8 @@ const startAuthenticatedApp = async () => {
 
   const inviteToken = getInviteToken();
   let claimedStudentId = "";
+  let inviteClaimed = false;
+  let linkedStudentResult = null;
   if (inviteToken) {
     const claimResult = await studentRepository.claimInvite(inviteToken);
     if (!claimResult.claimed) {
@@ -755,20 +757,37 @@ const startAuthenticatedApp = async () => {
       setAuthStatus("Este convite é inválido, expirou ou pertence a outro email. Peça um novo link ao personal.", "warning");
       return false;
     }
+    inviteClaimed = true;
     claimedStudentId = claimResult.studentId;
   } else if (!authContextBeforeClaim?.profile) {
-    await authRepository.signOut();
-    Store.resetOnboarding();
-    currentStudent = emptyStudent;
-    currentWorkout = emptyWorkout;
-    renderAll();
-    syncOnboarding();
-    syncAuthMode("signin", { preserveStatus: true });
-    setAuthStatus("Primeiro acesso exige o link de convite enviado pelo seu personal.", "warning");
-    return false;
+    linkedStudentResult = await studentRepository.fetchCurrentStudent();
+    if (!linkedStudentResult.student) {
+      await authRepository.signOut();
+      Store.resetOnboarding();
+      currentStudent = emptyStudent;
+      currentWorkout = emptyWorkout;
+      renderAll();
+      syncOnboarding();
+      syncAuthMode("signin", { preserveStatus: true });
+      setAuthStatus("Primeiro acesso exige o link de convite enviado pelo seu personal.", "warning");
+      return false;
+    }
   }
 
-  const authContext = await authRepository.getAuthContext();
+  let authContext = await authRepository.getAuthContext();
+  if ((inviteClaimed || linkedStudentResult?.student) && authContext?.user && !authContext.role) {
+    // claim_student_invite e atomico e so retorna sucesso depois de criar o
+    // profile student. Nao bloqueia o aluno por atraso na leitura seguinte.
+    authContext = {
+      ...authContext,
+      role: "student",
+      profile: {
+        userId: authContext.user.id,
+        role: "student",
+        name: session.user.user_metadata?.display_name || session.user.email
+      }
+    };
+  }
   if (authContext?.role !== "student") {
     await authRepository.signOut();
     Store.resetOnboarding();
@@ -777,11 +796,11 @@ const startAuthenticatedApp = async () => {
     renderAll();
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
-    setAuthStatus("O convite não conseguiu criar um acesso de aluno. Rode o SQL atualizado e tente novamente.", "warning");
+    setAuthStatus("A conta autenticada possui outro tipo de acesso. Use o email do convite ou entre com outra conta.", "warning");
     return false;
   }
 
-  const studentResult = await studentRepository.fetchCurrentStudent({
+  const studentResult = linkedStudentResult || await studentRepository.fetchCurrentStudent({
     preferredStudentId: claimedStudentId
   });
   if (!studentResult.student) {
