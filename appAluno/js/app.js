@@ -293,7 +293,11 @@ const syncBrandAssets = () => {
 const applyPublishedBrandTheme = async () => {
   try {
     const remote = await themeRepository.fetchBrandTheme();
-    if (!remote?.accent || !remote?.brandName) return;
+    if (!remote?.accent || !remote?.brandName) {
+      Theme.reset();
+      syncThemeControls();
+      return;
+    }
     Theme.apply(remote);
     syncThemeControls();
   } catch {

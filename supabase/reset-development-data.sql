@@ -23,6 +23,18 @@ restart identity cascade;
 -- aos usuarios. Os perfis publicos ja foram limpos acima.
 delete from auth.users;
 
+do $$
+begin
+  if exists (select 1 from auth.users)
+     or exists (select 1 from public.profiles)
+     or exists (select 1 from public.students)
+     or exists (select 1 from public.workout_plans)
+     or exists (select 1 from public.workout_sessions) then
+    raise exception 'A limpeza nao zerou todas as tabelas; a transacao sera revertida.';
+  end if;
+end;
+$$;
+
 commit;
 
 -- Resultado esperado: todos os contadores abaixo devem ser zero.

@@ -1781,6 +1781,8 @@ const startAuthenticatedPanel = async () => {
 
   const remote = await themeRepository.fetchBrandTheme();
   if (!remote) {
+    fillThemeInputs(DEFAULT_BRAND_THEME);
+    applyTheme(DEFAULT_BRAND_THEME);
     setThemeStatus("Sem tema publicado ainda. Use Salvar e aplicar para criar o primeiro.", "");
     return;
   }

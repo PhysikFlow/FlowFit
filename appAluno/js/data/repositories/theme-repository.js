@@ -46,6 +46,11 @@ const writeCachedTheme = (theme) => {
   return normalized;
 };
 
+const clearCachedTheme = () => {
+  Platform.storage.remove(REMOTE_THEME_KEY);
+  Platform.storage.remove(LEGACY_REMOTE_THEME_KEY);
+};
+
 export const themeRepository = {
   // Retorna o tema de marca branca (ou null). Busca na nuvem e cai no cache local.
   async fetchBrandTheme() {
@@ -73,10 +78,17 @@ export const themeRepository = {
           error = fallback.error;
         }
         const row = Array.isArray(data) ? data[0] : data;
-        if (!error && row) {
-          const theme = toAppTheme(row);
-          writeCachedTheme(theme);
-          return theme;
+        if (!error) {
+          if (row) {
+            const theme = toAppTheme(row);
+            writeCachedTheme(theme);
+            return theme;
+          }
+
+          // Resposta online e vazia e autoritativa: nao reutiliza tema de outra
+          // conta ou de um banco que acabou de ser limpo.
+          clearCachedTheme();
+          return null;
         }
       } catch {
         // offline: usa o cache local abaixo

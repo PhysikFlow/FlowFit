@@ -16,6 +16,15 @@ const browserStorage = {
     } catch {
       return false;
     }
+  },
+  remove(key) {
+    try {
+      if (!globalThis.localStorage) return false;
+      localStorage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
   }
 };
 
