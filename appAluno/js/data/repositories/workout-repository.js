@@ -21,6 +21,38 @@ const CLOUD_WORKOUT_SELECT = `
   last_done_label,
   source,
   status,
+  starts_at,
+  published_at,
+  version,
+  updated_at,
+  workout_exercises (
+    id,
+    position,
+    name,
+    target,
+    prescription,
+    load,
+    rest,
+    tempo,
+    rir,
+    notes,
+    updated_at
+  )
+`;
+
+const LEGACY_CLOUD_WORKOUT_SELECT = `
+  id,
+  coach_id,
+  student_id,
+  student_key,
+  owner,
+  code,
+  title,
+  focus,
+  estimated_minutes,
+  last_done_label,
+  source,
+  status,
   updated_at,
   workout_exercises (
     id,
@@ -62,6 +94,16 @@ const slugFromText = (value, fallback = "exercicio") => studentKeyFromName(norma
 
 const normalizePrescription = (sets, reps) => `${sets} x ${normalizeText(reps, "10")}`;
 
+const normalizeIsoDate = (value, fallback = new Date().toISOString()) => {
+  const date = value ? new Date(value) : new Date(fallback);
+  return Number.isNaN(date.getTime()) ? new Date(fallback).toISOString() : date.toISOString();
+};
+
+const isMissingWorkoutScheduleColumn = (error) => {
+  const message = String(error?.message || error?.details || "").toLowerCase();
+  return ["starts_at", "published_at", "version"].some((column) => message.includes(column));
+};
+
 const initialsFromName = (name) => normalizeText(name, "Aluno")
   .split(" ")
   .filter(Boolean)
@@ -84,6 +126,7 @@ const normalizeWorkout = (workout) => {
   const owner = normalizeText(workout?.owner, "Aluno");
   const studentKey = normalizeText(workout?.studentKey, studentKeyFromName(owner));
   const updatedAt = normalizeText(workout?.updatedAt, new Date().toISOString());
+  const startsAt = normalizeIsoDate(workout?.startsAt, updatedAt);
   const id = normalizeText(workout?.id, `published-${Date.now()}`);
   const studentId = normalizeText(workout?.studentId, fallbackStudentIdFromKey(studentKey));
   const exercises = Array.isArray(workout?.exercises)
@@ -103,6 +146,11 @@ const normalizeWorkout = (workout) => {
     studentKey,
     source: normalizeText(workout?.source, "professor"),
     status: normalizeText(workout?.status, "published"),
+    startsAt,
+    publishedAt: normalizeIsoDate(workout?.publishedAt, updatedAt),
+    version: Math.max(1, Number.parseInt(workout?.version || "1", 10) || 1),
+    syncStatus: normalizeText(workout?.syncStatus, "local"),
+    syncMessage: normalizeText(workout?.syncMessage, ""),
     updatedAt,
     exercises
   };
@@ -142,7 +190,7 @@ const readPublishedWorkouts = () => {
 
 const writePublishedWorkouts = (items) => Platform.storage.set(PUBLISHED_WORKOUTS_KEY, items);
 
-export const createWorkoutFromProfessorForm = ({ student, studentName, studentId, studentKey, coachId, title, template, blocks, workoutId }) => {
+export const createWorkoutFromProfessorForm = ({ student, studentName, studentId, studentKey, coachId, title, template, blocks, workoutId, startsAt, version = 1 }) => {
   const owner = normalizeText(student?.name || studentName, "Aluno");
   const resolvedStudentKey = normalizeText(student?.studentKey || studentKey, studentKeyFromName(owner));
   const resolvedStudentId = normalizeText(student?.id || studentId, fallbackStudentIdFromKey(resolvedStudentKey));
@@ -154,6 +202,7 @@ export const createWorkoutFromProfessorForm = ({ student, studentName, studentId
     .slice(0, 12);
   if (!sourceLines.length) sourceLines.push("Exercício livre 3x10");
   const id = normalizeText(workoutId, `published-${Date.now()}`);
+  const now = new Date().toISOString();
   const exercises = sourceLines.map((line, index) => parseExerciseLine(line, index, id));
 
   return {
@@ -169,7 +218,12 @@ export const createWorkoutFromProfessorForm = ({ student, studentName, studentId
     studentKey: resolvedStudentKey,
     source: "professor",
     status: "published",
-    updatedAt: new Date().toISOString(),
+    startsAt: normalizeIsoDate(startsAt, now),
+    publishedAt: now,
+    version: Math.max(1, Number.parseInt(version, 10) || 1),
+    syncStatus: "pending",
+    syncMessage: "Aguardando sincronização.",
+    updatedAt: now,
     exercises
   };
 };
@@ -204,8 +258,16 @@ const toWorkoutPlanRow = (workout, authContext) => ({
   last_done_label: workout.lastDoneLabel,
   source: workout.source,
   status: workout.status,
+  starts_at: workout.startsAt,
+  published_at: workout.publishedAt,
+  version: workout.version,
   updated_at: workout.updatedAt
 });
+
+const toLegacyWorkoutPlanRow = (workout, authContext) => {
+  const { starts_at, published_at, version, ...legacyRow } = toWorkoutPlanRow(workout, authContext);
+  return legacyRow;
+};
 
 const toExerciseRows = (workout, authContext) => workout.exercises.map((exercise, index) => ({
   id: exercise.id,
@@ -236,6 +298,10 @@ const toAppWorkout = (row) => normalizeWorkout({
   studentKey: row.student_key,
   source: row.source,
   status: row.status,
+  startsAt: row.starts_at,
+  publishedAt: row.published_at,
+  version: row.version,
+  syncStatus: "synced",
   updatedAt: row.updated_at,
   exercises: [...(row.workout_exercises || [])]
     .sort((a, b) => Number(a.position || 0) - Number(b.position || 0))
@@ -268,46 +334,113 @@ export const workoutRepository = {
 
   getLatestWorkoutForStudent(studentName) {
     const studentKey = studentKeyFromName(studentName);
-    return this.listPublishedWorkouts().find((workout) => workout.studentKey === studentKey) || null;
+    const now = Date.now();
+    return this.listPublishedWorkouts()
+      .filter((workout) => new Date(workout.startsAt || workout.updatedAt || 0).getTime() <= now)
+      .find((workout) => workout.studentKey === studentKey) || null;
   },
 
   async syncPublishedWorkout(workout, linkedStudent = {}) {
     const authContext = await authRepository.getAuthContext();
-    const normalized = this.savePublishedWorkout({ ...workout, coachId: authContext?.coachId || workout?.coachId });
+    const normalized = this.savePublishedWorkout({
+      ...workout,
+      coachId: authContext?.coachId || workout?.coachId,
+      syncStatus: "pending",
+      syncMessage: "Aguardando sincronização."
+    });
     const client = await getSupabase();
     if (!client || !authContext?.user || authContext.role !== "coach") {
-      return { synced: false, reason: "not-authenticated-as-coach", workout: normalized };
+      const pending = this.savePublishedWorkout({
+        ...normalized,
+        syncStatus: "local",
+        syncMessage: "Entre como professor para enviar este treino ao aluno."
+      });
+      return { synced: false, reason: "not-authenticated-as-coach", workout: pending };
     }
 
     try {
       const { error: studentError } = await client
         .from(STUDENTS_TABLE)
         .upsert(toStudentRow(normalized, linkedStudent), { onConflict: "id" });
-      if (studentError) return { synced: false, error: studentError, workout: normalized };
+      if (studentError) {
+        const failed = this.savePublishedWorkout({
+          ...normalized,
+          syncStatus: "failed",
+          syncMessage: studentError.message || "Não foi possível atualizar o aluno antes do treino."
+        });
+        return { synced: false, error: studentError, workout: failed };
+      }
 
       const { error: planError } = await client
         .from(PLANS_TABLE)
         .upsert(toWorkoutPlanRow(normalized, authContext), { onConflict: "id" });
-      if (planError) return { synced: false, error: planError, workout: normalized };
+      if (planError) {
+        if (!isMissingWorkoutScheduleColumn(planError)) {
+          const failed = this.savePublishedWorkout({
+            ...normalized,
+            syncStatus: "failed",
+            syncMessage: planError.message || "Não foi possível sincronizar o treino."
+          });
+          return { synced: false, error: planError, workout: failed };
+        }
+
+        const { error: legacyPlanError } = await client
+          .from(PLANS_TABLE)
+          .upsert(toLegacyWorkoutPlanRow(normalized, authContext), { onConflict: "id" });
+        if (legacyPlanError) {
+          const failed = this.savePublishedWorkout({
+            ...normalized,
+            syncStatus: "failed",
+            syncMessage: legacyPlanError.message || "Não foi possível sincronizar o treino."
+          });
+          return { synced: false, error: legacyPlanError, workout: failed };
+        }
+      }
 
       const { error: deleteError } = await client
         .from(EXERCISES_TABLE)
         .delete()
         .eq("workout_id", normalized.id)
         .eq("coach_id", authContext.coachId);
-      if (deleteError) return { synced: false, error: deleteError, workout: normalized };
+      if (deleteError) {
+        const failed = this.savePublishedWorkout({
+          ...normalized,
+          syncStatus: "failed",
+          syncMessage: deleteError.message || "Não foi possível substituir os exercícios antigos."
+        });
+        return { synced: false, error: deleteError, workout: failed };
+      }
 
       const exerciseRows = toExerciseRows(normalized, authContext);
       if (exerciseRows.length) {
         const { error: exercisesError } = await client
           .from(EXERCISES_TABLE)
           .upsert(exerciseRows, { onConflict: "id" });
-        if (exercisesError) return { synced: false, error: exercisesError, workout: normalized };
+        if (exercisesError) {
+          const failed = this.savePublishedWorkout({
+            ...normalized,
+            syncStatus: "failed",
+            syncMessage: exercisesError.message || "Não foi possível enviar os exercícios."
+          });
+          return { synced: false, error: exercisesError, workout: failed };
+        }
       }
 
-      return { synced: true, workout: normalized };
+      const syncedWorkout = this.savePublishedWorkout({
+        ...normalized,
+        syncStatus: "synced",
+        syncMessage: isMissingWorkoutScheduleColumn(planError)
+          ? "Sincronizado sem agendamento. Rode o SQL novo para salvar data e versão."
+          : "Sincronizado com o aluno."
+      });
+      return { synced: true, workout: syncedWorkout, partial: isMissingWorkoutScheduleColumn(planError) };
     } catch (error) {
-      return { synced: false, error, workout: normalized };
+      const failed = this.savePublishedWorkout({
+        ...normalized,
+        syncStatus: "failed",
+        syncMessage: error?.message || "Não foi possível sincronizar o treino."
+      });
+      return { synced: false, error, workout: failed };
     }
   },
 
@@ -318,15 +451,22 @@ export const workoutRepository = {
     if (!client || !authContext?.user) return { synced: false, reason: "not-authenticated", workouts: localWorkouts };
 
     try {
-      let query = client
+      const runQuery = (selectColumns) => {
+        let query = client
         .from(PLANS_TABLE)
-        .select(CLOUD_WORKOUT_SELECT)
+        .select(selectColumns)
         .eq("status", "published")
         .order("updated_at", { ascending: false });
 
-      if (authContext.role === "coach") query = query.eq("coach_id", authContext.coachId);
+        if (authContext.role === "coach") query = query.eq("coach_id", authContext.coachId);
+        return query;
+      };
 
-      const { data, error } = await query;
+      let { data, error } = await runQuery(CLOUD_WORKOUT_SELECT);
+      if (error && isMissingWorkoutScheduleColumn(error)) {
+        ({ data, error } = await runQuery(LEGACY_CLOUD_WORKOUT_SELECT));
+      }
+
       if (error) return { synced: false, error, workouts: localWorkouts };
 
       const cloudWorkouts = (data || []).map(toAppWorkout);
@@ -348,8 +488,16 @@ export const workoutRepository = {
   async fetchLatestWorkoutForCurrentStudent(student) {
     const result = await this.fetchPublishedWorkouts();
     const workouts = result.workouts || [];
-    const workout = workouts.find((item) => item.studentId === student?.id)
-      || workouts.find((item) => item.studentKey === student?.studentKey)
+    const now = Date.now();
+    const eligibleWorkouts = workouts
+      .filter((item) => new Date(item.startsAt || item.updatedAt || 0).getTime() <= now)
+      .sort((a, b) => (
+        new Date(b.startsAt || b.updatedAt || 0) - new Date(a.startsAt || a.updatedAt || 0)
+      ) || (
+        new Date(b.publishedAt || b.updatedAt || 0) - new Date(a.publishedAt || a.updatedAt || 0)
+      ));
+    const workout = eligibleWorkouts.find((item) => item.studentId === student?.id)
+      || eligibleWorkouts.find((item) => item.studentKey === student?.studentKey)
       || null;
     return { ...result, workout };
   }

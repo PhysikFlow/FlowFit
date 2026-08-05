@@ -75,6 +75,9 @@ create table if not exists public.workout_plans (
   last_done_label   text not null default 'novo',
   source            text not null default 'professor',
   status            text not null default 'published',
+  starts_at         timestamptz not null default now(),
+  published_at      timestamptz not null default now(),
+  version           integer not null default 1 check (version > 0),
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );
@@ -117,6 +120,17 @@ alter table public.students
   add column if not exists student_user_id uuid references auth.users(id) on delete set null,
   add column if not exists email text;
 
+alter table public.workout_plans
+  add column if not exists starts_at timestamptz not null default now(),
+  add column if not exists published_at timestamptz not null default now(),
+  add column if not exists version integer not null default 1;
+
+alter table public.workout_plans
+  drop constraint if exists workout_plans_version_check;
+
+alter table public.workout_plans
+  add constraint workout_plans_version_check check (version > 0);
+
 alter table public.students alter column coach_id drop default;
 alter table public.workout_plans alter column coach_id drop default;
 alter table public.workout_exercises alter column coach_id drop default;
@@ -142,6 +156,9 @@ create index if not exists students_student_user_id_idx
 
 create index if not exists workout_plans_coach_student_updated_idx
   on public.workout_plans (coach_id, student_key, updated_at desc);
+
+create index if not exists workout_plans_student_starts_idx
+  on public.workout_plans (student_id, starts_at desc, updated_at desc);
 
 create index if not exists workout_plans_student_id_idx
   on public.workout_plans (student_id);

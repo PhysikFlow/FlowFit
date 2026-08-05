@@ -548,6 +548,41 @@ const formatUpdatedAt = (value) => {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
 };
 
+const formatDateForInput = (value) => {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+};
+
+const formatWorkoutStart = (value) => {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "entrada indefinida";
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(date);
+};
+
+const getWorkoutStage = (workout) => {
+  const startsAt = new Date(workout?.startsAt || workout?.updatedAt || 0);
+  const isScheduled = !Number.isNaN(startsAt.getTime()) && startsAt.getTime() > Date.now();
+  return {
+    label: isScheduled ? "Agendado" : "Ativo",
+    detail: isScheduled ? `entra em ${formatWorkoutStart(workout.startsAt)}` : `vigente desde ${formatWorkoutStart(workout.startsAt || workout.updatedAt)}`
+  };
+};
+
+const getWorkoutSyncLabel = (workout) => {
+  if (workout?.syncStatus === "synced") return "Nuvem";
+  if (workout?.syncStatus === "failed") return "Pendente";
+  return "Local";
+};
+
+const describeWorkoutSyncResult = (result) => {
+  if (result.synced && result.partial) return "Treino enviado. Rode o SQL novo para salvar data de entrada e versão.";
+  if (result.synced) return "Treino enviado. O aluno recebe quando abrir ou atualizar o app.";
+  if (result.reason === "not-authenticated-as-coach") return "Treino não enviado. Entre como professor para sincronizar com o aluno.";
+  const message = result.error?.message || result.workout?.syncMessage;
+  return message ? `Treino salvo, mas não enviado: ${message}` : "Treino salvo, mas ainda não foi enviado para a nuvem.";
+};
+
 const parseSets = (prescription) => {
   const match = String(prescription || "").match(/\d+/);
   return Number.parseInt(match?.[0] || "0", 10) || 0;
@@ -870,11 +905,13 @@ const loadWorkoutForEditing = (workout) => {
   const studentSelect = workoutForm.querySelector("[name='student']");
   const titleInput = workoutForm.querySelector("[name='title']");
   const templateInput = workoutForm.querySelector("[name='template']");
+  const startsAtInput = workoutForm.querySelector("[name='startsAt']");
   const blocksInput = workoutForm.querySelector("[name='blocks']");
 
   if (studentSelect && students.some((student) => student.id === workout.studentId)) studentSelect.value = workout.studentId;
   if (titleInput) titleInput.value = workoutToEditableTitle(workout);
   if (templateInput) templateInput.value = workout.focus || templateInput.value;
+  if (startsAtInput) startsAtInput.value = formatDateForInput(workout.startsAt || workout.updatedAt);
   if (blocksInput) blocksInput.value = workoutToEditableBlocks(workout);
 
   setWorkoutEditingMode(workout);
@@ -998,17 +1035,21 @@ const renderWorkouts = () => {
 
   target.innerHTML = workouts.map((workout) => {
     const blocks = getWorkoutBlocks(workout).map(escapeHtml).join(" - ");
+    const stage = getWorkoutStage(workout);
+    const syncLabel = getWorkoutSyncLabel(workout);
+    const syncMessage = workout.syncMessage ? ` - ${workout.syncMessage}` : "";
     return `
       <article class="workout-card card workout-card--published">
         <span class="surface-icon">${svgIcon("dumbbell")}</span>
         <div>
           <div class="workout-card__meta-line">
             <span class="eyebrow">${escapeHtml(workout.owner || "Aluno")}</span>
-            <span class="chip">Publicado</span>
+            <span class="chip">${escapeHtml(stage.label)}</span>
+            <span class="chip">${escapeHtml(syncLabel)}</span>
           </div>
           <h2>${escapeHtml(workout.title)}</h2>
           <p>${blocks}</p>
-          <small>Atualizado: ${escapeHtml(formatUpdatedAt(workout.updatedAt))} - aluno recebe ao abrir ou atualizar o app</small>
+          <small>${escapeHtml(stage.detail)} - v${escapeHtml(workout.version || 1)} - atualizado: ${escapeHtml(formatUpdatedAt(workout.updatedAt))}${escapeHtml(syncMessage)}</small>
         </div>
         <button class="button button--quiet" type="button" aria-label="Editar ${escapeHtml(workout.title)}" data-workout-action="${escapeHtml(workout.id)}">
           Editar
@@ -1230,7 +1271,9 @@ workoutForm?.addEventListener("submit", async (event) => {
     title: data.get("title"),
     template: data.get("template"),
     blocks: data.get("blocks"),
-    workoutId: editingWorkout?.id
+    workoutId: editingWorkout?.id,
+    startsAt: data.get("startsAt"),
+    version: editingWorkout ? Number(editingWorkout.version || 1) + 1 : 1
   });
   const savedWorkout = workoutRepository.savePublishedWorkout(workout);
   const linkedStudent = students.find((student) => student.id === savedWorkout.studentId);
@@ -1249,11 +1292,10 @@ workoutForm?.addEventListener("submit", async (event) => {
 
   const result = await workoutRepository.syncPublishedWorkout(savedWorkout, linkedStudent);
   setWorkoutSyncStatus(
-    result.synced
-      ? "Treino sincronizado. O aluno recebe na próxima abertura ou atualização do app."
-      : "Treino salvo neste aparelho. O aluno recebe quando sincronizar.",
-    result.synced ? "synced" : "warning"
+    describeWorkoutSyncResult(result),
+    result.synced && !result.partial ? "synced" : "warning"
   );
+  if (result.workout) applyPublishedWorkouts([result.workout, ...workouts.filter((item) => item.id !== result.workout.id)]);
   if (result.synced) showToast("Treino sincronizado.");
   resetWorkoutFormMode({ resetForm: true });
 });

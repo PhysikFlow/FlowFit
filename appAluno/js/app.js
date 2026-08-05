@@ -636,14 +636,8 @@ const startAuthenticatedApp = async () => {
     role: "student",
     name: session.user.user_metadata?.display_name || session.user.email
   });
-  if (!profileResult.synced && !profileResult.profile) {
-    Store.resetOnboarding();
-    setAuthStatus("Conta autenticada, mas o perfil não carregou. Recarregue a página.", "warning");
-    syncOnboarding();
-    return false;
-  }
   const authContext = await authRepository.getAuthContext();
-  if (authContext?.role !== "student") {
+  if (authContext?.role && authContext.role !== "student") {
     await authRepository.signOut();
     Store.resetOnboarding();
     setAuthStatus("Esta conta não é de aluno. Use o painel do professor ou crie outra conta.", "warning");
@@ -669,6 +663,8 @@ const startAuthenticatedApp = async () => {
   if (!studentResult.student) {
     setAuthStatus("Conta autenticada, mas este email ainda não foi cadastrado por um personal.", "warning");
     Platform.notify("Peça ao personal para cadastrar este email no painel.");
+  } else if (!profileResult.synced && !profileResult.profile) {
+    setAuthStatus("Dados do aluno carregados pelo email. O perfil de login será sincronizado quando o banco aceitar profiles.", "warning");
   } else {
     setAuthStatus("Conta autenticada. Dados reais carregados.", "synced");
   }

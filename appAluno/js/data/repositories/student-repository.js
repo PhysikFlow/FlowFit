@@ -196,7 +196,7 @@ export const studentRepository = {
       const { data, error } = await client
         .from(TABLE)
         .select("id, coach_id, student_key, student_user_id, email, name, initials, goal, status, plan, workout, adherence, next_action, created_at, updated_at")
-        .eq("email", authContext.email)
+        .ilike("email", authContext.email)
         .order("updated_at", { ascending: false })
         .limit(1);
 
