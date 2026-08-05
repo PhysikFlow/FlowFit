@@ -8,10 +8,10 @@
     <title>FlowFit - Aluno</title>
     <link rel="icon" type="image/svg+xml" href="assets/icons/app-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="css/tokens.css?v=design-system-20260804" />
-    <link rel="stylesheet" href="css/components.css?v=design-system-20260804" />
-    <link rel="stylesheet" href="css/app.css?v=design-system-20260804" />
-    <script type="module" src="js/app.js?v=student-auth-workouts-20260804"></script>
+    <link rel="stylesheet" href="css/tokens.css?v=closed-cycle-20260804" />
+    <link rel="stylesheet" href="css/components.css?v=closed-cycle-20260804" />
+    <link rel="stylesheet" href="css/app.css?v=closed-cycle-20260804" />
+    <script type="module" src="js/app.js?v=closed-cycle-20260804"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title">
@@ -151,7 +151,27 @@
         <div class="section-title"><h2>Exercícios</h2><span>toque para registrar</span></div>
         <section class="exercise-list" aria-label="Lista de exercícios" data-exercise-list></section>
 
-        <div class="section-title"><h2>Finalizar</h2><span>salva neste aparelho</span></div>
+        <div class="section-title"><h2>Finalizar</h2><span>envia ao professor</span></div>
+        <form class="finish-feedback card" data-finish-feedback>
+          <label>Como foi?
+            <select name="effort" data-feedback-effort>
+              <option value="easy">Leve</option>
+              <option value="ok" selected>Na medida</option>
+              <option value="hard">Pesado</option>
+            </select>
+          </label>
+          <label>Dor ou desconforto?
+            <select name="pain" data-feedback-pain>
+              <option value="none" selected>Não senti dor</option>
+              <option value="mild">Leve desconforto</option>
+              <option value="pain">Senti dor</option>
+            </select>
+          </label>
+          <label>Nota para o personal
+            <textarea name="note" rows="3" placeholder="Ex: aumentei carga no supino, mas senti ombro no crucifixo." data-feedback-note></textarea>
+          </label>
+          <p class="form-status" data-finish-status>Ao concluir, o professor verá cargas, reps, volume e feedback.</p>
+        </form>
         <div class="button-group">
           <button class="button button--block" type="button" data-finish>Concluir treino</button>
           <button class="button button--quiet button--block" type="button" data-reset-workout>Reiniciar registro</button>

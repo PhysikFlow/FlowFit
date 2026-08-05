@@ -98,6 +98,58 @@ create table if not exists public.workout_exercises (
   updated_at   timestamptz not null default now()
 );
 
+create table if not exists public.workout_sessions (
+  id               text primary key,
+  coach_id         text not null,
+  student_id       text references public.students(id) on delete set null,
+  student_key      text not null,
+  student_email    text,
+  workout_id       text references public.workout_plans(id) on delete set null,
+  workout_code     text not null default 'A',
+  workout_title    text not null,
+  workout_version  integer not null default 1 check (workout_version > 0),
+  status           text not null default 'completed',
+  total_sets       integer not null default 0 check (total_sets >= 0),
+  completed_sets   integer not null default 0 check (completed_sets >= 0),
+  volume_kg        numeric not null default 0 check (volume_kg >= 0),
+  duration_seconds integer not null default 0 check (duration_seconds >= 0),
+  started_at       timestamptz not null default now(),
+  finished_at      timestamptz not null default now(),
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+
+create table if not exists public.workout_set_logs (
+  id             text primary key,
+  session_id     text not null references public.workout_sessions(id) on delete cascade,
+  coach_id       text not null,
+  workout_id     text,
+  exercise_id    text,
+  position       integer not null default 0 check (position >= 0),
+  exercise_name  text not null,
+  target         text not null default 'Personalizado',
+  prescription   text not null default '',
+  planned_sets   integer not null default 0 check (planned_sets >= 0),
+  completed_sets integer not null default 0 check (completed_sets >= 0),
+  load_kg        numeric not null default 0 check (load_kg >= 0),
+  reps           integer not null default 0 check (reps >= 0),
+  volume_kg      numeric not null default 0 check (volume_kg >= 0),
+  rir            text not null default '',
+  notes          text not null default '',
+  created_at     timestamptz not null default now()
+);
+
+create table if not exists public.workout_feedback (
+  id          text primary key,
+  session_id  text not null references public.workout_sessions(id) on delete cascade,
+  coach_id    text not null,
+  student_id  text references public.students(id) on delete set null,
+  effort      text not null default 'ok',
+  pain        text not null default 'none',
+  note        text not null default '',
+  created_at  timestamptz not null default now()
+);
+
 -- Migração segura para bancos que já tinham o schema piloto antigo.
 alter table public.profiles
   add column if not exists headline text not null default 'Personal trainer',
@@ -134,6 +186,9 @@ alter table public.workout_plans
 alter table public.students alter column coach_id drop default;
 alter table public.workout_plans alter column coach_id drop default;
 alter table public.workout_exercises alter column coach_id drop default;
+alter table public.workout_sessions alter column coach_id drop default;
+alter table public.workout_set_logs alter column coach_id drop default;
+alter table public.workout_feedback alter column coach_id drop default;
 
 alter table public.students
   drop constraint if exists students_coach_id_student_key_key;
@@ -166,12 +221,30 @@ create index if not exists workout_plans_student_id_idx
 create index if not exists workout_exercises_workout_position_idx
   on public.workout_exercises (workout_id, position);
 
+create index if not exists workout_sessions_coach_student_finished_idx
+  on public.workout_sessions (coach_id, student_id, finished_at desc);
+
+create index if not exists workout_sessions_student_finished_idx
+  on public.workout_sessions (student_id, finished_at desc);
+
+create index if not exists workout_sessions_workout_finished_idx
+  on public.workout_sessions (workout_id, finished_at desc);
+
+create index if not exists workout_set_logs_session_position_idx
+  on public.workout_set_logs (session_id, position);
+
+create index if not exists workout_feedback_session_idx
+  on public.workout_feedback (session_id);
+
 -- Data API: acesso anonimo nao le dados reais. Auth API continua funcionando.
 revoke all on public.profiles from anon;
 revoke all on public.brand_theme from anon;
 revoke all on public.students from anon;
 revoke all on public.workout_plans from anon;
 revoke all on public.workout_exercises from anon;
+revoke all on public.workout_sessions from anon;
+revoke all on public.workout_set_logs from anon;
+revoke all on public.workout_feedback from anon;
 
 grant usage on schema public to authenticated;
 grant select, insert, update on public.profiles to authenticated;
@@ -179,12 +252,18 @@ grant select, insert, update on public.brand_theme to authenticated;
 grant select, insert, update, delete on public.students to authenticated;
 grant select, insert, update, delete on public.workout_plans to authenticated;
 grant select, insert, update, delete on public.workout_exercises to authenticated;
+grant select, insert, update, delete on public.workout_sessions to authenticated;
+grant select, insert, update, delete on public.workout_set_logs to authenticated;
+grant select, insert, update, delete on public.workout_feedback to authenticated;
 
 alter table public.profiles enable row level security;
 alter table public.brand_theme enable row level security;
 alter table public.students enable row level security;
 alter table public.workout_plans enable row level security;
 alter table public.workout_exercises enable row level security;
+alter table public.workout_sessions enable row level security;
+alter table public.workout_set_logs enable row level security;
+alter table public.workout_feedback enable row level security;
 
 -- Remove policies do piloto anon/demo e recria policies autenticadas.
 drop policy if exists "brand_theme_select_demo" on public.brand_theme;
@@ -221,6 +300,18 @@ drop policy if exists "workout_exercises_select_authenticated_owner" on public.w
 drop policy if exists "workout_exercises_insert_coach" on public.workout_exercises;
 drop policy if exists "workout_exercises_update_coach" on public.workout_exercises;
 drop policy if exists "workout_exercises_delete_coach" on public.workout_exercises;
+drop policy if exists "workout_sessions_select_authenticated_owner" on public.workout_sessions;
+drop policy if exists "workout_sessions_insert_student" on public.workout_sessions;
+drop policy if exists "workout_sessions_update_owner" on public.workout_sessions;
+drop policy if exists "workout_sessions_delete_coach" on public.workout_sessions;
+drop policy if exists "workout_set_logs_select_authenticated_owner" on public.workout_set_logs;
+drop policy if exists "workout_set_logs_insert_student" on public.workout_set_logs;
+drop policy if exists "workout_set_logs_update_owner" on public.workout_set_logs;
+drop policy if exists "workout_set_logs_delete_coach" on public.workout_set_logs;
+drop policy if exists "workout_feedback_select_authenticated_owner" on public.workout_feedback;
+drop policy if exists "workout_feedback_insert_student" on public.workout_feedback;
+drop policy if exists "workout_feedback_update_owner" on public.workout_feedback;
+drop policy if exists "workout_feedback_delete_coach" on public.workout_feedback;
 
 create policy "profiles_select_own"
   on public.profiles for select
@@ -380,5 +471,233 @@ create policy "workout_exercises_update_coach"
 
 create policy "workout_exercises_delete_coach"
   on public.workout_exercises for delete
+  to authenticated
+  using (coach_id = (select auth.uid())::text);
+
+create policy "workout_sessions_select_authenticated_owner"
+  on public.workout_sessions for select
+  to authenticated
+  using (
+    coach_id = (select auth.uid())::text
+    or exists (
+      select 1
+      from public.students s
+      where s.id = workout_sessions.student_id
+        and s.coach_id = workout_sessions.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  );
+
+create policy "workout_sessions_insert_student"
+  on public.workout_sessions for insert
+  to authenticated
+  with check (
+    exists (
+      select 1
+      from public.students s
+      where s.id = workout_sessions.student_id
+        and s.coach_id = workout_sessions.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  );
+
+create policy "workout_sessions_update_owner"
+  on public.workout_sessions for update
+  to authenticated
+  using (
+    coach_id = (select auth.uid())::text
+    or exists (
+      select 1
+      from public.students s
+      where s.id = workout_sessions.student_id
+        and s.coach_id = workout_sessions.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  )
+  with check (
+    coach_id = (select auth.uid())::text
+    or exists (
+      select 1
+      from public.students s
+      where s.id = workout_sessions.student_id
+        and s.coach_id = workout_sessions.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  );
+
+create policy "workout_sessions_delete_coach"
+  on public.workout_sessions for delete
+  to authenticated
+  using (coach_id = (select auth.uid())::text);
+
+create policy "workout_set_logs_select_authenticated_owner"
+  on public.workout_set_logs for select
+  to authenticated
+  using (
+    coach_id = (select auth.uid())::text
+    or exists (
+      select 1
+      from public.workout_sessions ws
+      join public.students s
+        on s.id = ws.student_id
+       and s.coach_id = ws.coach_id
+      where ws.id = workout_set_logs.session_id
+        and ws.coach_id = workout_set_logs.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  );
+
+create policy "workout_set_logs_insert_student"
+  on public.workout_set_logs for insert
+  to authenticated
+  with check (
+    exists (
+      select 1
+      from public.workout_sessions ws
+      join public.students s
+        on s.id = ws.student_id
+       and s.coach_id = ws.coach_id
+      where ws.id = workout_set_logs.session_id
+        and ws.coach_id = workout_set_logs.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  );
+
+create policy "workout_set_logs_update_owner"
+  on public.workout_set_logs for update
+  to authenticated
+  using (
+    coach_id = (select auth.uid())::text
+    or exists (
+      select 1
+      from public.workout_sessions ws
+      join public.students s
+        on s.id = ws.student_id
+       and s.coach_id = ws.coach_id
+      where ws.id = workout_set_logs.session_id
+        and ws.coach_id = workout_set_logs.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  )
+  with check (
+    coach_id = (select auth.uid())::text
+    or exists (
+      select 1
+      from public.workout_sessions ws
+      join public.students s
+        on s.id = ws.student_id
+       and s.coach_id = ws.coach_id
+      where ws.id = workout_set_logs.session_id
+        and ws.coach_id = workout_set_logs.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  );
+
+create policy "workout_set_logs_delete_coach"
+  on public.workout_set_logs for delete
+  to authenticated
+  using (coach_id = (select auth.uid())::text);
+
+create policy "workout_feedback_select_authenticated_owner"
+  on public.workout_feedback for select
+  to authenticated
+  using (
+    coach_id = (select auth.uid())::text
+    or exists (
+      select 1
+      from public.workout_sessions ws
+      join public.students s
+        on s.id = ws.student_id
+       and s.coach_id = ws.coach_id
+      where ws.id = workout_feedback.session_id
+        and ws.coach_id = workout_feedback.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  );
+
+create policy "workout_feedback_insert_student"
+  on public.workout_feedback for insert
+  to authenticated
+  with check (
+    exists (
+      select 1
+      from public.workout_sessions ws
+      join public.students s
+        on s.id = ws.student_id
+       and s.coach_id = ws.coach_id
+      where ws.id = workout_feedback.session_id
+        and ws.coach_id = workout_feedback.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  );
+
+create policy "workout_feedback_update_owner"
+  on public.workout_feedback for update
+  to authenticated
+  using (
+    coach_id = (select auth.uid())::text
+    or exists (
+      select 1
+      from public.workout_sessions ws
+      join public.students s
+        on s.id = ws.student_id
+       and s.coach_id = ws.coach_id
+      where ws.id = workout_feedback.session_id
+        and ws.coach_id = workout_feedback.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  )
+  with check (
+    coach_id = (select auth.uid())::text
+    or exists (
+      select 1
+      from public.workout_sessions ws
+      join public.students s
+        on s.id = ws.student_id
+       and s.coach_id = ws.coach_id
+      where ws.id = workout_feedback.session_id
+        and ws.coach_id = workout_feedback.coach_id
+        and (
+          s.student_user_id = (select auth.uid())
+          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
+        )
+    )
+  );
+
+create policy "workout_feedback_delete_coach"
+  on public.workout_feedback for delete
   to authenticated
   using (coach_id = (select auth.uid())::text);

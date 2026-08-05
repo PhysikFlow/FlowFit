@@ -7,6 +7,7 @@ import { authRepository } from "./data/repositories/auth-repository.js";
 import { studentRepository } from "./data/repositories/student-repository.js";
 import { themeRepository } from "./data/repositories/theme-repository.js";
 import { PUBLISHED_WORKOUTS_KEY, workoutRepository } from "./data/repositories/workout-repository.js";
+import { sessionRepository } from "./data/repositories/session-repository.js";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -14,6 +15,7 @@ const onboarding = document.querySelector("[data-onboarding]");
 const onboardingForm = document.querySelector("[data-onboarding-form]");
 const accessAppButton = document.querySelector("[data-access-app]");
 const authStatus = document.querySelector("[data-auth-status]");
+const finishStatus = document.querySelector("[data-finish-status]");
 const authTitle = document.querySelector("[data-auth-title]");
 const authCopy = document.querySelector("[data-auth-copy]");
 const authSubmit = document.querySelector("[data-auth-submit]");
@@ -51,6 +53,7 @@ const scheduleItems = [];
 const notificationItems = [];
 let currentStudent = emptyStudent;
 let currentWorkout = emptyWorkout;
+let currentSessionStartedAt = new Date().toISOString();
 let authAction = "signin";
 
 const getInviteEmail = () => {
@@ -102,6 +105,12 @@ const formatVolume = (value) => `${(value / 1000).toLocaleString("pt-BR", { maxi
 const formatDecimal = (value) => Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
 const formatShortDate = (date) => new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(date));
+
+const formatDateTime = (date) => {
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return String(date || "Sem data");
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(parsed);
+};
 
 const formatMonthYear = (date) => new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(date));
 
@@ -172,6 +181,7 @@ const setStatus = (target, message, state = "") => {
 };
 
 const setAuthStatus = (message, state = "") => setStatus(authStatus, message, state);
+const setFinishStatus = (message, state = "") => setStatus(finishStatus, message, state);
 
 const getAuthRedirectUrl = () => {
   const url = new URL(window.location.href);
@@ -295,6 +305,7 @@ const refreshPublishedWorkout = async ({ silent = false } = {}) => {
   if (changed) {
     setClickLocks.clear();
     stopRestTimer();
+    currentSessionStartedAt = new Date().toISOString();
     if (!silent && currentWorkout.id !== emptyWorkout.id) Platform.notify("Seu personal publicou um novo treino.");
   }
   if (changed || result.synced) renderAll();
@@ -386,6 +397,78 @@ const getWorkoutVolume = () => getCurrentExercises().reduce((sum, exercise) => {
   });
   return sum + (done * Number(log.load || 0) * Number(log.reps || 0));
 }, 0);
+
+const getFinishFeedback = () => {
+  const form = document.querySelector("[data-finish-feedback]");
+  const data = form ? new FormData(form) : new FormData();
+  return {
+    effort: String(data.get("effort") || "ok"),
+    pain: String(data.get("pain") || "none"),
+    note: String(data.get("note") || "").trim()
+  };
+};
+
+const buildWorkoutSessionPayload = () => {
+  const sessionId = `session-${Date.now()}`;
+  const finishedAt = new Date().toISOString();
+  const startedAt = currentSessionStartedAt || finishedAt;
+  const setLogs = getCurrentExercises().map((exercise, index) => {
+    const completedSets = Store.getExerciseDone(exercise.id);
+    const log = Store.getExerciseLog(exercise.id, {
+      load: parseLoadKg(exercise.load),
+      reps: parseReps(exercise)
+    });
+    const loadKg = Number(log.load || 0);
+    const reps = Number(log.reps || 0);
+    return {
+      id: `${sessionId}-set-${String(index + 1).padStart(2, "0")}`,
+      sessionId,
+      coachId: currentWorkout.coachId || currentStudent.coachId || "",
+      workoutId: currentWorkout.id,
+      exerciseId: exercise.id,
+      position: index,
+      exerciseName: exercise.name,
+      target: exercise.target,
+      prescription: exercise.prescription,
+      plannedSets: parseTotalSets(exercise),
+      completedSets,
+      loadKg,
+      reps,
+      volumeKg: completedSets * loadKg * reps,
+      rir: exercise.rir,
+      notes: exercise.notes
+    };
+  });
+  const completedSets = setLogs.reduce((sum, log) => sum + log.completedSets, 0);
+  const volumeKg = setLogs.reduce((sum, log) => sum + log.volumeKg, 0);
+  const feedback = getFinishFeedback();
+
+  return {
+    id: sessionId,
+    coachId: currentWorkout.coachId || currentStudent.coachId || "",
+    studentId: currentStudent.id,
+    studentKey: currentStudent.studentKey || currentWorkout.studentKey || "",
+    studentEmail: currentStudent.email || "",
+    workoutId: currentWorkout.id,
+    workoutCode: currentWorkout.code,
+    workoutTitle: currentWorkout.title,
+    workoutVersion: currentWorkout.version || 1,
+    totalSets: getTotalSets(),
+    completedSets,
+    volumeKg: Math.round(volumeKg),
+    durationSeconds: Math.max(0, Math.round((new Date(finishedAt) - new Date(startedAt)) / 1000)),
+    startedAt,
+    finishedAt,
+    feedback: {
+      id: `${sessionId}-feedback`,
+      sessionId,
+      coachId: currentWorkout.coachId || currentStudent.coachId || "",
+      studentId: currentStudent.id,
+      ...feedback
+    },
+    setLogs
+  };
+};
 
 const renderRestTimer = () => {
   const timer = document.querySelector("[data-rest-timer]");
@@ -597,15 +680,18 @@ const renderHistory = () => {
   const sessions = Store.state.sessions || [];
   const target = document.querySelector("[data-history-list]");
   if (!sessions.length) {
-    target.innerHTML = `<article class="empty-state card"><strong>Nenhum treino salvo neste aparelho.</strong><small>Conclua o treino de hoje para criar o primeiro registro local.</small></article>`;
+    target.innerHTML = `<article class="empty-state card"><strong>Nenhum treino concluído.</strong><small>Conclua o treino de hoje para enviar o primeiro feedback ao professor.</small></article>`;
     return;
   }
   target.innerHTML = sessions.map((session) => `
     <article class="history-row card">
       <span class="surface-icon">${svgIcon("trophy")}</span>
-      <div><strong>${escapeHtml(session.title)}</strong><small>${escapeHtml(session.finishedAt)}</small></div>
-      <span class="chip">${session.sets}/${session.totalSets} séries</span>
-      <small>${formatVolume(session.volume || 0)} de volume</small>
+      <div>
+        <strong>${escapeHtml(session.workoutTitle || session.title)}</strong>
+        <small>${escapeHtml(formatDateTime(session.finishedAt))} - ${escapeHtml(session.feedback?.effort || "ok")}</small>
+      </div>
+      <span class="chip">${session.completedSets || session.sets}/${session.totalSets} séries</span>
+      <small>${formatVolume(session.volumeKg || session.volume || 0)} de volume - ${session.syncStatus === "synced" ? "enviado ao professor" : "pendente de envio"}</small>
     </article>
   `).join("");
 };
@@ -762,29 +848,39 @@ document.querySelector("[data-schedule-form]")?.addEventListener("submit", (even
   Platform.notify("Lembrete adicionado na agenda local.");
 });
 
-document.querySelector("[data-finish]")?.addEventListener("click", () => {
+document.querySelector("[data-finish]")?.addEventListener("click", async (event) => {
   const totalSets = getTotalSets();
   const done = getCurrentExercises().reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
   if (done < totalSets) {
     Platform.notify("Registre todas as séries antes de finalizar.");
     return;
   }
-  Store.addSession({
-    id: `session-${Date.now()}`,
-    title: currentWorkout.title,
-    sets: done,
-    totalSets,
-    volume: Math.round(getWorkoutVolume()),
-    finishedAt: new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date())
-  });
+  const finishButton = event.currentTarget;
+  finishButton.disabled = true;
+  setFinishStatus("Finalizando treino e enviando ao professor...", "");
+  const session = buildWorkoutSessionPayload();
+  Store.addSession(session);
   renderAll();
+  const result = await sessionRepository.syncSession(session);
+  if (result.session) Store.addSession(result.session);
+  renderAll();
+  currentSessionStartedAt = new Date().toISOString();
+  document.querySelector("[data-finish-feedback]")?.reset();
+  setFinishStatus(
+    result.synced
+      ? "Treino enviado ao professor com cargas, reps e feedback."
+      : result.session?.syncMessage || result.error?.message || "Treino salvo localmente; envio pendente.",
+    result.synced ? "synced" : "warning"
+  );
+  finishButton.disabled = false;
   Platform.vibrate([40, 40, 80]);
-  Platform.notify("Treino concluído! Histórico local atualizado.");
+  Platform.notify(result.synced ? "Treino concluído e enviado ao professor!" : "Treino concluído. Envio pendente.");
   navigate("progress");
 });
 
 document.querySelector("[data-reset-workout]")?.addEventListener("click", () => {
   Store.resetWorkout(currentWorkout.id);
+  currentSessionStartedAt = new Date().toISOString();
   renderExercises();
   Platform.notify("Registro do treino atual reiniciado.");
 });

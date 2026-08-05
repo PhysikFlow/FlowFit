@@ -5,6 +5,7 @@ import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from 
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js";
 import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutRepository } from "../../appAluno/js/data/repositories/workout-repository.js";
+import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -78,6 +79,8 @@ let toastTimer;
 let themeSaveTimer;
 let students = studentRepository.listStudents();
 let workouts = workoutRepository.listPublishedWorkouts();
+let workoutSessions = sessionRepository.listCachedSessions();
+let selectedStudentId = "";
 let dataStatus = "Local";
 let authContext = null;
 let authAction = "signin";
@@ -548,6 +551,20 @@ const formatUpdatedAt = (value) => {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
 };
 
+const formatVolume = (value) => `${(Number(value || 0) / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}t`;
+
+const effortLabel = (value) => ({
+  easy: "leve",
+  ok: "na medida",
+  hard: "pesado"
+}[value] || value || "sem feedback");
+
+const painLabel = (value) => ({
+  none: "sem dor",
+  mild: "desconforto leve",
+  pain: "relatou dor"
+}[value] || value || "sem dor");
+
 const formatDateForInput = (value) => {
   const date = value ? new Date(value) : new Date();
   if (Number.isNaN(date.getTime())) return "";
@@ -628,6 +645,17 @@ const applyPublishedWorkouts = (publishedWorkouts = workoutRepository.listPublis
   renderDashboard();
 };
 
+const getSessionsForStudent = (studentId) => workoutSessions
+  .filter((session) => session.studentId === studentId)
+  .sort((a, b) => new Date(b.finishedAt || 0) - new Date(a.finishedAt || 0));
+
+const applyWorkoutSessions = (sessions = sessionRepository.listCachedSessions()) => {
+  workoutSessions = [...sessions].sort((a, b) => new Date(b.finishedAt || 0) - new Date(a.finishedAt || 0));
+  renderStudents();
+  renderStudentSessionPanel();
+  renderDashboard();
+};
+
 const updateDataStatus = (status) => {
   dataStatus = status;
   renderDashboard();
@@ -656,6 +684,21 @@ const refreshPublishedWorkouts = async ({ silent = false } = {}) => {
     result.synced ? "Treinos atualizados." : "Treinos em modo offline.",
     result.synced ? "synced" : "warning"
   );
+  return result;
+};
+
+const refreshWorkoutSessions = async ({ silent = false } = {}) => {
+  if (!silent) setStudentSyncStatus("Buscando execuções dos alunos...", "");
+  updateDataStatus("Sincronizando");
+  const result = await sessionRepository.fetchCoachSessions();
+  dataStatus = result.synced ? "Online" : dataStatus;
+  applyWorkoutSessions(result.sessions);
+  if (!silent) {
+    setStudentSyncStatus(
+      result.synced ? "Execuções dos alunos atualizadas." : "Execuções em modo offline/local.",
+      result.synced ? "synced" : "warning"
+    );
+  }
   return result;
 };
 
@@ -745,6 +788,12 @@ const renderActivities = () => {
   const target = document.querySelector("[data-activity-list]");
   if (!target) return;
   const activities = [
+    ...workoutSessions.map((session) => ({
+      icon: "trophy",
+      title: `${session.workoutTitle} concluído`,
+      detail: `${formatVolume(session.volumeKg)} - ${effortLabel(session.feedback?.effort)} - ${formatUpdatedAt(session.finishedAt)}`,
+      time: session.finishedAt
+    })),
     ...workouts.map((workout) => ({
       icon: "dumbbell",
       title: `Treino publicado para ${workout.owner}`,
@@ -926,17 +975,85 @@ const resetWorkoutFormMode = ({ resetForm = false } = {}) => {
   renderWorkoutPreview();
 };
 
+const renderStudentSessionPanel = () => {
+  const target = document.querySelector("[data-student-session-panel]");
+  if (!target) return;
+  const selectedStudent = students.find((student) => student.id === selectedStudentId) || students[0] || null;
+  if (!selectedStudent) {
+    target.innerHTML = `<article class="empty-state"><strong>Acompanhamento</strong><small>Cadastre um aluno para acompanhar execuções reais.</small></article>`;
+    return;
+  }
+  selectedStudentId = selectedStudent.id;
+  const sessions = getSessionsForStudent(selectedStudent.id);
+  const totalSessions = sessions.length;
+  const lastSession = sessions[0] || null;
+  const totalVolume = sessions.reduce((sum, session) => sum + Number(session.volumeKg || 0), 0);
+  const painCount = sessions.filter((session) => session.feedback?.pain && session.feedback.pain !== "none").length;
+  const averageSets = totalSessions
+    ? Math.round(sessions.reduce((sum, session) => sum + Number(session.completedSets || 0), 0) / totalSessions)
+    : 0;
+
+  const sessionCards = sessions.slice(0, 5).map((session) => {
+    const setRows = (session.setLogs || []).slice(0, 6).map((log) => `
+      <article class="session-log-row">
+        <div><strong>${escapeHtml(log.exerciseName)}</strong><small>${escapeHtml(log.prescription || "")}</small></div>
+        <span class="chip">${escapeHtml(String(log.completedSets))}x${escapeHtml(String(log.reps))}</span>
+        <span>${escapeHtml(String(log.loadKg))} kg</span>
+      </article>
+    `).join("");
+    return `
+      <article class="session-card">
+        <div class="session-card__head">
+          <div>
+            <span class="eyebrow">${escapeHtml(formatUpdatedAt(session.finishedAt))}</span>
+            <h3>${escapeHtml(session.workoutTitle)}</h3>
+          </div>
+          <span class="chip">${escapeHtml(formatVolume(session.volumeKg))}</span>
+        </div>
+        <div class="session-card__feedback">
+          <span class="chip">${escapeHtml(effortLabel(session.feedback?.effort))}</span>
+          <span class="chip">${escapeHtml(painLabel(session.feedback?.pain))}</span>
+          <span class="chip">${escapeHtml(session.completedSets)}/${escapeHtml(session.totalSets)} séries</span>
+        </div>
+        ${session.feedback?.note ? `<p class="session-card__note">${escapeHtml(session.feedback.note)}</p>` : ""}
+        <section class="session-log-list">${setRows || `<article class="empty-state"><strong>Sem logs por exercício.</strong><small>O aluno concluiu sem registros detalhados.</small></article>`}</section>
+      </article>
+    `;
+  }).join("");
+
+  target.innerHTML = `
+    <div class="student-session-panel__head">
+      <div>
+        <span class="eyebrow">Acompanhamento real</span>
+        <h2>${escapeHtml(selectedStudent.name)}</h2>
+      </div>
+      <button class="button button--quiet" type="button" data-refresh-sessions>Atualizar execuções</button>
+    </div>
+    <div class="student-session-panel__metrics">
+      <span><strong>${totalSessions}</strong><small>treinos concluídos</small></span>
+      <span><strong>${lastSession ? formatUpdatedAt(lastSession.finishedAt) : "—"}</strong><small>última execução</small></span>
+      <span><strong>${formatVolume(totalVolume)}</strong><small>volume acumulado</small></span>
+      <span><strong>${painCount ? `${painCount} alerta(s)` : `${averageSets} séries`}</strong><small>${painCount ? "dor/desconforto" : "média por treino"}</small></span>
+    </div>
+    <section class="session-list">
+      ${sessionCards || `<article class="empty-state card"><strong>Nenhum treino concluído ainda.</strong><small>Quando o aluno finalizar no app, cargas, reps e feedback aparecem aqui.</small></article>`}
+    </section>
+  `;
+};
+
 const renderStudents = () => {
   const target = document.querySelector("[data-student-list]");
   if (!target) {
     renderStudentOptions();
     renderWorkoutPreview();
+    renderStudentSessionPanel();
     return;
   }
   if (!students.length) {
     target.innerHTML = `<article class="empty-state card"><strong>Nenhum aluno cadastrado.</strong><small>Use o formulário acima para criar o primeiro aluno real.</small></article>`;
     renderStudentOptions();
     renderWorkoutPreview();
+    renderStudentSessionPanel();
     return;
   }
 
@@ -946,6 +1063,11 @@ const renderStudents = () => {
     const workoutLabel = publishedWorkout
       ? `Treino ${publishedWorkout.code} - ${publishedWorkout.title}`
       : "Sem treino publicado";
+    const studentSessions = getSessionsForStudent(student.id);
+    const latestSession = studentSessions[0] || null;
+    const followupLabel = latestSession
+      ? `Último: ${formatUpdatedAt(latestSession.finishedAt)}`
+      : `${student.adherence}% aderência`;
     const accessLabel = student.email ? `Acesso: ${student.email}` : "Sem email de acesso";
     return `
       <article class="student-card card">
@@ -960,17 +1082,19 @@ const renderStudents = () => {
         </div>
         <div class="student-card__meta">
           <span>${escapeHtml(workoutLabel)}</span>
-          <span>${student.adherence}% aderência</span>
+          <span>${escapeHtml(followupLabel)}</span>
         </div>
         <div class="progress-track" aria-label="${student.adherence} por cento de aderência"><span style="--progress: ${student.adherence}%"></span></div>
-        <button class="button button--quiet button--block" type="button" data-student-action="${escapeHtml(student.id)}">
-          ${escapeHtml(actionLabel)} ${svgIcon("arrow-right")}
-        </button>
+        <div class="student-card__actions">
+          <button class="button button--quiet" type="button" data-student-detail="${escapeHtml(student.id)}">Acompanhar</button>
+          <button class="button button--quiet" type="button" data-student-action="${escapeHtml(student.id)}">${escapeHtml(actionLabel)}</button>
+        </div>
       </article>
     `;
   }).join("");
   renderStudentOptions();
   renderWorkoutPreview();
+  renderStudentSessionPanel();
 };
 
 const getWorkoutDraft = () => {
@@ -1442,6 +1566,21 @@ coachProfileForm?.addEventListener("submit", async (event) => {
 });
 
 document.addEventListener("click", (event) => {
+  const refreshSessionsButton = event.target.closest("[data-refresh-sessions]");
+  if (refreshSessionsButton) {
+    refreshWorkoutSessions();
+    return;
+  }
+
+  const studentDetail = event.target.closest("[data-student-detail]");
+  if (studentDetail) {
+    selectedStudentId = studentDetail.dataset.studentDetail;
+    navigate("students");
+    renderStudents();
+    document.querySelector("[data-student-session-panel]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+
   const studentAction = event.target.closest("[data-student-action]");
   if (studentAction) {
     const student = students.find((item) => item.id === studentAction.dataset.studentAction);
@@ -1481,6 +1620,10 @@ window.addEventListener("storage", (event) => {
   if (event.key === STUDENTS_KEY) {
     applyStudents(studentRepository.listStudents());
     setStudentSyncStatus("Alunos atualizados por outra aba.", "synced");
+  }
+  if (event.key === WORKOUT_SESSIONS_KEY) {
+    applyWorkoutSessions(sessionRepository.listCachedSessions());
+    setStudentSyncStatus("Execuções atualizadas por outra aba.", "synced");
   }
 });
 
@@ -1534,6 +1677,8 @@ document.querySelector("[data-sign-out]")?.addEventListener("click", async () =>
   authContext = null;
   students = [];
   workouts = [];
+  workoutSessions = [];
+  selectedStudentId = "";
   dataStatus = "Local";
   renderAll();
   setAuthLocked(true);
@@ -1571,11 +1716,14 @@ const startAuthenticatedPanel = async () => {
   if (authUser) authUser.title = authContext.email;
   students = [];
   workouts = [];
+  workoutSessions = [];
+  selectedStudentId = "";
   renderAll();
 
   await Promise.allSettled([
     refreshStudents({ silent: true }),
-    refreshPublishedWorkouts({ silent: true })
+    refreshPublishedWorkouts({ silent: true }),
+    refreshWorkoutSessions({ silent: true })
   ]);
 
   const remote = await themeRepository.fetchBrandTheme();

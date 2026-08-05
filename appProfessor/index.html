@@ -7,10 +7,10 @@
     <meta name="description" content="Painel do personal para gerenciar alunos, treinos e marca do aplicativo." />
     <title>FlowFit - Professor</title>
     <link rel="icon" type="image/svg+xml" href="../appAluno/assets/icons/app-icon.svg" />
-    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=design-system-20260804" />
-    <link rel="stylesheet" href="../appAluno/css/components.css?v=design-system-20260804" />
-    <link rel="stylesheet" href="css/app.css?v=design-system-20260804" />
-    <script type="module" src="js/app.js?v=prof-workouts-20260804"></script>
+    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=closed-cycle-20260804" />
+    <link rel="stylesheet" href="../appAluno/css/components.css?v=closed-cycle-20260804" />
+    <link rel="stylesheet" href="css/app.css?v=closed-cycle-20260804" />
+    <script type="module" src="js/app.js?v=closed-cycle-20260804"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title">
@@ -179,6 +179,12 @@
         </section>
 
         <section class="student-list" data-student-list aria-label="Lista de alunos"></section>
+        <section class="student-session-panel card" data-student-session-panel aria-label="Acompanhamento do aluno">
+          <article class="empty-state">
+            <strong>Acompanhamento</strong>
+            <small>Selecione um aluno para ver treinos concluídos, cargas, volume e feedback.</small>
+          </article>
+        </section>
       </section>
 
       <section class="page" data-page="workouts" aria-label="Treinos, modelos e ajustes">

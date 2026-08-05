@@ -404,6 +404,7 @@ textarea:focus-visible {
   .student-import,
   .progress-form,
   .schedule-form,
+  .finish-feedback,
   .theme-controls
 ) label {
   display: grid;
@@ -423,6 +424,7 @@ textarea:focus-visible {
   .student-import,
   .progress-form,
   .schedule-form,
+  .finish-feedback,
   .theme-controls
 ) :where(input, select, textarea) {
   width: 100%;
@@ -441,6 +443,7 @@ textarea:focus-visible {
   .theme-editor,
   .profile-editor,
   .student-invite,
+  .finish-feedback,
   .onboarding-form
 ) textarea {
   min-height: 6.5rem;

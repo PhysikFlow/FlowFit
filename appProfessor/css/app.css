@@ -655,6 +655,98 @@ body.is-auth-locked {
   font-weight: 800;
 }
 
+.student-card__actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.student-session-panel {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  box-shadow: none;
+}
+
+.student-session-panel__head,
+.student-session-panel__metrics,
+.session-card__head,
+.session-card__feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.student-session-panel__head h2,
+.session-card h3 {
+  margin: 0;
+}
+
+.student-session-panel__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(8rem, 1fr));
+}
+
+.student-session-panel__metrics span {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+}
+
+.student-session-panel__metrics strong {
+  color: var(--color-accent);
+  font-size: var(--text-lg);
+}
+
+.student-session-panel__metrics small,
+.session-log-row small {
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 850;
+}
+
+.session-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.session-card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+}
+
+.session-card__feedback {
+  justify-content: flex-start;
+}
+
+.session-card__note {
+  margin: 0;
+  color: var(--color-muted);
+  line-height: var(--line-height-copy);
+}
+
+.session-log-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-surface-strong) 64%, transparent);
+}
+
 .workout-builder {
   position: relative;
   display: grid;
@@ -1226,6 +1318,12 @@ body.is-auth-locked {
   .student-card__main,
   .student-card__meta {
     display: grid;
+  }
+
+  .student-card__actions,
+  .student-session-panel__metrics,
+  .session-log-row {
+    grid-template-columns: 1fr;
   }
 
   .theme-editor__colors {
