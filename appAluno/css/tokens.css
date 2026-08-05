@@ -40,6 +40,19 @@
   --space-6: 1.5rem;
   --space-8: 2rem;
 
+  --line-height-base: 1.35;
+  --line-height-copy: 1.45;
+  --control-height: 3rem;
+  --control-height-sm: 2.45rem;
+  --field-padding-x: var(--space-3);
+  --field-bg: var(--color-bg-elevated);
+  --field-border: var(--color-line);
+  --field-radius: var(--radius-sm);
+  --surface-icon-size: 2.45rem;
+  --surface-icon-radius: var(--radius-md);
+  --surface-icon-glyph: 1.2rem;
+  --avatar-size: 3.15rem;
+
   --radius-sm: 0.7rem;
   --radius-md: 1rem;
   --radius-lg: 1.35rem;
