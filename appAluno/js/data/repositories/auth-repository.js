@@ -14,9 +14,35 @@ const PROFILE_COLUMNS_EXTENDED = [
   "phone",
   "whatsapp",
   "cref",
+  "coach_status",
+  "coach_trial_ends_at",
+  "coach_status_note",
   "created_at",
   "updated_at"
 ].join(", ");
+
+export const AUTH_ROLES = Object.freeze({
+  ADMIN: "admin",
+  COACH: "coach",
+  STUDENT: "student"
+});
+
+export const COACH_STATUS = Object.freeze({
+  PENDING: "pending",
+  TRIAL: "trial",
+  ACTIVE: "active",
+  PAST_DUE: "past_due",
+  SUSPENDED: "suspended",
+  CANCELLED: "cancelled"
+});
+
+const VALID_ROLES = new Set(Object.values(AUTH_ROLES));
+const VALID_COACH_STATUSES = new Set(Object.values(COACH_STATUS));
+const COACH_ALLOWED_STATUSES = new Set([
+  COACH_STATUS.TRIAL,
+  COACH_STATUS.ACTIVE,
+  COACH_STATUS.PAST_DUE
+]);
 
 const normalizeEmail = (value) => String(value ?? "").trim().toLowerCase();
 
@@ -25,6 +51,16 @@ const normalizeText = (value) => String(value ?? "").trim();
 const normalizeName = (value, fallback = "Usuário") => {
   const text = normalizeText(value);
   return text || fallback;
+};
+
+const normalizeRole = (value, fallback = AUTH_ROLES.STUDENT) => {
+  const role = normalizeText(value).toLowerCase();
+  return VALID_ROLES.has(role) ? role : fallback;
+};
+
+const normalizeCoachStatus = (value, fallback = COACH_STATUS.TRIAL) => {
+  const status = normalizeText(value).toLowerCase();
+  return VALID_COACH_STATUSES.has(status) ? status : fallback;
 };
 
 const normalizeRedirectUrl = (value) => {
@@ -48,6 +84,9 @@ const profileFromRow = (row) => row ? {
   phone: row.phone || "",
   whatsapp: row.whatsapp || "",
   cref: row.cref || "",
+  coachStatus: normalizeCoachStatus(row.coach_status),
+  coachTrialEndsAt: row.coach_trial_ends_at || "",
+  coachStatusNote: row.coach_status_note || "",
   createdAt: row.created_at,
   updatedAt: row.updated_at
 } : null;
@@ -60,7 +99,85 @@ const isMissingProfileColumn = (error) => {
     || /could not find .* column/i.test(message);
 };
 
+const authMessage = (error, fallback = "Não foi possível autenticar.") => {
+  const message = String(error?.message || "").toLowerCase();
+  const code = String(error?.code || error?.status || "").toLowerCase();
+
+  if (code.includes("invalid_credentials") || message.includes("invalid login credentials")) {
+    return "Email ou senha incorretos.";
+  }
+  if (code.includes("email_not_confirmed") || message.includes("email not confirmed")) {
+    return "Confirme seu email antes de entrar.";
+  }
+  if (code.includes("user_already_exists") || message.includes("already registered") || message.includes("already exists")) {
+    return "Já existe uma conta com este email. Entre ou use “Esqueci minha senha”.";
+  }
+  if (message.includes("password") && (message.includes("6") || message.includes("characters") || message.includes("weak"))) {
+    return "Use uma senha com pelo menos 6 caracteres.";
+  }
+  if (message.includes("invalid email")) {
+    return "Informe um email válido.";
+  }
+  if (code.includes("rate") || message.includes("rate limit") || message.includes("too many")) {
+    return "Muitas tentativas. Tente novamente em alguns minutos.";
+  }
+  if (message.includes("provider") || message.includes("redirect")) {
+    return "Login social indisponível. Verifique a configuração do provedor.";
+  }
+
+  return fallback;
+};
+
+const buildCoachAccess = (profile) => {
+  if (!profile) {
+    return {
+      ok: false,
+      reason: "profile-missing",
+      message: "Conta autenticada, mas o perfil não carregou. Rode o SQL atualizado e recarregue a página."
+    };
+  }
+
+  if (profile.role !== AUTH_ROLES.COACH) {
+    return {
+      ok: false,
+      reason: "wrong-role",
+      message: "Esta conta não é de professor. Use o app do aluno ou entre com outro email."
+    };
+  }
+
+  const status = normalizeCoachStatus(profile.coachStatus);
+  if (COACH_ALLOWED_STATUSES.has(status)) return { ok: true, status };
+
+  const messages = {
+    [COACH_STATUS.PENDING]: "Seu cadastro de personal está aguardando liberação.",
+    [COACH_STATUS.SUSPENDED]: "Seu acesso de personal está suspenso.",
+    [COACH_STATUS.CANCELLED]: "Esta conta de personal foi cancelada."
+  };
+
+  return {
+    ok: false,
+    reason: "coach-status-blocked",
+    status,
+    message: messages[status] || "Seu acesso de personal não está ativo."
+  };
+};
+
 export const authRepository = {
+  roles: AUTH_ROLES,
+  coachStatus: COACH_STATUS,
+
+  translateAuthError(error, fallback) {
+    return authMessage(error, fallback);
+  },
+
+  getCoachAccess(profile) {
+    return buildCoachAccess(profile);
+  },
+
+  canWriteAsCoach(authContext) {
+    return authContext?.role === AUTH_ROLES.COACH && buildCoachAccess(authContext.profile).ok;
+  },
+
   async getClient() {
     return getSupabase();
   },
@@ -112,12 +229,12 @@ export const authRepository = {
     return profileFromRow(data);
   },
 
-  async ensureProfile({ role = "student", name } = {}) {
+  async ensureProfile({ role = AUTH_ROLES.STUDENT, name, createIfMissing = true, coachStatus = COACH_STATUS.TRIAL } = {}) {
     const client = await getSupabase();
     const user = await this.getUser();
     if (!client || !user) return { synced: false, profile: null, reason: "not-authenticated" };
 
-    const safeRole = role === "coach" ? "coach" : "student";
+    const safeRole = normalizeRole(role);
     const safeName = normalizeName(name, user.email || "Usuário");
     const existing = await this.getProfile();
 
@@ -126,16 +243,42 @@ export const authRepository = {
       return { synced: true, profile: existing };
     }
 
-    const { data, error } = await client
+    if (!createIfMissing) {
+      return { synced: false, profile: null, reason: "profile-missing" };
+    }
+
+    const now = new Date().toISOString();
+    const payload = {
+      user_id: user.id,
+      role: safeRole,
+      name: safeName,
+      updated_at: now
+    };
+
+    if (safeRole === AUTH_ROLES.COACH) {
+      payload.coach_status = normalizeCoachStatus(coachStatus);
+    }
+
+    let { data, error } = await client
       .from(PROFILES_TABLE)
-      .insert({
-        user_id: user.id,
-        role: safeRole,
-        name: safeName,
-        updated_at: new Date().toISOString()
-      })
-      .select(PROFILE_COLUMNS_BASE)
+      .insert(payload)
+      .select(PROFILE_COLUMNS_EXTENDED)
       .maybeSingle();
+
+    if (isMissingProfileColumn(error)) {
+      const fallback = await client
+        .from(PROFILES_TABLE)
+        .insert({
+          user_id: user.id,
+          role: safeRole,
+          name: safeName,
+          updated_at: now
+        })
+        .select(PROFILE_COLUMNS_BASE)
+        .maybeSingle();
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     return { synced: !error, error, profile: profileFromRow(data) };
   },
@@ -192,7 +335,7 @@ export const authRepository = {
     return { synced: !error, error, partial, profile: profileFromRow(data) };
   },
 
-  async signIn({ email, password, role, name } = {}) {
+  async signIn({ email, password, role, name, createProfile = true } = {}) {
     const client = await getSupabase();
     if (!client) return { ok: false, message: "Serviço indisponível." };
 
@@ -201,9 +344,9 @@ export const authRepository = {
       password: String(password || "")
     });
 
-    if (error) return { ok: false, error, message: error.message };
+    if (error) return { ok: false, error, message: authMessage(error) };
 
-    const profileResult = await this.ensureProfile({ role, name });
+    const profileResult = await this.ensureProfile({ role, name, createIfMissing: createProfile });
     if (profileResult.roleMismatch) {
       await client.auth.signOut();
       return { ok: false, message: "Esta conta já existe com outro tipo de acesso." };
@@ -212,33 +355,43 @@ export const authRepository = {
     return { ok: true, session: data.session, user: data.user, profile: profileResult.profile };
   },
 
-  async signUp({ email, password, role, name, redirectTo } = {}) {
+  async signUp({ email, password, role, name, redirectTo, createProfile = true, coachStatus = COACH_STATUS.TRIAL } = {}) {
     const client = await getSupabase();
     if (!client) return { ok: false, message: "Serviço indisponível." };
 
     const safeName = normalizeName(name, normalizeEmail(email));
+    const safeRole = normalizeRole(role);
     const { data, error } = await client.auth.signUp({
       email: normalizeEmail(email),
       password: String(password || ""),
       options: {
-        data: { display_name: safeName },
+        data: { display_name: safeName, flowfit_requested_role: safeRole },
         emailRedirectTo: normalizeRedirectUrl(redirectTo)
       }
     });
 
-    if (error) return { ok: false, error, message: error.message };
+    if (error) return { ok: false, error, message: authMessage(error) };
 
-    const session = data.session || await this.getSession();
+    const session = data.session || null;
     if (!session) {
       return {
         ok: true,
         pendingEmailConfirmation: true,
         user: data.user,
-        message: "Conta criada. Confirme o email e depois entre novamente."
+        message: "Confira seu email para confirmar o acesso. Se esta conta já existia, entre ou use “Esqueci minha senha”."
       };
     }
 
-    const profileResult = await this.ensureProfile({ role, name: safeName });
+    if (!createProfile) {
+      return { ok: true, session, user: data.user, profile: null };
+    }
+
+    const profileResult = await this.ensureProfile({ role: safeRole, name: safeName, coachStatus });
+    if (profileResult.roleMismatch) {
+      await client.auth.signOut();
+      return { ok: false, message: "Esta conta já existe com outro tipo de acesso." };
+    }
+
     return { ok: true, session, user: data.user, profile: profileResult.profile };
   },
 
@@ -258,7 +411,7 @@ export const authRepository = {
       }
     });
 
-    if (error) return { ok: false, error, message: error.message };
+    if (error) return { ok: false, error, message: authMessage(error) };
     return { ok: true, data };
   },
 
@@ -273,7 +426,7 @@ export const authRepository = {
       redirectTo: normalizeRedirectUrl(redirectTo)
     });
 
-    if (error) return { ok: false, error, message: error.message };
+    if (error) return { ok: false, error, message: authMessage(error, "Não foi possível enviar a recuperação de senha.") };
     return { ok: true, data };
   },
 

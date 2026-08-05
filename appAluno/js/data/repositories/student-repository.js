@@ -7,6 +7,7 @@ import { studentKeyFromName } from "./workout-repository.js";
 export const STUDENTS_KEY = "flowfit.students";
 
 const TABLE = "students";
+const CLOUD_STUDENT_SELECT = "id, coach_id, student_key, student_user_id, email, name, initials, goal, status, plan, workout, adherence, next_action, created_at, updated_at";
 
 const normalizeText = (value, fallback = "") => {
   const text = String(value ?? "").trim();
@@ -149,7 +150,7 @@ export const studentRepository = {
     const authContext = await authRepository.getAuthContext();
     const normalized = this.saveStudent({ ...student, coachId: authContext?.coachId || student?.coachId });
     const client = await getSupabase();
-    if (!client || !authContext?.user || authContext.role !== "coach") {
+    if (!client || !authContext?.user || !authRepository.canWriteAsCoach(authContext)) {
       return { synced: false, reason: "not-authenticated-as-coach", student: normalized };
     }
 
@@ -174,7 +175,7 @@ export const studentRepository = {
     try {
       const { data, error } = await client
         .from(TABLE)
-        .select("id, coach_id, student_key, student_user_id, email, name, initials, goal, status, plan, workout, adherence, next_action, created_at, updated_at")
+        .select(CLOUD_STUDENT_SELECT)
         .eq("coach_id", authContext.coachId)
         .order("name", { ascending: true });
       if (error) return { synced: false, error, students: localStudents };
@@ -187,25 +188,79 @@ export const studentRepository = {
     }
   },
 
-  async fetchCurrentStudent() {
+  async fetchCurrentStudent({ preferredStudentId = "", preferredCoachId = "" } = {}) {
     const authContext = await authRepository.getAuthContext();
     const client = await getSupabase();
     if (!client || !authContext?.user) return { synced: false, reason: "not-authenticated", student: null };
 
     try {
-      const { data, error } = await client
+      const { data: byUserId, error: userIdError } = await client
         .from(TABLE)
-        .select("id, coach_id, student_key, student_user_id, email, name, initials, goal, status, plan, workout, adherence, next_action, created_at, updated_at")
-        .ilike("email", authContext.email)
+        .select(CLOUD_STUDENT_SELECT)
+        .eq("student_user_id", authContext.user.id)
         .order("updated_at", { ascending: false })
-        .limit(1);
+        .limit(20);
 
-      if (error) return { synced: false, error, student: null };
-      const student = data?.[0] ? toAppStudent(data[0]) : null;
+      if (userIdError) return { synced: false, error: userIdError, student: null };
+
+      let byEmail = [];
+      if (authContext.email) {
+        const { data, error } = await client
+          .from(TABLE)
+          .select(CLOUD_STUDENT_SELECT)
+          .ilike("email", authContext.email)
+          .order("updated_at", { ascending: false })
+          .limit(20);
+
+        if (error) return { synced: false, error, student: null };
+        byEmail = data || [];
+      }
+
+      const uniqueRows = new Map();
+      [...(byUserId || []), ...byEmail].forEach((row) => {
+        if (row?.id) uniqueRows.set(row.id, row);
+      });
+
+      const students = [...uniqueRows.values()].map(toAppStudent).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      const student = students.find((item) => preferredStudentId && item.id === preferredStudentId)
+        || students.find((item) => preferredCoachId && item.coachId === preferredCoachId)
+        || students.find((item) => item.studentUserId === authContext.user.id)
+        || students[0]
+        || null;
       if (student) this.saveStudent(student);
-      return { synced: true, student };
+      return { synced: true, student, students, multiple: students.length > 1 };
     } catch (error) {
       return { synced: false, error, student: null };
+    }
+  },
+
+  async claimCurrentStudent(student) {
+    const authContext = await authRepository.getAuthContext();
+    const client = await getSupabase();
+    if (!client || !authContext?.user || !student?.id) {
+      return { synced: false, reason: "not-authenticated-or-student-missing", student };
+    }
+    if (student.studentUserId === authContext.user.id) {
+      return { synced: true, student };
+    }
+
+    try {
+      const { data, error } = await client
+        .from(TABLE)
+        .update({
+          student_user_id: authContext.user.id,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", student.id)
+        .select(CLOUD_STUDENT_SELECT)
+        .maybeSingle();
+
+      if (error) return { synced: false, error, student };
+      const claimed = data ? toAppStudent(data) : normalizeStudent({ ...student, studentUserId: authContext.user.id });
+      this.saveStudent(claimed);
+      return { synced: true, student: claimed };
+    } catch (error) {
+      return { synced: false, error, student };
     }
   }
 };

@@ -7,10 +7,10 @@
     <meta name="description" content="Painel do personal para gerenciar alunos, treinos e marca do aplicativo." />
     <title>FlowFit - Professor</title>
     <link rel="icon" type="image/svg+xml" href="../appAluno/assets/icons/app-icon.svg" />
-    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=closed-cycle-20260804" />
-    <link rel="stylesheet" href="../appAluno/css/components.css?v=closed-cycle-20260804" />
-    <link rel="stylesheet" href="css/app.css?v=closed-cycle-20260804" />
-    <script type="module" src="js/app.js?v=closed-cycle-20260804"></script>
+    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=auth-flow-20260805" />
+    <link rel="stylesheet" href="../appAluno/css/components.css?v=auth-flow-20260805" />
+    <link rel="stylesheet" href="css/app.css?v=auth-flow-20260805" />
+    <script type="module" src="js/app.js?v=auth-flow-20260805"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title">
@@ -27,6 +27,7 @@
         <label>Senha <input type="password" name="password" autocomplete="current-password" minlength="6" placeholder="Mínimo 6 caracteres" required /></label>
         <button class="auth-link-button" type="button" data-auth-reset>Esqueci minha senha</button>
         <p class="form-status" data-auth-status>Acesse sua conta de professor.</p>
+        <button class="auth-link-button" type="button" data-auth-gate-sign-out hidden>Sair desta conta</button>
         <button class="button button--block" type="submit" data-auth-submit>Entrar</button>
         <p class="auth-secondary-action" data-auth-secondary>Não tem conta? Use “Criar conta”.</p>
         <div class="auth-divider"><span>ou</span></div>

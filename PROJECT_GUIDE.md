@@ -92,7 +92,7 @@ Ele é o lugar onde o personal opera a base. Hoje inclui:
 - perfil profissional;
 - áreas de comunicação e negócio ainda não configuradas de verdade.
 
-O painel só libera operação depois que a conta autenticada tem perfil com papel `coach`. Se a conta for de aluno, o painel bloqueia o uso.
+O painel só libera operação depois que a conta autenticada tem perfil com papel `coach` e status operacional (`trial`, `active` ou `past_due`). Se a conta for de aluno ou estiver suspensa/cancelada, o painel bloqueia o uso.
 
 ### Supabase
 
@@ -162,10 +162,12 @@ O aluno autentica no `appAluno`.
 
 Depois disso, o app:
 
-1. garante que existe um perfil `student`;
-2. busca em `students` uma linha cujo email bate com o email autenticado;
-3. busca treinos publicados;
-4. escolhe o treino mais recente elegível para aquele aluno.
+1. verifica se a conta não está marcada como outro papel em `profiles`;
+2. busca em `students` uma linha cujo email bate com o email autenticado, priorizando o `student`/`coach` do link de convite;
+3. cria ou valida o perfil `student`;
+4. grava `student_user_id` no cadastro do aluno;
+5. busca treinos publicados;
+6. escolhe o treino mais recente elegível para aquele aluno.
 
 Elegível, aqui, quer dizer que o treino está publicado e sua data `startsAt` já chegou. Um treino agendado para o futuro aparece no painel como agendado, mas o aluno só deve recebê-lo quando chegar a data.
 
@@ -230,13 +232,13 @@ O login é centralizado em `auth-repository.js`.
 Quando alguém entra ou cria conta, o repositório:
 
 1. chama Supabase Auth;
-2. garante um registro em `profiles`;
-3. grava ou valida o papel da conta: `coach` para professor ou `student` para aluno;
+2. valida o registro em `profiles`, quando já existe;
+3. grava o papel apenas em fluxos explícitos: `coach` no painel do professor, `student` depois que o app do aluno confirma que o email existe em `students`;
 4. devolve um contexto com usuário, email, perfil, papel e `coachId`.
 
 O `coachId` é especialmente importante. Para o professor, ele é o `id` do usuário autenticado. Quase tudo que o professor grava recebe esse valor. Isso permite separar dados de um personal dos dados de outro.
 
-Para o aluno, o acesso é mais indireto: o aluno pode ler dados vinculados ao seu `student_user_id` ou ao email autenticado. Isso permite o fluxo atual em que o professor cadastra primeiro o email e o aluno cria a conta depois.
+Para o aluno, o acesso é mais indireto: o professor cadastra o email em `students`, envia o convite e o aluno ativa o acesso. No primeiro login válido, o app grava `students.student_user_id = auth.uid()` para transformar o vínculo por email em vínculo fixo.
 
 No banco, essas regras vivem em `supabase/schema.sql` como policies de RLS. A interface pode até tentar buscar dados de outro aluno, mas o banco deve barrar se as policies estiverem corretas.
 

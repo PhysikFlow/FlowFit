@@ -349,7 +349,7 @@ export const workoutRepository = {
       syncMessage: "Aguardando sincronização."
     });
     const client = await getSupabase();
-    if (!client || !authContext?.user || authContext.role !== "coach") {
+    if (!client || !authContext?.user || !authRepository.canWriteAsCoach(authContext)) {
       const pending = this.savePublishedWorkout({
         ...normalized,
         syncStatus: "local",

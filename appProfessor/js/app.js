@@ -48,6 +48,7 @@ const authCopy = document.querySelector("[data-auth-copy]");
 const authSubmit = document.querySelector("[data-auth-submit]");
 const authSecondary = document.querySelector("[data-auth-secondary]");
 const authUser = document.querySelector("[data-auth-user]");
+const authGateSignOut = document.querySelector("[data-auth-gate-sign-out]");
 const coachProfileForm = document.querySelector("[data-coach-profile-form]");
 const coachProfileStatus = document.querySelector("[data-coach-profile-status]");
 const coachNameInput = document.querySelector("[data-coach-name-input]");
@@ -145,6 +146,10 @@ const setCoachProfileStatus = (message, state = "") => setStatus(coachProfileSta
 const setInviteStatus = (message, state = "") => setStatus(inviteStatus, message, state);
 const setStudentImportStatus = (message, state = "") => setStatus(studentImportStatus, message, state);
 
+const setAuthGateSignOutVisible = (visible) => {
+  if (authGateSignOut) authGateSignOut.hidden = !visible;
+};
+
 const HEX_PATTERN = /^#[0-9a-f]{6}$/i;
 
 const normalizeHexInput = (value) => {
@@ -213,9 +218,9 @@ const authModeContent = {
   },
   signup: {
     title: "Criar conta de professor",
-    copy: "Comece seu painel com email, senha e nome profissional.",
+    copy: "Comece seu painel em período de teste com email, senha e nome profissional.",
     submit: "Criar conta",
-    status: "Crie sua conta para liberar o painel.",
+    status: "Contas novas de professor entram como teste no piloto.",
     secondary: "Já tem conta? Volte para “Entrar”."
   }
 };
@@ -255,6 +260,8 @@ const getActiveStudentCount = () => students.filter((student) => student.status 
 const getStudentAppUrl = (student) => {
   const url = new URL("../appAluno/", window.location.href);
   if (student?.email) url.searchParams.set("email", student.email);
+  if (student?.id) url.searchParams.set("student", student.id);
+  if (student?.coachId || authContext?.coachId) url.searchParams.set("coach", student?.coachId || authContext.coachId);
   return url.href;
 };
 
@@ -271,7 +278,8 @@ const buildInviteMessage = (student) => {
     `Oi, ${student.name}!`,
     `${getCoachPublicName()} liberou seu acesso ao ${brandName}.`,
     `Acesse: ${getStudentAppUrl(student)}`,
-    emailLine
+    emailLine,
+    "No primeiro acesso, ative o convite e escolha sua senha ou entre com Google."
   ].join("\n");
 };
 
@@ -1655,7 +1663,7 @@ authForm?.addEventListener("submit", async (event) => {
   setAuthStatus(authAction === "signup" ? "Criando conta de professor..." : "Entrando...", "");
 
   const result = authAction === "signup"
-    ? await authRepository.signUp({ ...data, role: "coach", redirectTo: getAuthRedirectUrl() })
+    ? await authRepository.signUp({ ...data, role: "coach", redirectTo: getAuthRedirectUrl(), coachStatus: authRepository.coachStatus.TRIAL })
     : await authRepository.signIn({ ...data, role: "coach" });
 
   if (!result.ok) {
@@ -1672,7 +1680,7 @@ authForm?.addEventListener("submit", async (event) => {
   await startAuthenticatedPanel();
 });
 
-document.querySelector("[data-sign-out]")?.addEventListener("click", async () => {
+const signOutProfessor = async () => {
   await authRepository.signOut();
   authContext = null;
   students = [];
@@ -1684,34 +1692,53 @@ document.querySelector("[data-sign-out]")?.addEventListener("click", async () =>
   setAuthLocked(true);
   syncAuthMode("signin");
   setAuthStatus("Sessão encerrada.", "");
-});
+  setAuthGateSignOutVisible(false);
+};
+
+document.querySelector("[data-sign-out]")?.addEventListener("click", signOutProfessor);
+authGateSignOut?.addEventListener("click", signOutProfessor);
 
 const startAuthenticatedPanel = async () => {
   const session = await authRepository.getSession();
   if (!session?.user) {
     setAuthLocked(true);
     syncAuthMode("signin");
+    setAuthGateSignOutVisible(false);
     return;
   }
 
   const profileResult = await authRepository.ensureProfile({
     role: "coach",
-    name: session.user.user_metadata?.display_name || session.user.email
+    name: session.user.user_metadata?.display_name || session.user.email,
+    coachStatus: authRepository.coachStatus.TRIAL
   });
+  if (profileResult.roleMismatch) {
+    await authRepository.signOut();
+    authContext = null;
+    setAuthLocked(true);
+    syncAuthMode("signin", { preserveStatus: true });
+    setAuthGateSignOutVisible(false);
+    setAuthStatus("Esta conta já existe como aluno. Use outro email para o painel do professor.", "warning");
+    return;
+  }
   if (!profileResult.synced && !profileResult.profile) {
     setAuthLocked(true);
+    setAuthGateSignOutVisible(true);
     setAuthStatus("Conta autenticada, mas o perfil não carregou. Recarregue a página.", "warning");
     return;
   }
   authContext = await authRepository.getAuthContext();
 
-  if (authContext?.role !== "coach") {
+  const coachAccess = authRepository.getCoachAccess(authContext?.profile);
+  if (!coachAccess.ok) {
     setAuthLocked(true);
-    setAuthStatus("Esta conta não é de professor. Use o app do aluno ou crie uma conta de professor.", "warning");
+    setAuthGateSignOutVisible(true);
+    setAuthStatus(coachAccess.message, "warning");
     return;
   }
 
   setAuthLocked(false);
+  setAuthGateSignOutVisible(false);
   setText("[data-auth-user]", authContext.email);
   if (authUser) authUser.title = authContext.email;
   students = [];

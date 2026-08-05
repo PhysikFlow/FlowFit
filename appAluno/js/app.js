@@ -20,6 +20,7 @@ const authTitle = document.querySelector("[data-auth-title]");
 const authCopy = document.querySelector("[data-auth-copy]");
 const authSubmit = document.querySelector("[data-auth-submit]");
 const authSecondary = document.querySelector("[data-auth-secondary]");
+const oauthLabel = document.querySelector("[data-oauth-label]");
 const toast = document.querySelector("[data-toast]");
 const accentInput = document.querySelector("[data-accent]");
 const brandInput = document.querySelector("[data-brand-input]");
@@ -56,13 +57,20 @@ let currentWorkout = emptyWorkout;
 let currentSessionStartedAt = new Date().toISOString();
 let authAction = "signin";
 
-const getInviteEmail = () => {
+const getInviteContext = () => {
   try {
-    return new URLSearchParams(window.location.search).get("email")?.trim().toLowerCase() || "";
+    const params = new URLSearchParams(window.location.search);
+    return {
+      email: params.get("email")?.trim().toLowerCase() || "",
+      studentId: params.get("student")?.trim() || "",
+      coachId: params.get("coach")?.trim() || ""
+    };
   } catch {
-    return "";
+    return { email: "", studentId: "", coachId: "" };
   }
 };
+
+const getInviteEmail = () => getInviteContext().email;
 
 const prefillInviteEmail = () => {
   const email = getInviteEmail();
@@ -192,16 +200,18 @@ const getAuthRedirectUrl = () => {
 const authModeContent = {
   signin: {
     title: "Entrar no app",
-    copy: "Use o email cadastrado pelo seu personal.",
+    copy: "Use o email que o personal cadastrou para você.",
     submit: "Entrar",
+    oauth: "Entrar com Google",
     status: "Entre para ver seu treino.",
-    secondary: "Primeiro acesso? Use “Criar conta”."
+    secondary: "Primeiro acesso? Use “Ativar convite”."
   },
   signup: {
-    title: "Criar conta de aluno",
-    copy: "Crie sua senha usando o email informado pelo personal.",
-    submit: "Criar conta",
-    status: "Depois da confirmação, seus treinos aparecem aqui.",
+    title: "Ativar acesso do aluno",
+    copy: "Ative usando o mesmo email do convite enviado pelo personal.",
+    submit: "Ativar convite",
+    oauth: "Ativar com Google",
+    status: "Sem cadastro do personal, o acesso não é liberado.",
     secondary: "Já tem conta? Volte para “Entrar”."
   }
 };
@@ -214,6 +224,7 @@ const syncAuthMode = (mode = authAction, { preserveStatus = false } = {}) => {
   if (authCopy) authCopy.textContent = content.copy;
   if (authSubmit) authSubmit.textContent = content.submit;
   if (authSecondary) authSecondary.textContent = content.secondary;
+  if (oauthLabel) oauthLabel.textContent = content.oauth;
   onboardingForm?.querySelector('input[name="password"]')?.setAttribute("autocomplete", authAction === "signup" ? "new-password" : "current-password");
   onboardingForm?.querySelectorAll("[data-auth-mode-button]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.authModeButton === authAction);
@@ -718,21 +729,68 @@ const startAuthenticatedApp = async () => {
     return false;
   }
 
-  const profileResult = await authRepository.ensureProfile({
-    role: "student",
-    name: session.user.user_metadata?.display_name || session.user.email
-  });
-  const authContext = await authRepository.getAuthContext();
-  if (authContext?.role && authContext.role !== "student") {
+  const authContextBeforeClaim = await authRepository.getAuthContext();
+  if (authContextBeforeClaim?.role && authContextBeforeClaim.role !== "student") {
     await authRepository.signOut();
     Store.resetOnboarding();
-    setAuthStatus("Esta conta não é de aluno. Use o painel do professor ou crie outra conta.", "warning");
+    currentStudent = emptyStudent;
+    currentWorkout = emptyWorkout;
+    renderAll();
     syncOnboarding();
+    syncAuthMode("signin", { preserveStatus: true });
+    setAuthStatus("Esta conta não é de aluno. Use o painel do professor ou entre com outro email.", "warning");
     return false;
   }
 
-  const studentResult = await studentRepository.fetchCurrentStudent();
-  currentStudent = toRuntimeStudent(studentResult.student, authContext);
+  const invite = getInviteContext();
+  const studentResult = await studentRepository.fetchCurrentStudent({
+    preferredStudentId: invite.studentId,
+    preferredCoachId: invite.coachId
+  });
+  if (!studentResult.student) {
+    await authRepository.signOut();
+    Store.resetOnboarding();
+    currentStudent = emptyStudent;
+    currentWorkout = emptyWorkout;
+    renderAll();
+    syncOnboarding();
+    syncAuthMode("signin", { preserveStatus: true });
+    setAuthStatus("Acesso não ativado: este email ainda não foi cadastrado por um personal.", "warning");
+    Platform.notify("Peça ao personal para enviar seu link de convite.");
+    return false;
+  }
+
+  const profileResult = await authRepository.ensureProfile({
+    role: "student",
+    name: session.user.user_metadata?.display_name || studentResult.student.name || session.user.email
+  });
+  if (profileResult.roleMismatch) {
+    await authRepository.signOut();
+    Store.resetOnboarding();
+    currentStudent = emptyStudent;
+    currentWorkout = emptyWorkout;
+    renderAll();
+    syncOnboarding();
+    syncAuthMode("signin", { preserveStatus: true });
+    setAuthStatus("Esta conta já existe com outro tipo de acesso.", "warning");
+    return false;
+  }
+  if (!profileResult.synced || !profileResult.profile) {
+    await authRepository.signOut();
+    Store.resetOnboarding();
+    currentStudent = emptyStudent;
+    currentWorkout = emptyWorkout;
+    renderAll();
+    syncOnboarding();
+    syncAuthMode("signin", { preserveStatus: true });
+    setAuthStatus("Login ok, mas o banco ainda não aceitou profiles. Rode supabase/schema.sql.", "warning");
+    return false;
+  }
+
+  const claimResult = await studentRepository.claimCurrentStudent(studentResult.student);
+  const authContext = await authRepository.getAuthContext();
+  const selectedStudent = claimResult.student || studentResult.student;
+  currentStudent = toRuntimeStudent(selectedStudent, authContext);
   Store.completeOnboarding({
     name: currentStudent.name,
     goal: currentStudent.goal,
@@ -746,13 +804,12 @@ const startAuthenticatedApp = async () => {
   syncOnboarding();
   navigate(location.hash.slice(1) || "home", false);
 
-  if (!studentResult.student) {
-    setAuthStatus("Conta autenticada, mas este email ainda não foi cadastrado por um personal.", "warning");
-    Platform.notify("Peça ao personal para cadastrar este email no painel.");
-  } else if (!profileResult.synced && !profileResult.profile) {
-    setAuthStatus("Dados do aluno carregados pelo email. O perfil de login será sincronizado quando o banco aceitar profiles.", "warning");
+  if (!claimResult.synced) {
+    setAuthStatus("Treino liberado pelo email. Rode o SQL atualizado para gravar o vínculo fixo do aluno.", "warning");
+  } else if (studentResult.multiple && !invite.studentId && !invite.coachId) {
+    setAuthStatus("Conta autenticada. Há mais de um personal para este email; use o link de convite correto para alternar.", "warning");
   } else {
-    setAuthStatus("Conta autenticada. Dados reais carregados.", "synced");
+    setAuthStatus("Acesso ativo. Treino carregado.", "synced");
   }
 
   return true;
@@ -915,11 +972,11 @@ onboardingForm?.addEventListener("click", async (event) => {
 onboardingForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(onboardingForm));
-  setAuthStatus(authAction === "signup" ? "Criando conta de aluno..." : "Entrando...", "");
+  setAuthStatus(authAction === "signup" ? "Ativando acesso..." : "Entrando...", "");
 
   const result = authAction === "signup"
-    ? await authRepository.signUp({ ...data, role: "student", redirectTo: getAuthRedirectUrl() })
-    : await authRepository.signIn({ ...data, role: "student" });
+    ? await authRepository.signUp({ ...data, role: "student", redirectTo: getAuthRedirectUrl(), createProfile: false })
+    : await authRepository.signIn({ ...data, role: "student", createProfile: false });
 
   if (!result.ok) {
     setAuthStatus(result.message || "Não foi possível autenticar.", "warning");
@@ -932,7 +989,7 @@ onboardingForm?.addEventListener("submit", async (event) => {
   }
 
   await startAuthenticatedApp();
-  Platform.notify("Bem-vindo ao app.");
+  Platform.notify("Acesso validado.");
 });
 
 const signOut = async () => {

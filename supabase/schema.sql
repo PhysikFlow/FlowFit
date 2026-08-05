@@ -8,15 +8,16 @@
 --    - Redirect URLs: URL do GitHub Pages e subpastas appAluno/appProfessor
 --
 -- Arquitetura:
--- - profiles.role = 'coach' ou 'student'
+-- - profiles.role = 'admin', 'coach' ou 'student'
+-- - profiles.coach_status controla se o personal pode operar o painel
 -- - professor/personal grava dados com coach_id = auth.uid()::text
--- - aluno acessa dados pelo email autenticado que o professor cadastrou
+-- - aluno ativa acesso por convite/email e grava students.student_user_id
 -- - tabelas publicas ficam com RLS habilitado; anon nao acessa dados reais
 -- ============================================================================
 
 create table if not exists public.profiles (
   user_id    uuid primary key references auth.users(id) on delete cascade,
-  role       text not null check (role in ('coach', 'student')),
+  role       text not null,
   name       text not null,
   headline   text not null default 'Personal trainer',
   bio        text not null default '',
@@ -25,8 +26,13 @@ create table if not exists public.profiles (
   phone      text not null default '',
   whatsapp   text not null default '',
   cref       text not null default '',
+  coach_status text not null default 'trial',
+  coach_trial_ends_at timestamptz,
+  coach_status_note text not null default '',
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint profiles_role_check check (role in ('admin', 'coach', 'student')),
+  constraint profiles_coach_status_check check (coach_status in ('pending', 'trial', 'active', 'past_due', 'suspended', 'cancelled'))
 );
 
 create table if not exists public.brand_theme (
@@ -158,7 +164,22 @@ alter table public.profiles
   add column if not exists contact_email text not null default '',
   add column if not exists phone text not null default '',
   add column if not exists whatsapp text not null default '',
-  add column if not exists cref text not null default '';
+  add column if not exists cref text not null default '',
+  add column if not exists coach_status text not null default 'trial',
+  add column if not exists coach_trial_ends_at timestamptz,
+  add column if not exists coach_status_note text not null default '';
+
+alter table public.profiles
+  drop constraint if exists profiles_role_check;
+
+alter table public.profiles
+  add constraint profiles_role_check check (role in ('admin', 'coach', 'student'));
+
+alter table public.profiles
+  drop constraint if exists profiles_coach_status_check;
+
+alter table public.profiles
+  add constraint profiles_coach_status_check check (coach_status in ('pending', 'trial', 'active', 'past_due', 'suspended', 'cancelled'));
 
 alter table public.brand_theme
   add column if not exists background_color text not null default '#090b10',
@@ -195,6 +216,9 @@ alter table public.students
 
 create index if not exists profiles_role_idx
   on public.profiles (role);
+
+create index if not exists profiles_coach_status_idx
+  on public.profiles (coach_status);
 
 create index if not exists students_coach_student_key_idx
   on public.students (coach_id, student_key);
@@ -246,8 +270,11 @@ revoke all on public.workout_sessions from anon;
 revoke all on public.workout_set_logs from anon;
 revoke all on public.workout_feedback from anon;
 
+revoke update on public.profiles from authenticated;
+
 grant usage on schema public to authenticated;
-grant select, insert, update on public.profiles to authenticated;
+grant select, insert on public.profiles to authenticated;
+grant update (name, headline, bio, city, contact_email, phone, whatsapp, cref, updated_at) on public.profiles to authenticated;
 grant select, insert, update on public.brand_theme to authenticated;
 grant select, insert, update, delete on public.students to authenticated;
 grant select, insert, update, delete on public.workout_plans to authenticated;
@@ -291,6 +318,7 @@ drop policy if exists "brand_theme_update_coach" on public.brand_theme;
 drop policy if exists "students_select_authenticated_owner" on public.students;
 drop policy if exists "students_insert_coach" on public.students;
 drop policy if exists "students_update_coach" on public.students;
+drop policy if exists "students_claim_self_by_email" on public.students;
 drop policy if exists "students_delete_coach" on public.students;
 drop policy if exists "workout_plans_select_authenticated_owner" on public.workout_plans;
 drop policy if exists "workout_plans_insert_coach" on public.workout_plans;
@@ -321,7 +349,10 @@ create policy "profiles_select_own"
 create policy "profiles_insert_own"
   on public.profiles for insert
   to authenticated
-  with check ((select auth.uid()) = user_id);
+  with check (
+    (select auth.uid()) = user_id
+    and role in ('coach', 'student')
+  );
 
 create policy "profiles_update_own"
   on public.profiles for update
@@ -352,15 +383,33 @@ create policy "brand_theme_insert_coach"
     coach_id = (select auth.uid())::text
     and exists (
       select 1 from public.profiles p
-      where p.user_id = (select auth.uid()) and p.role = 'coach'
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
     )
   );
 
 create policy "brand_theme_update_coach"
   on public.brand_theme for update
   to authenticated
-  using (coach_id = (select auth.uid())::text)
-  with check (coach_id = (select auth.uid())::text);
+  using (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  )
+  with check (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  );
 
 create policy "students_select_authenticated_owner"
   on public.students for select
@@ -378,20 +427,60 @@ create policy "students_insert_coach"
     coach_id = (select auth.uid())::text
     and exists (
       select 1 from public.profiles p
-      where p.user_id = (select auth.uid()) and p.role = 'coach'
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
     )
   );
 
 create policy "students_update_coach"
   on public.students for update
   to authenticated
-  using (coach_id = (select auth.uid())::text)
-  with check (coach_id = (select auth.uid())::text);
+  using (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  )
+  with check (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  );
+
+create policy "students_claim_self_by_email"
+  on public.students for update
+  to authenticated
+  using (
+    student_user_id is null
+    and email is not null
+    and lower(email) = lower((select auth.jwt() ->> 'email'))
+  )
+  with check (
+    student_user_id = (select auth.uid())
+    and email is not null
+    and lower(email) = lower((select auth.jwt() ->> 'email'))
+  );
 
 create policy "students_delete_coach"
   on public.students for delete
   to authenticated
-  using (coach_id = (select auth.uid())::text);
+  using (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  );
 
 create policy "workout_plans_select_authenticated_owner"
   on public.workout_plans for select
@@ -417,20 +506,46 @@ create policy "workout_plans_insert_coach"
     coach_id = (select auth.uid())::text
     and exists (
       select 1 from public.profiles p
-      where p.user_id = (select auth.uid()) and p.role = 'coach'
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
     )
   );
 
 create policy "workout_plans_update_coach"
   on public.workout_plans for update
   to authenticated
-  using (coach_id = (select auth.uid())::text)
-  with check (coach_id = (select auth.uid())::text);
+  using (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  )
+  with check (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  );
 
 create policy "workout_plans_delete_coach"
   on public.workout_plans for delete
   to authenticated
-  using (coach_id = (select auth.uid())::text);
+  using (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  );
 
 create policy "workout_exercises_select_authenticated_owner"
   on public.workout_exercises for select
@@ -459,20 +574,46 @@ create policy "workout_exercises_insert_coach"
     coach_id = (select auth.uid())::text
     and exists (
       select 1 from public.profiles p
-      where p.user_id = (select auth.uid()) and p.role = 'coach'
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
     )
   );
 
 create policy "workout_exercises_update_coach"
   on public.workout_exercises for update
   to authenticated
-  using (coach_id = (select auth.uid())::text)
-  with check (coach_id = (select auth.uid())::text);
+  using (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  )
+  with check (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  );
 
 create policy "workout_exercises_delete_coach"
   on public.workout_exercises for delete
   to authenticated
-  using (coach_id = (select auth.uid())::text);
+  using (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  );
 
 create policy "workout_sessions_select_authenticated_owner"
   on public.workout_sessions for select
@@ -511,7 +652,15 @@ create policy "workout_sessions_update_owner"
   on public.workout_sessions for update
   to authenticated
   using (
-    coach_id = (select auth.uid())::text
+    (
+      coach_id = (select auth.uid())::text
+      and exists (
+        select 1 from public.profiles p
+        where p.user_id = (select auth.uid())
+          and p.role = 'coach'
+          and p.coach_status in ('trial', 'active', 'past_due')
+      )
+    )
     or exists (
       select 1
       from public.students s
@@ -524,7 +673,15 @@ create policy "workout_sessions_update_owner"
     )
   )
   with check (
-    coach_id = (select auth.uid())::text
+    (
+      coach_id = (select auth.uid())::text
+      and exists (
+        select 1 from public.profiles p
+        where p.user_id = (select auth.uid())
+          and p.role = 'coach'
+          and p.coach_status in ('trial', 'active', 'past_due')
+      )
+    )
     or exists (
       select 1
       from public.students s
@@ -540,7 +697,15 @@ create policy "workout_sessions_update_owner"
 create policy "workout_sessions_delete_coach"
   on public.workout_sessions for delete
   to authenticated
-  using (coach_id = (select auth.uid())::text);
+  using (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  );
 
 create policy "workout_set_logs_select_authenticated_owner"
   on public.workout_set_logs for select
@@ -585,7 +750,15 @@ create policy "workout_set_logs_update_owner"
   on public.workout_set_logs for update
   to authenticated
   using (
-    coach_id = (select auth.uid())::text
+    (
+      coach_id = (select auth.uid())::text
+      and exists (
+        select 1 from public.profiles p
+        where p.user_id = (select auth.uid())
+          and p.role = 'coach'
+          and p.coach_status in ('trial', 'active', 'past_due')
+      )
+    )
     or exists (
       select 1
       from public.workout_sessions ws
@@ -601,7 +774,15 @@ create policy "workout_set_logs_update_owner"
     )
   )
   with check (
-    coach_id = (select auth.uid())::text
+    (
+      coach_id = (select auth.uid())::text
+      and exists (
+        select 1 from public.profiles p
+        where p.user_id = (select auth.uid())
+          and p.role = 'coach'
+          and p.coach_status in ('trial', 'active', 'past_due')
+      )
+    )
     or exists (
       select 1
       from public.workout_sessions ws
@@ -620,7 +801,15 @@ create policy "workout_set_logs_update_owner"
 create policy "workout_set_logs_delete_coach"
   on public.workout_set_logs for delete
   to authenticated
-  using (coach_id = (select auth.uid())::text);
+  using (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  );
 
 create policy "workout_feedback_select_authenticated_owner"
   on public.workout_feedback for select
@@ -665,7 +854,15 @@ create policy "workout_feedback_update_owner"
   on public.workout_feedback for update
   to authenticated
   using (
-    coach_id = (select auth.uid())::text
+    (
+      coach_id = (select auth.uid())::text
+      and exists (
+        select 1 from public.profiles p
+        where p.user_id = (select auth.uid())
+          and p.role = 'coach'
+          and p.coach_status in ('trial', 'active', 'past_due')
+      )
+    )
     or exists (
       select 1
       from public.workout_sessions ws
@@ -681,7 +878,15 @@ create policy "workout_feedback_update_owner"
     )
   )
   with check (
-    coach_id = (select auth.uid())::text
+    (
+      coach_id = (select auth.uid())::text
+      and exists (
+        select 1 from public.profiles p
+        where p.user_id = (select auth.uid())
+          and p.role = 'coach'
+          and p.coach_status in ('trial', 'active', 'past_due')
+      )
+    )
     or exists (
       select 1
       from public.workout_sessions ws
@@ -700,4 +905,12 @@ create policy "workout_feedback_update_owner"
 create policy "workout_feedback_delete_coach"
   on public.workout_feedback for delete
   to authenticated
-  using (coach_id = (select auth.uid())::text);
+  using (
+    coach_id = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.user_id = (select auth.uid())
+        and p.role = 'coach'
+        and p.coach_status in ('trial', 'active', 'past_due')
+    )
+  );

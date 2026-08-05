@@ -90,7 +90,7 @@ export const themeRepository = {
     const normalized = writeCachedTheme(theme);
     const client = await getSupabase();
     const authContext = await authRepository.getAuthContext();
-    if (!client || !authContext?.user || authContext.role !== "coach") {
+    if (!client || !authContext?.user || !authRepository.canWriteAsCoach(authContext)) {
       return { synced: false, reason: "not-authenticated-as-coach", theme: normalized };
     }
     try {
