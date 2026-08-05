@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-aluno-v26";
+const CACHE_NAME = "flowfit-aluno-v27";
 const APP_SHELL = [
   "./",
   "./index.html",

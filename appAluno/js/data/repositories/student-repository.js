@@ -7,7 +7,27 @@ import { studentKeyFromName } from "./workout-repository.js";
 export const STUDENTS_KEY = "flowfit.students";
 
 const TABLE = "students";
-const CLOUD_STUDENT_SELECT = "id, coach_id, student_key, student_user_id, email, name, initials, goal, status, plan, workout, adherence, next_action, created_at, updated_at";
+const CLOUD_STUDENT_SELECT = [
+  "id",
+  "coach_id",
+  "student_key",
+  "student_user_id",
+  "email",
+  "name",
+  "initials",
+  "goal",
+  "status",
+  "plan",
+  "workout",
+  "adherence",
+  "next_action",
+  "invite_token",
+  "invite_status",
+  "invite_expires_at",
+  "invite_claimed_at",
+  "created_at",
+  "updated_at"
+].join(", ");
 
 const normalizeText = (value, fallback = "") => {
   const text = String(value ?? "").trim();
@@ -58,6 +78,10 @@ const normalizeStudent = (student) => {
     workout: normalizeText(student?.workout, "Sem treino atribuído"),
     adherence: Number.isFinite(Number(student?.adherence)) ? Number(student.adherence) : 0,
     nextAction: normalizeText(student?.nextAction, "Criar primeiro treino"),
+    inviteToken: normalizeText(student?.inviteToken, ""),
+    inviteStatus: normalizeText(student?.inviteStatus, "pending"),
+    inviteExpiresAt: normalizeText(student?.inviteExpiresAt, ""),
+    inviteClaimedAt: normalizeText(student?.inviteClaimedAt, ""),
     createdAt: normalizeText(student?.createdAt, updatedAt),
     updatedAt
   };
@@ -71,7 +95,7 @@ const mergeStudents = (...lists) => {
       ? `${student.coachId}:email:${student.email}`
       : student.id || `${student.coachId}:key:${student.studentKey}`;
     const previous = merged.get(key);
-    if (!previous || new Date(student.updatedAt) >= new Date(previous.updatedAt)) merged.set(key, student);
+    if (!previous || new Date(student.updatedAt) > new Date(previous.updatedAt)) merged.set(key, student);
   });
   return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 };
@@ -80,7 +104,6 @@ const toRow = (student, authContext) => ({
   id: student.id,
   coach_id: authContext?.coachId || student.coachId,
   student_key: student.studentKey,
-  student_user_id: student.studentUserId || null,
   email: student.email || null,
   name: student.name,
   initials: student.initials,
@@ -108,6 +131,10 @@ const toAppStudent = (row) => normalizeStudent({
   workout: row.workout,
   adherence: row.adherence,
   nextAction: row.next_action,
+  inviteToken: row.invite_token,
+  inviteStatus: row.invite_status,
+  inviteExpiresAt: row.invite_expires_at,
+  inviteClaimedAt: row.invite_claimed_at,
   createdAt: row.created_at,
   updatedAt: row.updated_at
 });
@@ -155,10 +182,14 @@ export const studentRepository = {
     }
 
     try {
-      const { error } = await client
+      const { data, error } = await client
         .from(TABLE)
-        .upsert(toRow(normalized, authContext), { onConflict: "id" });
-      return { synced: !error, error, student: normalized };
+        .upsert(toRow(normalized, authContext), { onConflict: "id" })
+        .select(CLOUD_STUDENT_SELECT)
+        .maybeSingle();
+      const syncedStudent = data ? toAppStudent(data) : normalized;
+      if (data) this.saveStudent(syncedStudent);
+      return { synced: !error, error, student: syncedStudent };
     } catch (error) {
       return { synced: false, error, student: normalized };
     }
@@ -188,7 +219,7 @@ export const studentRepository = {
     }
   },
 
-  async fetchCurrentStudent({ preferredStudentId = "", preferredCoachId = "" } = {}) {
+  async fetchCurrentStudent({ preferredStudentId = "" } = {}) {
     const authContext = await authRepository.getAuthContext();
     const client = await getSupabase();
     if (!client || !authContext?.user) return { synced: false, reason: "not-authenticated", student: null };
@@ -203,27 +234,13 @@ export const studentRepository = {
 
       if (userIdError) return { synced: false, error: userIdError, student: null };
 
-      let byEmail = [];
-      if (authContext.email) {
-        const { data, error } = await client
-          .from(TABLE)
-          .select(CLOUD_STUDENT_SELECT)
-          .ilike("email", authContext.email)
-          .order("updated_at", { ascending: false })
-          .limit(20);
-
-        if (error) return { synced: false, error, student: null };
-        byEmail = data || [];
-      }
-
       const uniqueRows = new Map();
-      [...(byUserId || []), ...byEmail].forEach((row) => {
+      (byUserId || []).forEach((row) => {
         if (row?.id) uniqueRows.set(row.id, row);
       });
 
       const students = [...uniqueRows.values()].map(toAppStudent).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
       const student = students.find((item) => preferredStudentId && item.id === preferredStudentId)
-        || students.find((item) => preferredCoachId && item.coachId === preferredCoachId)
         || students.find((item) => item.studentUserId === authContext.user.id)
         || students[0]
         || null;
@@ -234,33 +251,65 @@ export const studentRepository = {
     }
   },
 
-  async claimCurrentStudent(student) {
-    const authContext = await authRepository.getAuthContext();
+  async validateInvite({ token, email } = {}) {
     const client = await getSupabase();
-    if (!client || !authContext?.user || !student?.id) {
-      return { synced: false, reason: "not-authenticated-or-student-missing", student };
-    }
-    if (student.studentUserId === authContext.user.id) {
-      return { synced: true, student };
-    }
+    if (!client || !token) return { valid: false, reason: "invite-required" };
 
     try {
       const { data, error } = await client
-        .from(TABLE)
-        .update({
-          student_user_id: authContext.user.id,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", student.id)
-        .select(CLOUD_STUDENT_SELECT)
-        .maybeSingle();
-
-      if (error) return { synced: false, error, student };
-      const claimed = data ? toAppStudent(data) : normalizeStudent({ ...student, studentUserId: authContext.user.id });
-      this.saveStudent(claimed);
-      return { synced: true, student: claimed };
+        .rpc("validate_student_invite", { p_token: token, p_email: normalizeEmail(email) || null });
+      const result = Array.isArray(data) ? data[0] : data;
+      if (error) return { valid: false, error, reason: "invite-validation-failed" };
+      return {
+        valid: Boolean(result?.valid),
+        emailMatches: result?.email_matches !== false,
+        reason: result?.reason || "invite-invalid"
+      };
     } catch (error) {
-      return { synced: false, error, student };
+      return { valid: false, error, reason: "invite-validation-failed" };
+    }
+  },
+
+  async claimInvite(token) {
+    const client = await getSupabase();
+    const authContext = await authRepository.getAuthContext();
+    if (!client || !authContext?.user || !token) {
+      return { claimed: false, reason: "not-authenticated-or-invite-missing" };
+    }
+
+    try {
+      const { data, error } = await client.rpc("claim_student_invite", { p_token: token });
+      if (error) return { claimed: false, error, reason: "invite-claim-failed" };
+      const result = Array.isArray(data) ? data[0] : data;
+      return { claimed: true, studentId: result?.student_id || "" };
+    } catch (error) {
+      return { claimed: false, error, reason: "invite-claim-failed" };
+    }
+  },
+
+  async renewInvite(student) {
+    const client = await getSupabase();
+    const authContext = await authRepository.getAuthContext();
+    if (!client || !authContext?.user || !student?.id || !authRepository.canWriteAsCoach(authContext)) {
+      return { renewed: false, reason: "not-authenticated-as-coach", student };
+    }
+
+    try {
+      const { data, error } = await client.rpc("renew_student_invite", { p_student_id: student.id });
+      if (error) return { renewed: false, error, reason: "invite-renew-failed", student };
+      const result = Array.isArray(data) ? data[0] : data;
+      const renewedStudent = normalizeStudent({
+        ...student,
+        inviteToken: result?.invite_token,
+        inviteStatus: result?.invite_status,
+        inviteExpiresAt: result?.invite_expires_at,
+        inviteClaimedAt: "",
+        updatedAt: new Date().toISOString()
+      });
+      this.saveStudent(renewedStudent);
+      return { renewed: true, student: renewedStudent };
+    } catch (error) {
+      return { renewed: false, error, reason: "invite-renew-failed", student };
     }
   }
 };

@@ -60,23 +60,13 @@ let authAction = "signin";
 const getInviteContext = () => {
   try {
     const params = new URLSearchParams(window.location.search);
-    return {
-      email: params.get("email")?.trim().toLowerCase() || "",
-      studentId: params.get("student")?.trim() || "",
-      coachId: params.get("coach")?.trim() || ""
-    };
+    return { token: params.get("invite")?.trim() || "" };
   } catch {
-    return { email: "", studentId: "", coachId: "" };
+    return { token: "" };
   }
 };
 
-const getInviteEmail = () => getInviteContext().email;
-
-const prefillInviteEmail = () => {
-  const email = getInviteEmail();
-  const emailInput = onboardingForm?.querySelector('input[name="email"]');
-  if (email && emailInput && !emailInput.value) emailInput.value = email;
-};
+const getInviteToken = () => getInviteContext().token;
 
 const escapeHtml = (value) => String(value ?? "")
   .replace(/&/g, "&amp;")
@@ -251,6 +241,10 @@ const handlePasswordReset = async () => {
 
 const handleOAuthSignIn = async (provider) => {
   const label = getProviderLabel(provider);
+  if (authAction === "signup" && !getInviteToken()) {
+    setAuthStatus("Abra o link de convite enviado pelo seu personal para ativar o acesso.", "warning");
+    return;
+  }
   setAuthStatus(`Abrindo login com ${label}...`, "");
   const result = await authRepository.signInWithOAuth({
     provider,
@@ -742,10 +736,49 @@ const startAuthenticatedApp = async () => {
     return false;
   }
 
-  const invite = getInviteContext();
+  const inviteToken = getInviteToken();
+  let claimedStudentId = "";
+  if (inviteToken) {
+    const claimResult = await studentRepository.claimInvite(inviteToken);
+    if (!claimResult.claimed) {
+      await authRepository.signOut();
+      Store.resetOnboarding();
+      currentStudent = emptyStudent;
+      currentWorkout = emptyWorkout;
+      renderAll();
+      syncOnboarding();
+      syncAuthMode("signup", { preserveStatus: true });
+      setAuthStatus("Este convite é inválido, expirou ou pertence a outro email. Peça um novo link ao personal.", "warning");
+      return false;
+    }
+    claimedStudentId = claimResult.studentId;
+  } else if (!authContextBeforeClaim?.profile) {
+    await authRepository.signOut();
+    Store.resetOnboarding();
+    currentStudent = emptyStudent;
+    currentWorkout = emptyWorkout;
+    renderAll();
+    syncOnboarding();
+    syncAuthMode("signin", { preserveStatus: true });
+    setAuthStatus("Primeiro acesso exige o link de convite enviado pelo seu personal.", "warning");
+    return false;
+  }
+
+  const authContext = await authRepository.getAuthContext();
+  if (authContext?.role !== "student") {
+    await authRepository.signOut();
+    Store.resetOnboarding();
+    currentStudent = emptyStudent;
+    currentWorkout = emptyWorkout;
+    renderAll();
+    syncOnboarding();
+    syncAuthMode("signin", { preserveStatus: true });
+    setAuthStatus("O convite não conseguiu criar um acesso de aluno. Rode o SQL atualizado e tente novamente.", "warning");
+    return false;
+  }
+
   const studentResult = await studentRepository.fetchCurrentStudent({
-    preferredStudentId: invite.studentId,
-    preferredCoachId: invite.coachId
+    preferredStudentId: claimedStudentId
   });
   if (!studentResult.student) {
     await authRepository.signOut();
@@ -755,42 +788,12 @@ const startAuthenticatedApp = async () => {
     renderAll();
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
-    setAuthStatus("Acesso não ativado: este email ainda não foi cadastrado por um personal.", "warning");
-    Platform.notify("Peça ao personal para enviar seu link de convite.");
+    setAuthStatus("Sua conta não tem nenhum aluno vinculado. Abra o convite enviado pelo personal.", "warning");
+    Platform.notify("Peça ao personal para enviar um novo link de convite.");
     return false;
   }
 
-  const profileResult = await authRepository.ensureProfile({
-    role: "student",
-    name: session.user.user_metadata?.display_name || studentResult.student.name || session.user.email
-  });
-  if (profileResult.roleMismatch) {
-    await authRepository.signOut();
-    Store.resetOnboarding();
-    currentStudent = emptyStudent;
-    currentWorkout = emptyWorkout;
-    renderAll();
-    syncOnboarding();
-    syncAuthMode("signin", { preserveStatus: true });
-    setAuthStatus("Esta conta já existe com outro tipo de acesso.", "warning");
-    return false;
-  }
-  if (!profileResult.synced || !profileResult.profile) {
-    await authRepository.signOut();
-    Store.resetOnboarding();
-    currentStudent = emptyStudent;
-    currentWorkout = emptyWorkout;
-    renderAll();
-    syncOnboarding();
-    syncAuthMode("signin", { preserveStatus: true });
-    setAuthStatus("Login ok, mas o banco ainda não aceitou profiles. Rode supabase/schema.sql.", "warning");
-    return false;
-  }
-
-  const claimResult = await studentRepository.claimCurrentStudent(studentResult.student);
-  const authContext = await authRepository.getAuthContext();
-  const selectedStudent = claimResult.student || studentResult.student;
-  currentStudent = toRuntimeStudent(selectedStudent, authContext);
+  currentStudent = toRuntimeStudent(studentResult.student, authContext);
   Store.completeOnboarding({
     name: currentStudent.name,
     goal: currentStudent.goal,
@@ -804,10 +807,8 @@ const startAuthenticatedApp = async () => {
   syncOnboarding();
   navigate(location.hash.slice(1) || "home", false);
 
-  if (!claimResult.synced) {
-    setAuthStatus("Treino liberado pelo email. Rode o SQL atualizado para gravar o vínculo fixo do aluno.", "warning");
-  } else if (studentResult.multiple && !invite.studentId && !invite.coachId) {
-    setAuthStatus("Conta autenticada. Há mais de um personal para este email; use o link de convite correto para alternar.", "warning");
+  if (studentResult.multiple && !claimedStudentId) {
+    setAuthStatus("Conta autenticada. Há mais de um personal vinculado; abra o convite correto para alternar.", "warning");
   } else {
     setAuthStatus("Acesso ativo. Treino carregado.", "synced");
   }
@@ -974,6 +975,19 @@ onboardingForm?.addEventListener("submit", async (event) => {
   const data = Object.fromEntries(new FormData(onboardingForm));
   setAuthStatus(authAction === "signup" ? "Ativando acesso..." : "Entrando...", "");
 
+  const inviteToken = getInviteToken();
+  if (authAction === "signup") {
+    if (!inviteToken) {
+      setAuthStatus("Abra o link de convite enviado pelo seu personal para ativar o acesso.", "warning");
+      return;
+    }
+    const inviteResult = await studentRepository.validateInvite({ token: inviteToken, email: data.email });
+    if (!inviteResult.valid || !inviteResult.emailMatches) {
+      setAuthStatus("Convite inválido, expirado ou usado com um email diferente do cadastrado pelo personal.", "warning");
+      return;
+    }
+  }
+
   const result = authAction === "signup"
     ? await authRepository.signUp({ ...data, role: "student", redirectTo: getAuthRedirectUrl(), createProfile: false })
     : await authRepository.signIn({ ...data, role: "student", createProfile: false });
@@ -1044,8 +1058,7 @@ window.addEventListener("storage", (event) => {
   }
 });
 
-prefillInviteEmail();
-syncAuthMode("signin", { preserveStatus: true });
+syncAuthMode(getInviteToken() ? "signup" : "signin");
 Theme.apply();
 syncThemeControls();
 renderAll();

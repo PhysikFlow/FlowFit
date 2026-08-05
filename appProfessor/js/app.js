@@ -257,11 +257,13 @@ const handlePasswordReset = async () => {
 
 const getActiveStudentCount = () => students.filter((student) => student.status === "Ativo").length;
 
+const isInviteExpired = (student) => student?.inviteStatus === "pending"
+  && student?.inviteExpiresAt
+  && new Date(student.inviteExpiresAt).getTime() <= Date.now();
+
 const getStudentAppUrl = (student) => {
   const url = new URL("../appAluno/", window.location.href);
-  if (student?.email) url.searchParams.set("email", student.email);
-  if (student?.id) url.searchParams.set("student", student.id);
-  if (student?.coachId || authContext?.coachId) url.searchParams.set("coach", student?.coachId || authContext.coachId);
+  if (student?.inviteToken) url.searchParams.set("invite", student.inviteToken);
   return url.href;
 };
 
@@ -271,7 +273,7 @@ const getCoachPublicName = () => authContext?.profile?.name
   || "seu personal";
 
 const buildInviteMessage = (student) => {
-  if (!student) return "";
+  if (!student?.inviteToken) return "";
   const brandName = brandInput?.value?.trim() || DEFAULT_BRAND_THEME.brandName;
   const emailLine = student.email ? `Entre usando este email: ${student.email}.` : "Entre usando o email cadastrado pelo seu personal.";
   return [
@@ -279,7 +281,7 @@ const buildInviteMessage = (student) => {
     `${getCoachPublicName()} liberou seu acesso ao ${brandName}.`,
     `Acesse: ${getStudentAppUrl(student)}`,
     emailLine,
-    "No primeiro acesso, ative o convite e escolha sua senha ou entre com Google."
+    "No primeiro acesso, abra este link e escolha uma senha ou entre com Google. O link é pessoal."
   ].join("\n");
 };
 
@@ -892,7 +894,7 @@ const renderAccount = () => {
 const renderInviteTools = () => {
   if (!inviteStudentOptions || !inviteMessage || !whatsappInvite) return;
   const previousValue = inviteStudentOptions.value;
-  const hasStudents = students.length > 0;
+  const hasStudents = students.some((student) => student.inviteToken);
 
   inviteStudentOptions.disabled = !hasStudents;
   copyInviteButton?.toggleAttribute("disabled", !hasStudents);
@@ -903,6 +905,7 @@ const renderInviteTools = () => {
     inviteStudentOptions.innerHTML = `<option value="">Cadastre um aluno primeiro</option>`;
     inviteMessage.value = "";
     whatsappInvite.href = "#";
+    if (copyInviteButton) copyInviteButton.textContent = "Copiar convite";
     setInviteStatus("Cadastre um aluno para gerar o primeiro convite.", "");
     return;
   }
@@ -910,12 +913,19 @@ const renderInviteTools = () => {
   inviteStudentOptions.innerHTML = students.map((student) => `<option value="${escapeHtml(student.id)}">${escapeHtml(student.name)}${student.email ? ` - ${escapeHtml(student.email)}` : ""}</option>`).join("");
   if (students.some((student) => student.id === previousValue)) inviteStudentOptions.value = previousValue;
 
-  const selected = students.find((student) => student.id === inviteStudentOptions.value) || students[0];
+  const selected = students.find((student) => student.id === inviteStudentOptions.value && student.inviteToken)
+    || students.find((student) => student.inviteToken);
   if (selected) inviteStudentOptions.value = selected.id;
   const message = buildInviteMessage(selected);
+  const expired = isInviteExpired(selected);
   inviteMessage.value = message;
-  whatsappInvite.href = `https://wa.me/?text=${encodeURIComponent(message)}`;
-  setInviteStatus(`Convite pronto para ${selected.name}.`, "synced");
+  whatsappInvite.href = expired ? "#" : `https://wa.me/?text=${encodeURIComponent(message)}`;
+  whatsappInvite.classList.toggle("is-disabled", expired);
+  whatsappInvite.setAttribute("aria-disabled", String(expired));
+  if (copyInviteButton) copyInviteButton.textContent = expired ? "Gerar novo convite" : "Copiar convite";
+  if (expired) setInviteStatus(`O convite de ${selected.name} expirou. Gere um novo link.`, "warning");
+  else if (selected.inviteStatus === "accepted") setInviteStatus(`${selected.name} já ativou o acesso.`, "synced");
+  else setInviteStatus(`Convite pessoal pronto para ${selected.name}.`, "synced");
 };
 
 const renderStudentOptions = () => {
@@ -1275,6 +1285,9 @@ document.querySelector("[data-student-form]")?.addEventListener("submit", async 
   }
 
   const result = await studentRepository.syncStudent(savedStudent);
+  if (result.student) {
+    applyStudents([result.student, ...students.filter((item) => item.id !== result.student.id)]);
+  }
   const limitExceeded = getActiveStudentCount() > ACCOUNT_PLAN.activeStudentLimit;
   setStudentSyncStatus(
     result.synced
@@ -1293,7 +1306,20 @@ document.querySelector("[data-student-form]")?.addEventListener("submit", async 
 inviteStudentOptions?.addEventListener("change", renderInviteTools);
 
 copyInviteButton?.addEventListener("click", async () => {
-  const message = inviteMessage?.value || "";
+  let selected = students.find((student) => student.id === inviteStudentOptions?.value);
+  if (selected && isInviteExpired(selected)) {
+    setInviteStatus("Gerando um novo convite pessoal...", "");
+    const renewal = await studentRepository.renewInvite(selected);
+    if (!renewal.renewed) {
+      setInviteStatus("Não foi possível renovar o convite. Confirme o SQL e tente novamente.", "warning");
+      return;
+    }
+    selected = renewal.student;
+    applyStudents([selected, ...students.filter((student) => student.id !== selected.id)]);
+    renderInviteTools();
+  }
+
+  const message = selected ? buildInviteMessage(selected) : inviteMessage?.value || "";
   if (!message) {
     setInviteStatus("Cadastre e selecione um aluno antes de copiar.", "warning");
     return;

@@ -232,7 +232,6 @@ const toStudentRow = (workout, student = {}) => ({
   id: workout.studentId,
   coach_id: workout.coachId,
   student_key: workout.studentKey,
-  student_user_id: student.studentUserId || null,
   email: student.email || null,
   name: workout.owner,
   initials: student.initials || initialsFromName(workout.owner),

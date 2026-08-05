@@ -85,7 +85,7 @@ Ele é o lugar onde o personal opera a base. Hoje inclui:
 - dashboard com indicadores e pendências;
 - cadastro manual de alunos;
 - importação simples de alunos por CSV;
-- convite rápido para aluno, com link para `appAluno` e email preenchido na URL;
+- convite pessoal para aluno, com token único no link do `appAluno`;
 - criação e edição de treinos publicados;
 - preview de exercícios interpretados a partir de linhas como `Supino reto 4x10`;
 - editor de marca branca;
@@ -163,9 +163,9 @@ O aluno autentica no `appAluno`.
 Depois disso, o app:
 
 1. verifica se a conta não está marcada como outro papel em `profiles`;
-2. busca em `students` uma linha cujo email bate com o email autenticado, priorizando o `student`/`coach` do link de convite;
-3. cria ou valida o perfil `student`;
-4. grava `student_user_id` no cadastro do aluno;
+2. exige o token pessoal do convite no primeiro acesso;
+3. pede ao banco para validar token, prazo e email em uma única operação;
+4. cria o perfil `student` e grava `student_user_id` somente quando o convite é aceito;
 5. busca treinos publicados;
 6. escolhe o treino mais recente elegível para aquele aluno.
 
@@ -233,12 +233,12 @@ Quando alguém entra ou cria conta, o repositório:
 
 1. chama Supabase Auth;
 2. valida o registro em `profiles`, quando já existe;
-3. grava o papel apenas em fluxos explícitos: `coach` no painel do professor, `student` depois que o app do aluno confirma que o email existe em `students`;
+3. grava o papel apenas em fluxos explícitos: `coach` no painel do professor, `student` pela função de banco que aceita um token de convite válido;
 4. devolve um contexto com usuário, email, perfil, papel e `coachId`.
 
 O `coachId` é especialmente importante. Para o professor, ele é o `id` do usuário autenticado. Quase tudo que o professor grava recebe esse valor. Isso permite separar dados de um personal dos dados de outro.
 
-Para o aluno, o acesso é mais indireto: o professor cadastra o email em `students`, envia o convite e o aluno ativa o acesso. No primeiro login válido, o app grava `students.student_user_id = auth.uid()` para transformar o vínculo por email em vínculo fixo.
+Para o aluno, o professor cadastra o email em `students` e envia um link com token pessoal. Google ou senha apenas autenticam a pessoa. A função `claim_student_invite` confere token, validade e email; só então grava `students.student_user_id = auth.uid()` e cria `profiles.role = 'student'`. Depois do aceite, as policies usam o vínculo fixo, nunca apenas a coincidência de email.
 
 No banco, essas regras vivem em `supabase/schema.sql` como policies de RLS. A interface pode até tentar buscar dados de outro aluno, mas o banco deve barrar se as policies estiverem corretas.
 
@@ -389,9 +389,9 @@ Para adicionar uma nova entidade sincronizada, pense em três lugares ao mesmo t
 
 RLS é a fechadura real. Qualquer mudança em tabelas de aluno, treino, sessão, feedback ou tema precisa preservar a separação entre professores e alunos. Teste com contas diferentes, não só com a conta feliz do desenvolvimento.
 
-**Email como vínculo do aluno**
+**Token no primeiro acesso e vínculo fixo**
 
-Hoje o aluno encontra seu cadastro principalmente pelo email autenticado. Isso é prático para convite, mas sensível a erros de digitação, troca de email e alunos com mais de um personal.
+No primeiro acesso, token e email precisam corresponder. Depois do aceite, o vínculo passa a ser `student_user_id`; o email deixa de autorizar leituras. Se o aluno tiver mais de um personal, cada cadastro tem seu próprio token e pode apontar para o mesmo usuário autenticado.
 
 **Cache local**
 

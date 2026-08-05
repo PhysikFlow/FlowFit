@@ -14,18 +14,20 @@ Regra adotada para o piloto:
 - Conta nova de personal entra com `profiles.role = 'coach'` e `profiles.coach_status = 'trial'`.
 - Status de personal aceitos para operar: `trial`, `active`, `past_due`.
 - Status bloqueados: `pending`, `suspended`, `cancelled`.
-- Aluno não tem cadastro livre de produto: ele só entra se o email autenticado existir em `students`, criado por um personal.
-- O app do aluno não cria `profiles.role = 'student'` no submit inicial. Ele primeiro valida o cadastro em `students`; depois cria o perfil e grava `students.student_user_id`.
+- Aluno não tem cadastro livre de produto: o primeiro acesso exige um token pessoal gerado no cadastro feito pelo personal.
+- A função `claim_student_invite` valida token, validade e email e, de forma atômica, cria `profiles.role = 'student'` e grava `students.student_user_id`.
 - Google continua sendo apenas método de autenticação. O papel vem de `profiles.role`.
-- O convite do personal agora carrega `email`, `student` e `coach` na URL para reduzir ambiguidade quando o mesmo aluno existe em mais de um personal.
+- O convite carrega apenas `?invite=TOKEN`; email e IDs internos não ficam mais expostos na URL.
+- Depois do aceite, RLS usa somente `student_user_id`; coincidência de email não libera cadastro ou treino.
 - `profiles.role` não deve ser alterado por update comum do frontend. O SQL revoga update total em `profiles` e libera apenas campos editáveis de perfil.
 
 Ainda pendente para endurecer antes de produção:
 
-- Token real de convite (`student_invites`) com expiração/uso único.
 - Painel administrativo `/admin` para aprovar/suspender personal sem SQL manual.
-- Migração/limpeza de perfis antigos criados pelo fluxo anterior.
+- Executar `supabase/reset-development-data.sql` no projeto de desenvolvimento para remover vínculos antigos misturados.
 - Seletor visual no app do aluno quando ele tiver mais de um personal ativo.
+
+> A implementação acima substitui as descrições históricas abaixo que falam em autorização direta por email. Elas foram mantidas como registro da auditoria do fluxo antigo.
 
 ---
 

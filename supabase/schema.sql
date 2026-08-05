@@ -11,7 +11,7 @@
 -- - profiles.role = 'admin', 'coach' ou 'student'
 -- - profiles.coach_status controla se o personal pode operar o painel
 -- - professor/personal grava dados com coach_id = auth.uid()::text
--- - aluno ativa acesso por convite/email e grava students.student_user_id
+-- - aluno ativa acesso somente por token de convite e grava students.student_user_id
 -- - tabelas publicas ficam com RLS habilitado; anon nao acessa dados reais
 -- ============================================================================
 
@@ -64,8 +64,13 @@ create table if not exists public.students (
   workout         text not null default 'Sem treino atribuido',
   adherence       integer not null default 0 check (adherence >= 0 and adherence <= 100),
   next_action     text not null default 'Criar primeiro treino',
+  invite_token    uuid not null default gen_random_uuid(),
+  invite_status   text not null default 'pending',
+  invite_expires_at timestamptz not null default (now() + interval '30 days'),
+  invite_claimed_at timestamptz,
   created_at      timestamptz not null default now(),
-  updated_at      timestamptz not null default now()
+  updated_at      timestamptz not null default now(),
+  constraint students_invite_status_check check (invite_status in ('pending', 'accepted', 'revoked'))
 );
 
 create table if not exists public.workout_plans (
@@ -191,7 +196,17 @@ alter table public.brand_theme
 
 alter table public.students
   add column if not exists student_user_id uuid references auth.users(id) on delete set null,
-  add column if not exists email text;
+  add column if not exists email text,
+  add column if not exists invite_token uuid not null default gen_random_uuid(),
+  add column if not exists invite_status text not null default 'pending',
+  add column if not exists invite_expires_at timestamptz not null default (now() + interval '30 days'),
+  add column if not exists invite_claimed_at timestamptz;
+
+alter table public.students
+  drop constraint if exists students_invite_status_check;
+
+alter table public.students
+  add constraint students_invite_status_check check (invite_status in ('pending', 'accepted', 'revoked'));
 
 alter table public.workout_plans
   add column if not exists starts_at timestamptz not null default now(),
@@ -233,6 +248,9 @@ create unique index if not exists students_coach_email_unique_idx
 create index if not exists students_student_user_id_idx
   on public.students (student_user_id);
 
+create unique index if not exists students_invite_token_unique_idx
+  on public.students (invite_token);
+
 create index if not exists workout_plans_coach_student_updated_idx
   on public.workout_plans (coach_id, student_key, updated_at desc);
 
@@ -260,6 +278,177 @@ create index if not exists workout_set_logs_session_position_idx
 create index if not exists workout_feedback_session_idx
   on public.workout_feedback (session_id);
 
+-- O token pode ser validado antes do cadastro sem expor os dados do aluno.
+create or replace function public.validate_student_invite(p_token text, p_email text default null)
+returns table (valid boolean, email_matches boolean, reason text)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_student public.students%rowtype;
+begin
+  select s.*
+    into v_student
+    from public.students s
+   where s.invite_token::text = trim(coalesce(p_token, ''))
+   limit 1;
+
+  if not found then
+    return query select false, false, 'not-found'::text;
+    return;
+  end if;
+
+  if v_student.invite_status <> 'pending' then
+    return query select false, true, v_student.invite_status::text;
+    return;
+  end if;
+
+  if v_student.invite_expires_at <= now() then
+    return query select false, true, 'expired'::text;
+    return;
+  end if;
+
+  if p_email is not null and lower(trim(p_email)) <> lower(trim(coalesce(v_student.email, ''))) then
+    return query select false, false, 'email-mismatch'::text;
+    return;
+  end if;
+
+  return query select true, true, 'valid'::text;
+end;
+$$;
+
+-- Claim atomico: valida convite, fixa o aluno no auth.uid e cria o papel student.
+create or replace function public.claim_student_invite(p_token text)
+returns table (student_id text)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_user_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_student public.students%rowtype;
+  v_profile_role text;
+begin
+  if v_user_id is null or v_user_email = '' then
+    raise exception 'invite_requires_authenticated_email';
+  end if;
+
+  select s.*
+    into v_student
+    from public.students s
+   where s.invite_token::text = trim(coalesce(p_token, ''))
+   for update;
+
+  if not found then
+    raise exception 'invite_not_found';
+  end if;
+
+  if v_student.invite_status = 'revoked' then
+    raise exception 'invite_revoked';
+  end if;
+
+  if v_student.invite_status = 'pending' and v_student.invite_expires_at <= now() then
+    raise exception 'invite_expired';
+  end if;
+
+  if v_student.student_user_id is not null and v_student.student_user_id <> v_user_id then
+    raise exception 'invite_already_claimed';
+  end if;
+
+  if v_student.student_user_id is null
+     and lower(trim(coalesce(v_student.email, ''))) <> v_user_email then
+    raise exception 'invite_email_mismatch';
+  end if;
+
+  select p.role into v_profile_role
+    from public.profiles p
+   where p.user_id = v_user_id;
+
+  if v_profile_role is not null and v_profile_role <> 'student' then
+    raise exception 'account_has_different_role';
+  end if;
+
+  insert into public.profiles (user_id, role, name, updated_at)
+  values (v_user_id, 'student', v_student.name, now())
+  on conflict (user_id) do nothing;
+
+  update public.students
+     set student_user_id = v_user_id,
+         invite_status = 'accepted',
+         invite_claimed_at = coalesce(invite_claimed_at, now()),
+         updated_at = now()
+   where id = v_student.id;
+
+  return query select v_student.id;
+end;
+$$;
+
+-- Um personal pode renovar um convite pendente/revogado; convite aceito nao
+-- troca de dono e deve usar login/recuperacao de senha.
+create or replace function public.renew_student_invite(p_student_id text)
+returns table (
+  student_id text,
+  invite_token uuid,
+  invite_status text,
+  invite_expires_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_student public.students%rowtype;
+begin
+  if v_user_id is null then
+    raise exception 'invite_renew_requires_authentication';
+  end if;
+
+  select s.*
+    into v_student
+    from public.students s
+   where s.id = p_student_id
+     and s.coach_id = v_user_id::text
+   for update;
+
+  if not found then
+    raise exception 'student_not_found_for_coach';
+  end if;
+
+  if not exists (
+    select 1 from public.profiles p
+     where p.user_id = v_user_id
+       and p.role = 'coach'
+       and p.coach_status in ('trial', 'active', 'past_due')
+  ) then
+    raise exception 'coach_access_blocked';
+  end if;
+
+  if v_student.invite_status <> 'accepted' then
+    update public.students
+       set invite_token = gen_random_uuid(),
+           invite_status = 'pending',
+           invite_expires_at = now() + interval '30 days',
+           invite_claimed_at = null,
+           updated_at = now()
+     where id = v_student.id
+     returning * into v_student;
+  end if;
+
+  return query
+  select v_student.id, v_student.invite_token, v_student.invite_status, v_student.invite_expires_at;
+end;
+$$;
+
+revoke all on function public.validate_student_invite(text, text) from public;
+revoke all on function public.claim_student_invite(text) from public;
+revoke all on function public.renew_student_invite(text) from public;
+grant execute on function public.validate_student_invite(text, text) to anon, authenticated;
+grant execute on function public.claim_student_invite(text) to authenticated;
+grant execute on function public.renew_student_invite(text) to authenticated;
+
 -- Data API: acesso anonimo nao le dados reais. Auth API continua funcionando.
 revoke all on public.profiles from anon;
 revoke all on public.brand_theme from anon;
@@ -272,7 +461,7 @@ revoke all on public.workout_feedback from anon;
 
 revoke update on public.profiles from authenticated;
 
-grant usage on schema public to authenticated;
+grant usage on schema public to anon, authenticated;
 grant select, insert on public.profiles to authenticated;
 grant update (name, headline, bio, city, contact_email, phone, whatsapp, cref, updated_at) on public.profiles to authenticated;
 grant select, insert, update on public.brand_theme to authenticated;
@@ -351,7 +540,8 @@ create policy "profiles_insert_own"
   to authenticated
   with check (
     (select auth.uid()) = user_id
-    and role in ('coach', 'student')
+    and role = 'coach'
+    and coach_status = 'trial'
   );
 
 create policy "profiles_update_own"
@@ -369,10 +559,7 @@ create policy "brand_theme_select_authenticated"
       select 1
       from public.students s
       where s.coach_id = brand_theme.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   );
 
@@ -417,7 +604,6 @@ create policy "students_select_authenticated_owner"
   using (
     coach_id = (select auth.uid())::text
     or student_user_id = (select auth.uid())
-    or lower(email) = lower((select auth.jwt() ->> 'email'))
   );
 
 create policy "students_insert_coach"
@@ -455,20 +641,6 @@ create policy "students_update_coach"
     )
   );
 
-create policy "students_claim_self_by_email"
-  on public.students for update
-  to authenticated
-  using (
-    student_user_id is null
-    and email is not null
-    and lower(email) = lower((select auth.jwt() ->> 'email'))
-  )
-  with check (
-    student_user_id = (select auth.uid())
-    and email is not null
-    and lower(email) = lower((select auth.jwt() ->> 'email'))
-  );
-
 create policy "students_delete_coach"
   on public.students for delete
   to authenticated
@@ -492,10 +664,7 @@ create policy "workout_plans_select_authenticated_owner"
       from public.students s
       where s.id = workout_plans.student_id
         and s.coach_id = workout_plans.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   );
 
@@ -560,10 +729,7 @@ create policy "workout_exercises_select_authenticated_owner"
        and s.coach_id = wp.coach_id
       where wp.id = workout_exercises.workout_id
         and wp.coach_id = workout_exercises.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   );
 
@@ -625,10 +791,7 @@ create policy "workout_sessions_select_authenticated_owner"
       from public.students s
       where s.id = workout_sessions.student_id
         and s.coach_id = workout_sessions.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   );
 
@@ -641,10 +804,7 @@ create policy "workout_sessions_insert_student"
       from public.students s
       where s.id = workout_sessions.student_id
         and s.coach_id = workout_sessions.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   );
 
@@ -666,10 +826,7 @@ create policy "workout_sessions_update_owner"
       from public.students s
       where s.id = workout_sessions.student_id
         and s.coach_id = workout_sessions.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   )
   with check (
@@ -687,10 +844,7 @@ create policy "workout_sessions_update_owner"
       from public.students s
       where s.id = workout_sessions.student_id
         and s.coach_id = workout_sessions.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   );
 
@@ -720,10 +874,7 @@ create policy "workout_set_logs_select_authenticated_owner"
        and s.coach_id = ws.coach_id
       where ws.id = workout_set_logs.session_id
         and ws.coach_id = workout_set_logs.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   );
 
@@ -739,10 +890,7 @@ create policy "workout_set_logs_insert_student"
        and s.coach_id = ws.coach_id
       where ws.id = workout_set_logs.session_id
         and ws.coach_id = workout_set_logs.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   );
 
@@ -767,10 +915,7 @@ create policy "workout_set_logs_update_owner"
        and s.coach_id = ws.coach_id
       where ws.id = workout_set_logs.session_id
         and ws.coach_id = workout_set_logs.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   )
   with check (
@@ -791,10 +936,7 @@ create policy "workout_set_logs_update_owner"
        and s.coach_id = ws.coach_id
       where ws.id = workout_set_logs.session_id
         and ws.coach_id = workout_set_logs.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   );
 
@@ -824,10 +966,7 @@ create policy "workout_feedback_select_authenticated_owner"
        and s.coach_id = ws.coach_id
       where ws.id = workout_feedback.session_id
         and ws.coach_id = workout_feedback.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   );
 
@@ -843,10 +982,7 @@ create policy "workout_feedback_insert_student"
        and s.coach_id = ws.coach_id
       where ws.id = workout_feedback.session_id
         and ws.coach_id = workout_feedback.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   );
 
@@ -871,10 +1007,7 @@ create policy "workout_feedback_update_owner"
        and s.coach_id = ws.coach_id
       where ws.id = workout_feedback.session_id
         and ws.coach_id = workout_feedback.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   )
   with check (
@@ -895,10 +1028,7 @@ create policy "workout_feedback_update_owner"
        and s.coach_id = ws.coach_id
       where ws.id = workout_feedback.session_id
         and ws.coach_id = workout_feedback.coach_id
-        and (
-          s.student_user_id = (select auth.uid())
-          or lower(s.email) = lower((select auth.jwt() ->> 'email'))
-        )
+        and s.student_user_id = (select auth.uid())
     )
   );
 
