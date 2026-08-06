@@ -420,6 +420,29 @@ export const authRepository = {
     return { ok: true, data };
   },
 
+  async signInWithMagicLink({ email, redirectTo } = {}) {
+    const client = await getSupabase();
+    if (!client) return { ok: false, message: "ServiÃ§o indisponÃ­vel." };
+
+    const safeEmail = normalizeEmail(email);
+    if (!safeEmail) return { ok: false, message: "Informe seu email para receber o link de acesso." };
+
+    const { data, error } = await client.auth.signInWithOtp({
+      email: safeEmail,
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: normalizeRedirectUrl(redirectTo)
+      }
+    });
+
+    if (error) return { ok: false, error, message: authMessage(error, "NÃ£o foi possÃ­vel enviar o link de acesso.") };
+    return {
+      ok: true,
+      data,
+      message: "Enviamos um link de acesso para seu email. Ele funciona tanto no primeiro acesso quanto nos prÃ³ximos."
+    };
+  },
+
   async resetPassword({ email, redirectTo } = {}) {
     const client = await getSupabase();
     if (!client) return { ok: false, message: "Serviço indisponível." };

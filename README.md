@@ -13,8 +13,8 @@ Base web, mobile-first e sem dependencias de framework para um produto de treino
 
 ## Estado atual
 
-- Login por email/senha e Google no app do aluno e no painel do professor usando Supabase Auth.
-- Professor cadastra alunos reais com email de acesso.
+- App do aluno com uma única tela de acesso: Google ou link mágico por email, sem senha.
+- Professor pode cadastrar aluno com email (entrada direta) ou sem email (primeiro acesso por convite).
 - Professor publica treinos para alunos do proprio `coach_id`.
 - Aluno entra com o mesmo email cadastrado pelo professor e ve apenas os proprios dados.
 - RLS habilitado para `profiles`, `brand_theme`, `students`, `workout_plans` e `workout_exercises`.
@@ -29,7 +29,7 @@ Base web, mobile-first e sem dependencias de framework para um produto de treino
 
 O projeto roda em GitHub Pages sem backend proprio. Por isso, login e autorizacao usam Supabase Auth + Row Level Security.
 
-1. No Supabase SQL Editor, rode `supabase/schema.sql`.
+1. Em projeto novo, rode `supabase/schema.sql`. Em banco já configurado, rode apenas `supabase/update-student-access.sql`.
 2. Em Authentication > URL Configuration:
    - configure `Site URL` com `https://physikflow.github.io/FlowFit/appProfessor/`;
    - adicione em Redirect URLs:
@@ -37,10 +37,11 @@ O projeto roda em GitHub Pages sem backend proprio. Por isso, login e autorizaca
      - `https://physikflow.github.io/FlowFit/appAluno/`
      - opcional durante testes: `https://physikflow.github.io/FlowFit/**`
 3. Em `appAluno/js/config.js`, confira `SUPABASE_URL` e `SUPABASE_ANON_KEY`.
-4. Abra `appProfessor/`, crie/entre com uma conta de professor.
-5. Cadastre um aluno com nome, email, objetivo e status.
-6. Publique um treino para esse aluno.
-7. Abra `appAluno/`, crie/entre com uma conta de aluno usando o mesmo email cadastrado.
+4. Em Authentication > Providers > Email, mantenha o provedor habilitado; o template de Magic Link deve usar a URL de confirmação do Supabase.
+5. Abra `appProfessor/`, crie/entre com uma conta de professor.
+6. Cadastre um aluno com nome e, se souber, o email de acesso.
+7. Publique os treinos A, B e C para esse aluno.
+8. Com email cadastrado, abra `appAluno/` e continue com Google ou peça um link mágico. Sem email, abra primeiro o convite copiado no painel.
 
 ## Login social: Google
 
@@ -71,20 +72,32 @@ Depois abra:
 - `http://localhost:8080/appAluno/`
 - `http://localhost:8080/appProfessor/`
 
+## Atualizar um banco existente sem apagar dados
+
+1. Rode `supabase/update-student-access.sql` no SQL Editor.
+2. Rode `supabase/diagnose-development-data.sql` e confira se as consultas de duplicidade e planos incompletos retornam zero linhas.
+3. Não rode `supabase/reset-development-data.sql`; ele continua reservado para uma limpeza deliberada do ambiente de desenvolvimento.
+
+A migração mantém alunos, contas, temas, treinos e históricos existentes. Ela adiciona o acesso direto por email, preserva a RPC antiga de convite por compatibilidade e cria a publicação transacional de treinos.
+
 ## Publicacao de treinos
 
-O painel do professor publica um treino no cache local (`flowfit.published-workouts`) imediatamente e, se o professor estiver autenticado, sincroniza:
-
-- `students`
-- `workout_plans`
-- `workout_exercises`
+O painel prepara o treino localmente e chama `publish_student_workout`. O Supabase confirma plano, exercícios e resumo do aluno na mesma transação. A interface só mostra sucesso depois dessa confirmação.
 
 O app do aluno carrega:
 
 1. sessao Supabase;
-2. aluno encontrado pelo email autenticado;
-3. treino publicado para esse aluno;
+2. todos os vínculos autorizados para o email autenticado;
+3. personal selecionado e seus treinos A/B/C ativos;
 4. estado vazio real se nada foi publicado.
+
+## Roteiro manual curto
+
+1. Cadastre um aluno com email, publique A, B e C e confirme que os três aparecem no app do aluno.
+2. Cadastre outro aluno sem email, copie o convite e confirme que o primeiro login define o email verificado.
+3. Use o mesmo email em dois personais e confirme que o seletor do perfil troca tanto os treinos quanto o tema.
+4. Arquive um treino e confirme que ele desaparece do app sem remover sessões antigas.
+5. Salve duas cores de destaque diferentes; reabra o app do aluno e confirme que a segunda é aplicada.
 
 ## Observacao de producao
 

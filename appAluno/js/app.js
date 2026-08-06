@@ -54,8 +54,12 @@ const scheduleItems = [];
 const notificationItems = [];
 let currentStudent = emptyStudent;
 let currentWorkout = emptyWorkout;
+let studentAccesses = [];
+let availableWorkouts = [];
 let currentSessionStartedAt = new Date().toISOString();
-let authAction = "signin";
+const PENDING_INVITE_KEY = "flowfit.pending-student-invite";
+const ACTIVE_STUDENT_KEY = "flowfit.active-student";
+const ACTIVE_WORKOUT_KEY = "flowfit.active-workout";
 
 const getInviteContext = () => {
   try {
@@ -66,7 +70,32 @@ const getInviteContext = () => {
   }
 };
 
-const getInviteToken = () => getInviteContext().token;
+const captureInviteToken = () => {
+  const token = getInviteContext().token;
+  if (token) {
+    Platform.storage.set(PENDING_INVITE_KEY, {
+      token,
+      expiresAt: Date.now() + (30 * 60 * 1000)
+    });
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("invite");
+      history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    } catch {
+      // O token continua disponivel no cache temporario.
+    }
+    return token;
+  }
+  const pending = Platform.storage.get(PENDING_INVITE_KEY, null);
+  if (!pending?.token || Number(pending.expiresAt || 0) <= Date.now()) {
+    Platform.storage.remove(PENDING_INVITE_KEY);
+    return "";
+  }
+  return String(pending.token);
+};
+
+let pendingInviteToken = captureInviteToken();
+const getInviteToken = () => pendingInviteToken;
 
 const escapeHtml = (value) => String(value ?? "")
   .replace(/&/g, "&amp;")
@@ -92,11 +121,6 @@ const parseReps = (exercise) => {
 const getCurrentExercises = () => Array.isArray(currentWorkout.exercises) ? currentWorkout.exercises : [];
 
 const getTotalSets = () => getCurrentExercises().reduce((sum, exercise) => sum + parseTotalSets(exercise), 0);
-
-const resolveCurrentWorkout = () => {
-  if (!currentStudent?.name) return emptyWorkout;
-  return workoutRepository.getLatestWorkoutForStudent(currentStudent.name) || emptyWorkout;
-};
 
 const formatVolume = (value) => `${(value / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}t`;
 
@@ -184,67 +208,35 @@ const setFinishStatus = (message, state = "") => setStatus(finishStatus, message
 const getAuthRedirectUrl = () => {
   const url = new URL(window.location.href);
   url.hash = "";
+  if (pendingInviteToken) url.searchParams.set("invite", pendingInviteToken);
   return url.href;
 };
 
-const authModeContent = {
-  signin: {
-    title: "Entrar no app",
-    copy: "Use o email que o personal cadastrou para você.",
-    submit: "Entrar",
-    oauth: "Entrar com Google",
-    status: "Entre para ver seu treino.",
-    secondary: "Primeiro acesso? Use “Ativar convite”."
-  },
-  signup: {
-    title: "Ativar acesso do aluno",
-    copy: "Ative usando o mesmo email do convite enviado pelo personal.",
-    submit: "Ativar convite",
-    oauth: "Ativar com Google",
-    status: "Sem cadastro do personal, o acesso não é liberado.",
-    secondary: "Já tem conta? Volte para “Entrar”."
+const syncAuthMode = (_mode = "access", { preserveStatus = false } = {}) => {
+  if (onboardingForm) onboardingForm.dataset.authMode = "access";
+  if (authTitle) authTitle.textContent = pendingInviteToken ? "Ativar acesso do aluno" : "Acessar meus treinos";
+  if (authCopy) authCopy.textContent = pendingInviteToken
+    ? "Confirme sua identidade. O convite será vinculado ao email verificado."
+    : "Use o email cadastrado pelo personal. Funciona no primeiro acesso e nos próximos.";
+  if (authSubmit) authSubmit.textContent = "Enviar link de acesso";
+  if (authSecondary) authSecondary.textContent = "";
+  if (oauthLabel) oauthLabel.textContent = "Continuar com Google";
+  const passwordInput = onboardingForm?.querySelector('input[name="password"]');
+  const nameInput = onboardingForm?.querySelector('input[name="name"]');
+  if (passwordInput) passwordInput.disabled = true;
+  if (nameInput) nameInput.disabled = true;
+  if (!preserveStatus) {
+    setAuthStatus(
+      pendingInviteToken ? "Convite detectado. Continue com Google ou receba um link por email." : "Entre com Google ou receba um link no email informado ao personal.",
+      ""
+    );
   }
-};
-
-const syncAuthMode = (mode = authAction, { preserveStatus = false } = {}) => {
-  authAction = mode === "signup" ? "signup" : "signin";
-  const content = authModeContent[authAction];
-  if (onboardingForm) onboardingForm.dataset.authMode = authAction;
-  if (authTitle) authTitle.textContent = content.title;
-  if (authCopy) authCopy.textContent = content.copy;
-  if (authSubmit) authSubmit.textContent = content.submit;
-  if (authSecondary) authSecondary.textContent = content.secondary;
-  if (oauthLabel) oauthLabel.textContent = content.oauth;
-  onboardingForm?.querySelector('input[name="password"]')?.setAttribute("autocomplete", authAction === "signup" ? "new-password" : "current-password");
-  onboardingForm?.querySelectorAll("[data-auth-mode-button]").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.authModeButton === authAction);
-  });
-  if (!preserveStatus) setAuthStatus(content.status, "");
 };
 
 const getProviderLabel = () => "Google";
 
-const handlePasswordReset = async () => {
-  const email = onboardingForm?.querySelector('input[name="email"]')?.value;
-  if (!email) {
-    setAuthStatus("Informe seu email para recuperar a senha.", "warning");
-    return;
-  }
-
-  setAuthStatus("Enviando email de recuperação...", "");
-  const result = await authRepository.resetPassword({ email, redirectTo: getAuthRedirectUrl() });
-  setAuthStatus(
-    result.ok ? "Enviamos o link de recuperação para seu email." : result.message || "Não foi possível enviar a recuperação.",
-    result.ok ? "synced" : "warning"
-  );
-};
-
 const handleOAuthSignIn = async (provider) => {
   const label = getProviderLabel(provider);
-  if (authAction === "signup" && !getInviteToken()) {
-    setAuthStatus("Abra o link de convite enviado pelo seu personal para ativar o acesso.", "warning");
-    return;
-  }
   setAuthStatus(`Abrindo login com ${label}...`, "");
   const result = await authRepository.signInWithOAuth({
     provider,
@@ -292,7 +284,7 @@ const syncBrandAssets = () => {
 
 const applyPublishedBrandTheme = async () => {
   try {
-    const remote = await themeRepository.fetchBrandTheme();
+    const remote = await themeRepository.fetchBrandTheme(currentStudent?.coachId || "");
     if (!remote?.accent || !remote?.brandName) {
       Theme.reset();
       syncThemeControls();
@@ -307,8 +299,16 @@ const applyPublishedBrandTheme = async () => {
 
 const refreshPublishedWorkout = async ({ silent = false } = {}) => {
   const previousWorkoutId = currentWorkout.id;
-  const result = await workoutRepository.fetchLatestWorkoutForCurrentStudent(currentStudent);
-  currentWorkout = result.workout || emptyWorkout;
+  const result = await workoutRepository.fetchWorkoutsForCurrentStudent(currentStudent);
+  availableWorkouts = result.workouts || [];
+  const preferredWorkoutId = Platform.storage.get(`${ACTIVE_WORKOUT_KEY}:${currentStudent.id}`, "");
+  currentWorkout = availableWorkouts.find((workout) => workout.id === previousWorkoutId)
+    || availableWorkouts.find((workout) => workout.id === preferredWorkoutId)
+    || availableWorkouts[0]
+    || emptyWorkout;
+  if (currentWorkout.id !== emptyWorkout.id) {
+    Platform.storage.set(`${ACTIVE_WORKOUT_KEY}:${currentStudent.id}`, currentWorkout.id);
+  }
 
   const changed = currentWorkout.id !== previousWorkoutId;
   if (changed) {
@@ -346,7 +346,7 @@ const toRuntimeStudent = (student, authContext) => {
     ...emptyStudent,
     ...student,
     since: student.createdAt ? formatMonthYear(student.createdAt) : "hoje",
-    coach: "Personal",
+    coach: student.coachName || "Personal",
     frequency: student.plan || "Atendimento"
   };
 };
@@ -360,6 +360,34 @@ const renderStudent = () => {
   document.querySelector("[data-coach-name]").textContent = student.coach;
   document.querySelector("[data-profile-goal]").textContent = student.goal || "Hipertrofia";
   document.querySelector("[data-profile-frequency]").textContent = student.frequency || "Sem frequência cadastrada";
+};
+
+const renderAccessSelectors = () => {
+  const coachField = document.querySelector("[data-coach-selector-field]");
+  const coachSelect = document.querySelector("[data-coach-selector]");
+  if (coachField && coachSelect) {
+    coachField.hidden = studentAccesses.length <= 1;
+    coachSelect.innerHTML = studentAccesses.map((student) => `
+      <option value="${escapeHtml(student.id)}" ${student.id === currentStudent.id ? "selected" : ""}>
+        ${escapeHtml(student.coachName || "Personal")}
+      </option>
+    `).join("");
+  }
+
+  const picker = document.querySelector("[data-workout-picker]");
+  const options = document.querySelector("[data-workout-options]");
+  const count = document.querySelector("[data-available-workout-count]");
+  if (picker) picker.hidden = availableWorkouts.length === 0;
+  if (count) count.textContent = `${availableWorkouts.length} ${availableWorkouts.length === 1 ? "disponível" : "disponíveis"}`;
+  if (options) {
+    options.innerHTML = availableWorkouts.map((workout) => `
+      <button class="workout-choice ${workout.id === currentWorkout.id ? "is-active" : ""}" type="button" data-select-workout="${escapeHtml(workout.id)}">
+        <strong>Treino ${escapeHtml(workout.code)}</strong>
+        <span>${escapeHtml(workout.title)}</span>
+        <small>${escapeHtml(workout.estimatedMinutes)} min - ${escapeHtml(workout.exercises.length)} exercícios</small>
+      </button>
+    `).join("");
+  }
 };
 
 const renderHome = () => {
@@ -707,6 +735,7 @@ const renderHistory = () => {
 
 const renderAll = () => {
   renderStudent();
+  renderAccessSelectors();
   renderHome();
   renderExercises();
   renderProgress();
@@ -740,27 +769,37 @@ const startAuthenticatedApp = async () => {
     return false;
   }
 
-  const inviteToken = getInviteToken();
-  let claimedStudentId = "";
-  let inviteClaimed = false;
-  let linkedStudentResult = null;
-  if (inviteToken) {
-    const claimResult = await studentRepository.claimInvite(inviteToken);
-    if (!claimResult.claimed) {
-      await authRepository.signOut();
-      Store.resetOnboarding();
-      currentStudent = emptyStudent;
-      currentWorkout = emptyWorkout;
-      renderAll();
-      syncOnboarding();
-      syncAuthMode("signup", { preserveStatus: true });
-      setAuthStatus("Este convite é inválido, expirou ou pertence a outro email. Peça um novo link ao personal.", "warning");
-      return false;
+  const accessToken = getInviteToken();
+  const accessClaim = await studentRepository.claimAccess(accessToken);
+  if (!accessClaim.claimed) {
+    await authRepository.signOut();
+    if (accessToken) {
+      pendingInviteToken = "";
+      Platform.storage.remove(PENDING_INVITE_KEY);
     }
-    inviteClaimed = true;
-    claimedStudentId = claimResult.studentId;
-  } else if (!authContextBeforeClaim?.profile) {
-    linkedStudentResult = await studentRepository.fetchCurrentStudent();
+    Store.resetOnboarding();
+    currentStudent = emptyStudent;
+    currentWorkout = emptyWorkout;
+    studentAccesses = [];
+    availableWorkouts = [];
+    renderAll();
+    syncOnboarding();
+    syncAuthMode("signin", { preserveStatus: true });
+    setAuthStatus(
+      accessToken
+        ? "Este convite é inválido, expirou ou pertence a outro email. Peça um novo link ao personal."
+        : "Este email ainda não foi cadastrado por um personal. Nenhum acesso ao FlowFit foi criado.",
+      "warning"
+    );
+    return false;
+  }
+
+  pendingInviteToken = "";
+  Platform.storage.remove(PENDING_INVITE_KEY);
+  const claimedStudentId = accessToken ? accessClaim.studentId || "" : "";
+  let linkedStudentResult = null;
+  if (!authContextBeforeClaim?.profile) {
+    linkedStudentResult = await studentRepository.fetchCurrentStudent({ preferredStudentId: claimedStudentId });
     if (!linkedStudentResult.student) {
       await authRepository.signOut();
       Store.resetOnboarding();
@@ -775,8 +814,8 @@ const startAuthenticatedApp = async () => {
   }
 
   let authContext = await authRepository.getAuthContext();
-  if ((inviteClaimed || linkedStudentResult?.student) && authContext?.user && !authContext.role) {
-    // claim_student_invite e atomico e so retorna sucesso depois de criar o
+  if (linkedStudentResult?.student && authContext?.user && !authContext.role) {
+    // claim_student_access e atomico e so retorna sucesso depois de criar o
     // profile student. Nao bloqueia o aluno por atraso na leitura seguinte.
     authContext = {
       ...authContext,
@@ -816,7 +855,13 @@ const startAuthenticatedApp = async () => {
     return false;
   }
 
-  currentStudent = toRuntimeStudent(studentResult.student, authContext);
+  studentAccesses = (studentResult.students || [studentResult.student]).filter(Boolean);
+  const storedStudentId = Platform.storage.get(`${ACTIVE_STUDENT_KEY}:${session.user.id}`, "");
+  const selectedStudent = studentAccesses.find((student) => student.id === claimedStudentId)
+    || studentAccesses.find((student) => student.id === storedStudentId)
+    || studentResult.student;
+  currentStudent = toRuntimeStudent(selectedStudent, authContext);
+  Platform.storage.set(`${ACTIVE_STUDENT_KEY}:${session.user.id}`, currentStudent.id);
   Store.completeOnboarding({
     name: currentStudent.name,
     goal: currentStudent.goal,
@@ -830,13 +875,42 @@ const startAuthenticatedApp = async () => {
   syncOnboarding();
   navigate(location.hash.slice(1) || "home", false);
 
-  if (studentResult.multiple && !claimedStudentId) {
-    setAuthStatus("Conta autenticada. Há mais de um personal vinculado; abra o convite correto para alternar.", "warning");
+  if (studentResult.multiple) {
+    setAuthStatus("Acesso ativo. Use o seletor no perfil para alternar entre seus personais.", "synced");
   } else {
     setAuthStatus("Acesso ativo. Treino carregado.", "synced");
   }
 
   return true;
+};
+
+const switchStudentAccess = async (studentId) => {
+  const student = studentAccesses.find((item) => item.id === studentId);
+  if (!student || student.id === currentStudent.id) return;
+  const authContext = await authRepository.getAuthContext();
+  currentStudent = toRuntimeStudent(student, authContext);
+  Platform.storage.set(`${ACTIVE_STUDENT_KEY}:${authContext?.user?.id || "user"}`, currentStudent.id);
+  availableWorkouts = [];
+  currentWorkout = emptyWorkout;
+  setClickLocks.clear();
+  stopRestTimer();
+  currentSessionStartedAt = new Date().toISOString();
+  await applyPublishedBrandTheme();
+  await refreshPublishedWorkout({ silent: true });
+  renderAll();
+  Platform.notify(`Personal ativo: ${currentStudent.coach}.`);
+};
+
+const selectWorkout = (workoutId) => {
+  const workout = availableWorkouts.find((item) => item.id === workoutId);
+  if (!workout || workout.id === currentWorkout.id) return;
+  currentWorkout = workout;
+  Platform.storage.set(`${ACTIVE_WORKOUT_KEY}:${currentStudent.id}`, workout.id);
+  setClickLocks.clear();
+  stopRestTimer();
+  currentSessionStartedAt = new Date().toISOString();
+  renderAll();
+  Platform.notify(`Treino ${workout.code} selecionado.`);
 };
 
 navItems.forEach((item) => item.addEventListener("click", (event) => {
@@ -847,6 +921,12 @@ navItems.forEach((item) => item.addEventListener("click", (event) => {
 document.querySelectorAll("[data-go]").forEach((item) => item.addEventListener("click", () => navigate(item.dataset.go)));
 
 document.addEventListener("click", (event) => {
+  const workoutChoice = event.target.closest("[data-select-workout]");
+  if (workoutChoice) {
+    selectWorkout(workoutChoice.dataset.selectWorkout);
+    return;
+  }
+
   const filterButton = event.target.closest("[data-schedule-filter]");
   if (filterButton) {
     Store.setScheduleFilter(filterButton.dataset.scheduleFilter);
@@ -898,6 +978,10 @@ document.addEventListener("input", (event) => {
   if (repsInput) {
     Store.setExerciseLog(repsInput.dataset.logReps, { reps: Number(repsInput.value || 0) });
   }
+});
+
+document.querySelector("[data-coach-selector]")?.addEventListener("change", (event) => {
+  switchStudentAccess(event.currentTarget.value);
 });
 
 document.querySelector("[data-progress-form]")?.addEventListener("submit", (event) => {
@@ -979,61 +1063,47 @@ onboardingForm?.addEventListener("click", async (event) => {
     return;
   }
 
-  const modeButton = event.target.closest("[data-auth-mode-button]");
-  if (modeButton) {
-    event.preventDefault();
-    syncAuthMode(modeButton.dataset.authModeButton);
-    return;
-  }
-
-  const resetButton = event.target.closest("[data-auth-reset]");
-  if (resetButton) {
-    event.preventDefault();
-    await handlePasswordReset();
-  }
 });
 
 onboardingForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(onboardingForm));
-  setAuthStatus(authAction === "signup" ? "Ativando acesso..." : "Entrando...", "");
+  setAuthStatus("Enviando link seguro...", "");
 
   const inviteToken = getInviteToken();
-  if (authAction === "signup") {
-    if (!inviteToken) {
-      setAuthStatus("Abra o link de convite enviado pelo seu personal para ativar o acesso.", "warning");
-      return;
-    }
+  if (inviteToken) {
     const inviteResult = await studentRepository.validateInvite({ token: inviteToken, email: data.email });
     if (!inviteResult.valid || !inviteResult.emailMatches) {
+      if (inviteResult.reason !== "email-mismatch") {
+        pendingInviteToken = "";
+        Platform.storage.remove(PENDING_INVITE_KEY);
+        syncAuthMode("access", { preserveStatus: true });
+      }
       setAuthStatus("Convite inválido, expirado ou usado com um email diferente do cadastrado pelo personal.", "warning");
       return;
     }
   }
 
-  const result = authAction === "signup"
-    ? await authRepository.signUp({ ...data, role: "student", redirectTo: getAuthRedirectUrl(), createProfile: false })
-    : await authRepository.signIn({ ...data, role: "student", createProfile: false });
+  const result = await authRepository.signInWithMagicLink({
+    email: data.email,
+    redirectTo: getAuthRedirectUrl()
+  });
 
   if (!result.ok) {
-    setAuthStatus(result.message || "Não foi possível autenticar.", "warning");
+    setAuthStatus(result.message || "Não foi possível enviar o link de acesso.", "warning");
     return;
   }
-
-  if (result.pendingEmailConfirmation) {
-    setAuthStatus(result.message, "warning");
-    return;
-  }
-
-  await startAuthenticatedApp();
-  Platform.notify("Acesso validado.");
+  setAuthStatus(result.message, "synced");
 });
 
 const signOut = async () => {
   await authRepository.signOut();
   Store.resetOnboarding();
+  Theme.reset();
   currentStudent = emptyStudent;
   currentWorkout = emptyWorkout;
+  studentAccesses = [];
+  availableWorkouts = [];
   setClickLocks.clear();
   stopRestTimer();
   renderAll();
@@ -1067,22 +1137,29 @@ window.addEventListener("hashchange", () => navigate(location.hash.slice(1), fal
 window.addEventListener("app:notify", (event) => showToast(event.detail));
 window.addEventListener("app:theme", syncThemeControls);
 window.addEventListener("storage", (event) => {
-  if ([REMOTE_THEME_KEY, LEGACY_REMOTE_THEME_KEY].includes(event.key)) applyPublishedBrandTheme();
+  if (event.key?.startsWith(REMOTE_THEME_KEY) || event.key === LEGACY_REMOTE_THEME_KEY) applyPublishedBrandTheme();
   if (event.key === LOCAL_BRAND_ASSETS_KEY) syncBrandAssets();
   if (event.key === PUBLISHED_WORKOUTS_KEY) {
-    const previousWorkoutId = currentWorkout.id;
-    currentWorkout = resolveCurrentWorkout();
-    if (currentWorkout.id !== previousWorkoutId) {
-      setClickLocks.clear();
-      stopRestTimer();
-      Platform.notify("Seu personal publicou um novo treino.");
-    }
-    renderAll();
+    refreshPublishedWorkout();
   }
 });
 
+let foregroundRefreshAt = 0;
+const refreshOnForeground = async () => {
+  if (!Store.state.onboarded || !currentStudent?.coachId || Date.now() - foregroundRefreshAt < 1500) return;
+  foregroundRefreshAt = Date.now();
+  await applyPublishedBrandTheme();
+  await refreshPublishedWorkout({ silent: true });
+};
+
+window.addEventListener("pageshow", refreshOnForeground);
+window.addEventListener("focus", refreshOnForeground);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") refreshOnForeground();
+});
+
 syncAuthMode(getInviteToken() ? "signup" : "signin");
-Theme.apply();
+Theme.reset();
 syncThemeControls();
 renderAll();
 renderRestTimer();

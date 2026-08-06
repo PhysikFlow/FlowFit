@@ -46,3 +46,50 @@ select
   b.updated_at
 from public.brand_theme b
 order by b.updated_at desc;
+
+-- Acessos ainda nao vinculados, convites que exigem atencao e duplicidades.
+select
+  count(*) filter (where student_user_id is null) as students_without_user,
+  count(*) filter (where invite_status = 'pending') as pending_invites,
+  count(*) filter (where invite_status = 'pending' and invite_expires_at <= now()) as expired_invites
+from public.students;
+
+select
+  coach_id,
+  lower(trim(email)) as normalized_email,
+  count(*) as duplicate_count,
+  array_agg(id order by created_at) as student_ids
+from public.students
+where trim(coalesce(email, '')) <> ''
+group by coach_id, lower(trim(email))
+having count(*) > 1
+order by duplicate_count desc, coach_id;
+
+-- Planos incompletos ou ligados a um cadastro inconsistente.
+select
+  wp.id as workout_id,
+  wp.coach_id,
+  wp.student_id,
+  wp.status,
+  count(we.id) as exercise_count,
+  case
+    when s.id is null then 'student-missing'
+    when s.coach_id <> wp.coach_id then 'coach-mismatch'
+    when count(we.id) = 0 then 'without-exercises'
+    else 'ok'
+  end as diagnosis
+from public.workout_plans wp
+left join public.students s on s.id = wp.student_id
+left join public.workout_exercises we on we.workout_id = wp.id
+group by wp.id, wp.coach_id, wp.student_id, wp.status, s.id, s.coach_id
+having s.id is null or s.coach_id <> wp.coach_id or count(we.id) = 0
+order by wp.updated_at desc;
+
+select
+  coach_id,
+  brand_name,
+  accent,
+  mode,
+  updated_at as last_theme_update
+from public.brand_theme
+order by updated_at desc;

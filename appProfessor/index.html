@@ -7,10 +7,10 @@
     <meta name="description" content="Painel do personal para gerenciar alunos, treinos e marca do aplicativo." />
     <title>FlowFit - Professor</title>
     <link rel="icon" type="image/svg+xml" href="../appAluno/assets/icons/app-icon.svg" />
-    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=auth-flow-20260805" />
-    <link rel="stylesheet" href="../appAluno/css/components.css?v=auth-flow-20260805" />
-    <link rel="stylesheet" href="css/app.css?v=auth-flow-20260805" />
-    <script type="module" src="js/app.js?v=auth-flow-20260805"></script>
+    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=access-v2-20260805" />
+    <link rel="stylesheet" href="../appAluno/css/components.css?v=access-v2-20260805" />
+    <link rel="stylesheet" href="css/app.css?v=access-v2-20260805" />
+    <script type="module" src="js/app.js?v=access-v2-20260805"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title">
@@ -130,7 +130,7 @@
       <section class="page" data-page="students" aria-label="Alunos e acompanhamento">
         <form class="quick-form card" data-student-form>
           <label>Nome <input name="name" placeholder="Nome completo do aluno" autocomplete="name" required /></label>
-          <label>Email de acesso <input type="email" name="email" placeholder="email do aluno" autocomplete="email" required /></label>
+          <label>Email de acesso (opcional) <input type="email" name="email" placeholder="deixe vazio para convidar por link" autocomplete="email" /></label>
           <label>Objetivo
             <select name="goal">
               <option>Hipertrofia</option>
@@ -169,7 +169,7 @@
           <form class="student-import card" data-student-import-form>
             <span class="eyebrow">Importação simples</span>
             <h2>Importar alunos por CSV</h2>
-            <p>Use uma planilha exportada como CSV. Colunas aceitas: nome, email, objetivo e status.</p>
+            <p>Use uma planilha exportada como CSV. Nome é obrigatório; email, objetivo e status são opcionais.</p>
             <label class="file-picker">Arquivo CSV
               <input type="file" accept=".csv,text/csv" data-student-import-input />
               <small data-student-import-file>Nenhum arquivo selecionado</small>

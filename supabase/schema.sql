@@ -241,9 +241,10 @@ create index if not exists students_coach_student_key_idx
 create index if not exists students_email_idx
   on public.students (lower(email));
 
-create unique index if not exists students_coach_email_unique_idx
-  on public.students (coach_id, lower(email))
-  where email is not null;
+drop index if exists public.students_coach_email_unique_idx;
+create unique index students_coach_email_unique_idx
+  on public.students (coach_id, lower(trim(email)))
+  where email is not null and trim(email) <> '';
 
 create index if not exists students_student_user_id_idx
   on public.students (student_user_id);
@@ -299,28 +300,32 @@ begin
     return;
   end if;
 
-  if v_student.invite_status <> 'pending' then
-    return query select false, true, v_student.invite_status::text;
+  if v_student.invite_status = 'revoked' then
+    return query select false, true, 'revoked'::text;
     return;
   end if;
 
-  if v_student.invite_expires_at <= now() then
+  if v_student.invite_status = 'pending' and v_student.invite_expires_at <= now() then
     return query select false, true, 'expired'::text;
     return;
   end if;
 
-  if p_email is not null and lower(trim(p_email)) <> lower(trim(coalesce(v_student.email, ''))) then
+  if p_email is not null
+     and trim(coalesce(v_student.email, '')) <> ''
+     and lower(trim(p_email)) <> lower(trim(v_student.email)) then
     return query select false, false, 'email-mismatch'::text;
     return;
   end if;
 
-  return query select true, true, 'valid'::text;
+  return query select true, true,
+    case when v_student.invite_status = 'accepted' then 'accepted' else 'valid' end::text;
 end;
 $$;
 
--- Claim atomico: valida convite, fixa o aluno no auth.uid e cria o papel student.
-create or replace function public.claim_student_invite(p_token text)
-returns table (student_id text)
+-- Acesso atomico: email previamente cadastrado dispensa link. O token continua
+-- sendo a autorizacao para cadastros em que o personal nao conhece o email.
+create or replace function public.claim_student_access(p_token text default null)
+returns table (student_id text, coach_id text, access_method text)
 language plpgsql
 security definer
 set search_path = public, pg_temp
@@ -328,38 +333,12 @@ as $$
 declare
   v_user_id uuid := auth.uid();
   v_user_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
-  v_student public.students%rowtype;
+  v_token_student public.students%rowtype;
   v_profile_role text;
+  v_access_count integer := 0;
 begin
   if v_user_id is null or v_user_email = '' then
-    raise exception 'invite_requires_authenticated_email';
-  end if;
-
-  select s.*
-    into v_student
-    from public.students s
-   where s.invite_token::text = trim(coalesce(p_token, ''))
-   for update;
-
-  if not found then
-    raise exception 'invite_not_found';
-  end if;
-
-  if v_student.invite_status = 'revoked' then
-    raise exception 'invite_revoked';
-  end if;
-
-  if v_student.invite_status = 'pending' and v_student.invite_expires_at <= now() then
-    raise exception 'invite_expired';
-  end if;
-
-  if v_student.student_user_id is not null and v_student.student_user_id <> v_user_id then
-    raise exception 'invite_already_claimed';
-  end if;
-
-  if v_student.student_user_id is null
-     and lower(trim(coalesce(v_student.email, ''))) <> v_user_email then
-    raise exception 'invite_email_mismatch';
+    raise exception 'student_access_requires_authenticated_email';
   end if;
 
   select p.role into v_profile_role
@@ -370,23 +349,232 @@ begin
     raise exception 'account_has_different_role';
   end if;
 
-  insert into public.profiles (user_id, role, name, updated_at)
-  values (v_user_id, 'student', v_student.name, now())
-  on conflict (user_id) do nothing;
+  if trim(coalesce(p_token, '')) <> '' then
+    select s.*
+      into v_token_student
+      from public.students s
+     where s.invite_token::text = trim(p_token)
+     for update;
 
+    if not found then
+      raise exception 'invite_not_found';
+    end if;
+
+    if v_token_student.invite_status = 'revoked' then
+      raise exception 'invite_revoked';
+    end if;
+
+    if v_token_student.invite_status = 'pending' and v_token_student.invite_expires_at <= now() then
+      raise exception 'invite_expired';
+    end if;
+
+    if v_token_student.student_user_id is not null and v_token_student.student_user_id <> v_user_id then
+      raise exception 'invite_already_claimed';
+    end if;
+
+    if trim(coalesce(v_token_student.email, '')) <> ''
+       and lower(trim(v_token_student.email)) <> v_user_email then
+      raise exception 'invite_email_mismatch';
+    end if;
+
+    update public.students
+       set email = case when trim(coalesce(email, '')) = '' then v_user_email else lower(trim(email)) end,
+           student_user_id = v_user_id,
+           invite_status = 'accepted',
+           invite_claimed_at = coalesce(invite_claimed_at, now()),
+           updated_at = now()
+     where id = v_token_student.id;
+  end if;
+
+  -- Um unico login vincula todos os cadastros pendentes do mesmo email,
+  -- inclusive quando eles pertencem a personais diferentes.
   update public.students
      set student_user_id = v_user_id,
          invite_status = 'accepted',
          invite_claimed_at = coalesce(invite_claimed_at, now()),
          updated_at = now()
-   where id = v_student.id;
+   where lower(trim(coalesce(email, ''))) = v_user_email
+     and (student_user_id is null or student_user_id = v_user_id);
 
-  return query select v_student.id;
+  select count(*) into v_access_count
+    from public.students s
+   where s.student_user_id = v_user_id;
+
+  if v_access_count = 0 then
+    raise exception 'student_access_not_authorized';
+  end if;
+
+  insert into public.profiles (user_id, role, name, updated_at)
+  select v_user_id, 'student', s.name, now()
+    from public.students s
+   where s.student_user_id = v_user_id
+   order by s.updated_at desc
+   limit 1
+  on conflict (user_id) do nothing;
+
+  return query
+  select s.id,
+         s.coach_id,
+         case when trim(coalesce(p_token, '')) <> '' and s.id = v_token_student.id then 'invite' else 'email' end
+    from public.students s
+   where s.student_user_id = v_user_id
+   order by s.updated_at desc;
+end;
+$$;
+
+-- Compatibilidade por uma versao com PWAs que ainda chamam a RPC antiga.
+create or replace function public.claim_student_invite(p_token text)
+returns table (student_id text)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  perform * from public.claim_student_access(p_token);
+  return query
+  select s.id
+    from public.students s
+   where s.invite_token::text = trim(coalesce(p_token, ''))
+     and s.student_user_id = auth.uid()
+   limit 1;
+end;
+$$;
+
+-- Publicacao transacional: plano, exercicios e resumo do aluno confirmam juntos.
+create or replace function public.publish_student_workout(p_workout jsonb, p_exercises jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_coach_id text := auth.uid()::text;
+  v_workout_id text := trim(coalesce(p_workout ->> 'id', ''));
+  v_student_id text := trim(coalesce(p_workout ->> 'student_id', ''));
+  v_exercise jsonb;
+  v_count integer := 0;
+  v_result jsonb;
+begin
+  if v_user_id is null or not exists (
+    select 1 from public.profiles p
+     where p.user_id = v_user_id
+       and p.role = 'coach'
+       and p.coach_status in ('trial', 'active', 'past_due')
+  ) then
+    raise exception 'coach_access_blocked';
+  end if;
+
+  if v_workout_id = '' or v_student_id = '' then
+    raise exception 'workout_id_and_student_required';
+  end if;
+
+  if not exists (
+    select 1 from public.students s
+     where s.id = v_student_id and s.coach_id = v_coach_id
+  ) then
+    raise exception 'student_not_found_for_coach';
+  end if;
+
+  if exists (
+    select 1 from public.workout_plans wp
+     where wp.id = v_workout_id and wp.coach_id <> v_coach_id
+  ) then
+    raise exception 'workout_owned_by_another_coach';
+  end if;
+
+  if jsonb_typeof(coalesce(p_exercises, '[]'::jsonb)) <> 'array'
+     or jsonb_array_length(coalesce(p_exercises, '[]'::jsonb)) = 0 then
+    raise exception 'workout_requires_exercises';
+  end if;
+
+  insert into public.workout_plans (
+    id, coach_id, student_id, student_key, owner, code, title, focus,
+    estimated_minutes, last_done_label, source, status, starts_at,
+    published_at, version, updated_at
+  ) values (
+    v_workout_id,
+    v_coach_id,
+    v_student_id,
+    trim(coalesce(p_workout ->> 'student_key', 'aluno')),
+    trim(coalesce(p_workout ->> 'owner', 'Aluno')),
+    trim(coalesce(p_workout ->> 'code', 'A')),
+    trim(coalesce(p_workout ->> 'title', 'Novo treino')),
+    trim(coalesce(p_workout ->> 'focus', 'Prescricao personalizada')),
+    greatest(1, coalesce((p_workout ->> 'estimated_minutes')::integer, 45)),
+    trim(coalesce(p_workout ->> 'last_done_label', 'novo')),
+    trim(coalesce(p_workout ->> 'source', 'professor')),
+    'published',
+    coalesce((p_workout ->> 'starts_at')::timestamptz, now()),
+    coalesce((p_workout ->> 'published_at')::timestamptz, now()),
+    greatest(1, coalesce((p_workout ->> 'version')::integer, 1)),
+    now()
+  )
+  on conflict (id) do update set
+    student_id = excluded.student_id,
+    student_key = excluded.student_key,
+    owner = excluded.owner,
+    code = excluded.code,
+    title = excluded.title,
+    focus = excluded.focus,
+    estimated_minutes = excluded.estimated_minutes,
+    last_done_label = excluded.last_done_label,
+    source = excluded.source,
+    status = 'published',
+    starts_at = excluded.starts_at,
+    published_at = excluded.published_at,
+    version = excluded.version,
+    updated_at = now();
+
+  delete from public.workout_exercises
+   where workout_id = v_workout_id and coach_id = v_coach_id;
+
+  for v_exercise in select value from jsonb_array_elements(p_exercises)
+  loop
+    insert into public.workout_exercises (
+      id, workout_id, coach_id, position, name, target, prescription,
+      load, rest, tempo, rir, notes, updated_at
+    ) values (
+      trim(coalesce(v_exercise ->> 'id', v_workout_id || '-ex-' || v_count::text)),
+      v_workout_id,
+      v_coach_id,
+      v_count,
+      trim(coalesce(v_exercise ->> 'name', 'Exercicio')),
+      trim(coalesce(v_exercise ->> 'target', 'Personalizado')),
+      trim(coalesce(v_exercise ->> 'prescription', '3 x 10')),
+      trim(coalesce(v_exercise ->> 'load', '0 kg')),
+      trim(coalesce(v_exercise ->> 'rest', '60s')),
+      trim(coalesce(v_exercise ->> 'tempo', '2-0-2')),
+      trim(coalesce(v_exercise ->> 'rir', '2')),
+      trim(coalesce(v_exercise ->> 'notes', 'Criado no painel do professor.')),
+      now()
+    );
+    v_count := v_count + 1;
+  end loop;
+
+  update public.students
+     set workout = 'Treino ' || trim(coalesce(p_workout ->> 'code', 'A')) || ' - ' || trim(coalesce(p_workout ->> 'title', 'Novo treino')),
+         next_action = 'Ver treino publicado',
+         updated_at = now()
+   where id = v_student_id and coach_id = v_coach_id;
+
+  select jsonb_build_object(
+    'workout_id', wp.id,
+    'student_id', wp.student_id,
+    'status', wp.status,
+    'version', wp.version,
+    'exercise_count', v_count,
+    'updated_at', wp.updated_at
+  ) into v_result
+    from public.workout_plans wp
+   where wp.id = v_workout_id and wp.coach_id = v_coach_id;
+
+  return v_result;
 end;
 $$;
 
 -- Um personal pode renovar um convite pendente/revogado; convite aceito nao
--- troca de dono e deve usar login/recuperacao de senha.
+-- troca de dono e deve usar Google ou link magico pelo email ja vinculado.
 create or replace function public.renew_student_invite(p_student_id text)
 returns table (
   student_id text,
@@ -443,10 +631,14 @@ end;
 $$;
 
 revoke all on function public.validate_student_invite(text, text) from public;
+revoke all on function public.claim_student_access(text) from public;
 revoke all on function public.claim_student_invite(text) from public;
+revoke all on function public.publish_student_workout(jsonb, jsonb) from public;
 revoke all on function public.renew_student_invite(text) from public;
 grant execute on function public.validate_student_invite(text, text) to anon, authenticated;
+grant execute on function public.claim_student_access(text) to authenticated;
 grant execute on function public.claim_student_invite(text) to authenticated;
+grant execute on function public.publish_student_workout(jsonb, jsonb) to authenticated;
 grant execute on function public.renew_student_invite(text) to authenticated;
 
 -- Data API: acesso anonimo nao le dados reais. Auth API continua funcionando.
@@ -499,6 +691,7 @@ drop policy if exists "workout_exercises_update_demo" on public.workout_exercise
 drop policy if exists "workout_exercises_delete_demo" on public.workout_exercises;
 
 drop policy if exists "profiles_select_own" on public.profiles;
+drop policy if exists "profiles_select_own_or_linked_coach" on public.profiles;
 drop policy if exists "profiles_insert_own" on public.profiles;
 drop policy if exists "profiles_update_own" on public.profiles;
 drop policy if exists "brand_theme_select_authenticated" on public.brand_theme;
@@ -530,10 +723,20 @@ drop policy if exists "workout_feedback_insert_student" on public.workout_feedba
 drop policy if exists "workout_feedback_update_owner" on public.workout_feedback;
 drop policy if exists "workout_feedback_delete_coach" on public.workout_feedback;
 
-create policy "profiles_select_own"
+create policy "profiles_select_own_or_linked_coach"
   on public.profiles for select
   to authenticated
-  using ((select auth.uid()) = user_id);
+  using (
+    (select auth.uid()) = user_id
+    or (
+      role = 'coach'
+      and exists (
+        select 1 from public.students s
+         where s.coach_id = profiles.user_id::text
+           and s.student_user_id = (select auth.uid())
+      )
+    )
+  );
 
 create policy "profiles_insert_own"
   on public.profiles for insert

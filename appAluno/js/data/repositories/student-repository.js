@@ -82,6 +82,8 @@ const normalizeStudent = (student) => {
     inviteStatus: normalizeText(student?.inviteStatus, "pending"),
     inviteExpiresAt: normalizeText(student?.inviteExpiresAt, ""),
     inviteClaimedAt: normalizeText(student?.inviteClaimedAt, ""),
+    coachName: normalizeText(student?.coachName, "Personal"),
+    coachHeadline: normalizeText(student?.coachHeadline, "Acompanhamento personalizado"),
     createdAt: normalizeText(student?.createdAt, updatedAt),
     updatedAt
   };
@@ -239,7 +241,26 @@ export const studentRepository = {
         if (row?.id) uniqueRows.set(row.id, row);
       });
 
-      const students = [...uniqueRows.values()].map(toAppStudent).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      const coachIds = [...new Set([...uniqueRows.values()].map((row) => row.coach_id).filter(Boolean))];
+      let coachProfiles = [];
+      if (coachIds.length) {
+        const profileResult = await client
+          .from("profiles")
+          .select("user_id, name, headline")
+          .in("user_id", coachIds);
+        if (!profileResult.error) coachProfiles = profileResult.data || [];
+      }
+      const coachById = new Map(coachProfiles.map((profile) => [String(profile.user_id), profile]));
+      const students = [...uniqueRows.values()]
+        .map((row) => {
+          const coach = coachById.get(String(row.coach_id));
+          return normalizeStudent({
+            ...toAppStudent(row),
+            coachName: coach?.name || "Personal",
+            coachHeadline: coach?.headline || "Acompanhamento personalizado"
+          });
+        })
+        .sort((a, b) => a.coachName.localeCompare(b.coachName, "pt-BR") || a.name.localeCompare(b.name, "pt-BR"));
       const student = students.find((item) => preferredStudentId && item.id === preferredStudentId)
         || students.find((item) => item.studentUserId === authContext.user.id)
         || students[0]
@@ -270,21 +291,29 @@ export const studentRepository = {
     }
   },
 
-  async claimInvite(token) {
+  async claimAccess(token = "") {
     const client = await getSupabase();
     const authContext = await authRepository.getAuthContext();
-    if (!client || !authContext?.user || !token) {
-      return { claimed: false, reason: "not-authenticated-or-invite-missing" };
+    if (!client || !authContext?.user) {
+      return { claimed: false, reason: "not-authenticated" };
     }
 
     try {
-      const { data, error } = await client.rpc("claim_student_invite", { p_token: token });
-      if (error) return { claimed: false, error, reason: "invite-claim-failed" };
-      const result = Array.isArray(data) ? data[0] : data;
-      return { claimed: true, studentId: result?.student_id || "" };
+      const { data, error } = await client.rpc("claim_student_access", { p_token: String(token || "").trim() || null });
+      if (error) return { claimed: false, error, reason: "student-access-claim-failed" };
+      const accesses = (Array.isArray(data) ? data : [data]).filter(Boolean).map((item) => ({
+        studentId: item.student_id || "",
+        coachId: item.coach_id || "",
+        method: item.access_method || "email"
+      }));
+      return { claimed: accesses.length > 0, studentId: accesses[0]?.studentId || "", accesses };
     } catch (error) {
-      return { claimed: false, error, reason: "invite-claim-failed" };
+      return { claimed: false, error, reason: "student-access-claim-failed" };
     }
+  },
+
+  async claimInvite(token) {
+    return this.claimAccess(token);
   },
 
   async renewInvite(student) {

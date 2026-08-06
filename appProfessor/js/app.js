@@ -275,13 +275,15 @@ const getCoachPublicName = () => authContext?.profile?.name
 const buildInviteMessage = (student) => {
   if (!student?.inviteToken) return "";
   const brandName = brandInput?.value?.trim() || DEFAULT_BRAND_THEME.brandName;
-  const emailLine = student.email ? `Entre usando este email: ${student.email}.` : "Entre usando o email cadastrado pelo seu personal.";
+  const emailLine = student.email
+    ? `Você também pode entrar diretamente com ${student.email}, sem precisar guardar este link.`
+    : "Como seu email não foi cadastrado, use este link no primeiro acesso.";
   return [
     `Oi, ${student.name}!`,
     `${getCoachPublicName()} liberou seu acesso ao ${brandName}.`,
     `Acesse: ${getStudentAppUrl(student)}`,
     emailLine,
-    "No primeiro acesso, abra este link e escolha uma senha ou entre com Google. O link é pessoal."
+    "Continue com Google ou peça um link mágico por email. Não é necessário criar senha."
   ].join("\n");
 };
 
@@ -366,7 +368,7 @@ const parseStudentCsv = (text) => {
       goal: row[goalIndex] || "Hipertrofia",
       status: row[statusIndex] || "Ativo"
     }))
-    .filter((student) => student.name && student.email);
+    .filter((student) => student.name);
 };
 
 const handleOAuthSignIn = async (provider) => {
@@ -488,8 +490,8 @@ const saveThemeNow = async ({ silent = false } = {}) => {
   const message = result.synced && result.partial
     ? "Tema salvo parcialmente. Recarregue e tente salvar novamente."
     : result.synced
-    ? "Marca sincronizada."
-    : "Marca salva neste aparelho. Verifique a conexão.";
+    ? `Marca sincronizada e confirmada${result.updatedAt ? ` em ${formatUpdatedAt(result.updatedAt)}` : ""}.`
+    : "Marca não confirmada pelo Supabase. Verifique a conexão e tente novamente.";
   setThemeStatus(message, result.synced && !result.partial ? "synced" : "warning");
   if (!silent) showToast(result.synced && !result.partial ? "Tema sincronizado." : "Tema salvo com aviso.");
   return result;
@@ -532,12 +534,8 @@ const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 
 const findExistingStudentForDraft = (draft) => {
   const normalizedEmail = normalizeEmail(draft.email);
-  const normalizedName = String(draft.name || "").trim().toLowerCase();
-  return students.find((student) => (
-    normalizedEmail && normalizeEmail(student.email) === normalizedEmail
-  ) || (
-    !normalizedEmail && normalizedName && student.name.trim().toLowerCase() === normalizedName
-  )) || null;
+  if (!normalizedEmail) return null;
+  return students.find((student) => normalizeEmail(student.email) === normalizedEmail) || null;
 };
 
 const mergeStudentDraftWithExisting = (draft) => {
@@ -925,7 +923,8 @@ const renderInviteTools = () => {
   if (copyInviteButton) copyInviteButton.textContent = expired ? "Gerar novo convite" : "Copiar convite";
   if (expired) setInviteStatus(`O convite de ${selected.name} expirou. Gere um novo link.`, "warning");
   else if (selected.inviteStatus === "accepted") setInviteStatus(`${selected.name} já ativou o acesso.`, "synced");
-  else setInviteStatus(`Convite pessoal pronto para ${selected.name}.`, "synced");
+  else if (selected.email) setInviteStatus(`Link opcional: ${selected.name} também pode entrar diretamente com o email cadastrado.`, "synced");
+  else setInviteStatus(`Convite necessário: o email será definido no primeiro acesso de ${selected.name}.`, "warning");
 };
 
 const renderStudentOptions = () => {
@@ -1193,9 +1192,10 @@ const renderWorkouts = () => {
           <p>${blocks}</p>
           <small>${escapeHtml(stage.detail)} - v${escapeHtml(workout.version || 1)} - atualizado: ${escapeHtml(formatUpdatedAt(workout.updatedAt))}${escapeHtml(syncMessage)}</small>
         </div>
-        <button class="button button--quiet" type="button" aria-label="Editar ${escapeHtml(workout.title)}" data-workout-action="${escapeHtml(workout.id)}">
-          Editar
-        </button>
+        <div class="workout-card__actions">
+          <button class="button button--quiet" type="button" aria-label="Editar ${escapeHtml(workout.title)}" data-workout-action="${escapeHtml(workout.id)}">Editar</button>
+          <button class="button button--quiet" type="button" aria-label="Arquivar ${escapeHtml(workout.title)}" data-workout-archive="${escapeHtml(workout.id)}">Arquivar</button>
+        </div>
       </article>
     `;
   }).join("");
@@ -1295,7 +1295,9 @@ document.querySelector("[data-student-form]")?.addEventListener("submit", async 
         ? "Aluno sincronizado, mas o limite do plano piloto foi excedido."
         : existingStudent
           ? "Aluno atualizado neste personal. Outros personais com o mesmo aluno não foram alterados."
-          : "Aluno sincronizado. Agora publique um treino e envie o convite."
+          : draft.email
+            ? "Aluno sincronizado. Ele já pode entrar diretamente com Google ou link mágico usando esse email."
+            : "Aluno sincronizado sem email. Envie o convite pessoal para liberar o primeiro acesso."
       : "Aluno salvo neste aparelho.",
     result.synced && !limitExceeded ? "synced" : "warning"
   );
@@ -1362,7 +1364,7 @@ studentImportForm?.addEventListener("submit", async (event) => {
   setStudentImportStatus("Lendo planilha...", "");
   const parsedStudents = parseStudentCsv(await file.text());
   if (!parsedStudents.length) {
-    setStudentImportStatus("Nenhum aluno válido encontrado. Use colunas nome,email,objetivo,status.", "warning");
+    setStudentImportStatus("Nenhum aluno válido encontrado. Nome é obrigatório; email é opcional.", "warning");
     return;
   }
 
@@ -1445,8 +1447,7 @@ workoutForm?.addEventListener("submit", async (event) => {
   }
 
   applyPublishedWorkouts([savedWorkout, ...workouts.filter((item) => item.id !== savedWorkout.id)]);
-  setWorkoutSyncStatus(editingWorkout ? "Treino atualizado. Republicando para o aluno..." : "Treino salvo. Sincronizando...", "");
-  showToast(editingWorkout ? "Treino republicado." : "Treino publicado.");
+  setWorkoutSyncStatus(editingWorkout ? "Confirmando atualização completa no Supabase..." : "Confirmando plano e exercícios no Supabase...", "");
 
   const result = await workoutRepository.syncPublishedWorkout(savedWorkout, linkedStudent);
   setWorkoutSyncStatus(
@@ -1454,8 +1455,12 @@ workoutForm?.addEventListener("submit", async (event) => {
     result.synced && !result.partial ? "synced" : "warning"
   );
   if (result.workout) applyPublishedWorkouts([result.workout, ...workouts.filter((item) => item.id !== result.workout.id)]);
-  if (result.synced) showToast("Treino sincronizado.");
-  resetWorkoutFormMode({ resetForm: true });
+  if (result.synced) {
+    showToast(editingWorkout ? "Treino republicado e confirmado." : "Treino publicado e confirmado.");
+    resetWorkoutFormMode({ resetForm: true });
+  } else {
+    showToast("Publicação não concluída. Revise o aviso e tente novamente.");
+  }
 });
 
 workoutForm?.addEventListener("input", renderWorkoutPreview);
@@ -1599,7 +1604,7 @@ coachProfileForm?.addEventListener("submit", async (event) => {
   showToast("Perfil atualizado.");
 });
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const refreshSessionsButton = event.target.closest("[data-refresh-sessions]");
   if (refreshSessionsButton) {
     refreshWorkoutSessions();
@@ -1637,6 +1642,24 @@ document.addEventListener("click", (event) => {
   if (workoutAction) {
     const workout = workouts.find((item) => item.id === workoutAction.dataset.workoutAction);
     if (workout) loadWorkoutForEditing(workout);
+  }
+
+  const workoutArchive = event.target.closest("[data-workout-archive]");
+  if (workoutArchive) {
+    const workout = workouts.find((item) => item.id === workoutArchive.dataset.workoutArchive);
+    if (!workout) return;
+    workoutArchive.disabled = true;
+    setWorkoutSyncStatus(`Arquivando Treino ${workout.code}...`, "");
+    const result = await workoutRepository.archivePublishedWorkout(workout.id);
+    if (!result.archived) {
+      workoutArchive.disabled = false;
+      setWorkoutSyncStatus(result.error?.message || "Não foi possível arquivar o treino.", "warning");
+      showToast("Treino não arquivado.");
+      return;
+    }
+    applyPublishedWorkouts(workouts.filter((item) => item.id !== workout.id));
+    setWorkoutSyncStatus("Treino arquivado. O histórico do aluno foi preservado.", "synced");
+    showToast("Treino arquivado.");
   }
 });
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-aluno-v29";
+const CACHE_NAME = "flowfit-aluno-v30";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -34,13 +34,20 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-const isConfigRequest = (request) => request.url.includes("/js/config.js");
+const isNetworkFirstRequest = (request) => {
+  const url = new URL(request.url);
+  return request.mode === "navigate"
+    || url.pathname.endsWith(".html")
+    || url.pathname.endsWith(".js");
+};
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
-  if (isConfigRequest(event.request)) {
-    // config.js pode mudar a qualquer momento (chaves do Supabase):
-    // sempre tenta a rede primeiro e so usa o cache como fallback offline.
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.origin !== self.location.origin) return;
+  if (isNetworkFirstRequest(event.request)) {
+    // HTML e JavaScript priorizam a rede para que login, RLS e correcoes de
+    // sincronizacao nao fiquem presos em uma versao antiga instalada.
     event.respondWith(
       fetch(event.request).then((response) => {
         const copy = response.clone();

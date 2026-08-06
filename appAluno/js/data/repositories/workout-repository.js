@@ -358,6 +358,30 @@ export const workoutRepository = {
     }
 
     try {
+      const { data, error } = await client.rpc("publish_student_workout", {
+        p_workout: toWorkoutPlanRow(normalized, authContext),
+        p_exercises: toExerciseRows(normalized, authContext)
+      });
+      if (error || !data || Number(data.exercise_count || 0) !== normalized.exercises.length) {
+        const verificationError = error || new Error("O Supabase não confirmou todos os exercícios do treino.");
+        const failed = this.savePublishedWorkout({
+          ...normalized,
+          syncStatus: "failed",
+          syncMessage: verificationError.message || "Não foi possível publicar o treino por completo."
+        });
+        return { synced: false, error: verificationError, workout: failed };
+      }
+
+      const confirmedWorkout = this.savePublishedWorkout({
+        ...normalized,
+        syncStatus: "synced",
+        syncMessage: "Plano e exercícios confirmados pelo Supabase.",
+        updatedAt: data.updated_at || normalized.updatedAt
+      });
+      return { synced: true, workout: confirmedWorkout, partial: false, confirmation: data };
+
+      /* Compatibilidade historica removida da execucao: a RPC acima substitui
+         as tres gravacoes independentes e garante rollback automatico.
       const { error: studentError } = await client
         .from(STUDENTS_TABLE)
         .upsert(toStudentRow(normalized, linkedStudent), { onConflict: "id" });
@@ -433,6 +457,7 @@ export const workoutRepository = {
           : "Sincronizado com o aluno."
       });
       return { synced: true, workout: syncedWorkout, partial: isMissingWorkoutScheduleColumn(planError) };
+      */
     } catch (error) {
       const failed = this.savePublishedWorkout({
         ...normalized,
@@ -443,11 +468,19 @@ export const workoutRepository = {
     }
   },
 
-  async fetchPublishedWorkouts() {
+  async fetchPublishedWorkouts({ studentId = "", coachId = "" } = {}) {
     const client = await getSupabase();
-    const localWorkouts = this.listPublishedWorkouts();
     const authContext = await authRepository.getAuthContext();
+    const resolvedCoachId = String(coachId || (authContext?.role === "coach" ? authContext.coachId : "")).trim();
+    const resolvedStudentId = String(studentId || "").trim();
+    const localWorkouts = this.listPublishedWorkouts().filter((workout) => (
+      (!resolvedCoachId || workout.coachId === resolvedCoachId)
+      && (!resolvedStudentId || workout.studentId === resolvedStudentId)
+    ));
     if (!client || !authContext?.user) return { synced: false, reason: "not-authenticated", workouts: localWorkouts };
+    if (authContext.role === "student" && (!resolvedCoachId || !resolvedStudentId)) {
+      return { synced: false, reason: "student-scope-required", workouts: [] };
+    }
 
     try {
       const runQuery = (selectColumns) => {
@@ -457,7 +490,8 @@ export const workoutRepository = {
         .eq("status", "published")
         .order("updated_at", { ascending: false });
 
-        if (authContext.role === "coach") query = query.eq("coach_id", authContext.coachId);
+        if (resolvedCoachId) query = query.eq("coach_id", resolvedCoachId);
+        if (resolvedStudentId) query = query.eq("student_id", resolvedStudentId);
         return query;
       };
 
@@ -469,7 +503,11 @@ export const workoutRepository = {
       if (error) return { synced: false, error, workouts: localWorkouts };
 
       const cloudWorkouts = (data || []).map(toAppWorkout);
-      writePublishedWorkouts(cloudWorkouts);
+      const unrelatedLocal = this.listPublishedWorkouts().filter((workout) => (
+        (resolvedCoachId && workout.coachId !== resolvedCoachId)
+        || (resolvedStudentId && workout.studentId !== resolvedStudentId)
+      ));
+      writePublishedWorkouts(mergeWorkoutLists(cloudWorkouts, unrelatedLocal));
       return { synced: true, workouts: cloudWorkouts };
     } catch (error) {
       return { synced: false, error, workouts: localWorkouts };
@@ -484,20 +522,43 @@ export const workoutRepository = {
     };
   },
 
-  async fetchLatestWorkoutForCurrentStudent(student) {
-    const result = await this.fetchPublishedWorkouts();
-    const workouts = result.workouts || [];
+  async fetchWorkoutsForCurrentStudent(student) {
+    if (!student?.id || !student?.coachId) return { synced: false, reason: "student-scope-required", workouts: [] };
+    const result = await this.fetchPublishedWorkouts({ studentId: student.id, coachId: student.coachId });
     const now = Date.now();
-    const eligibleWorkouts = workouts
+    const workouts = (result.workouts || [])
+      .filter((item) => item.status === "published")
       .filter((item) => new Date(item.startsAt || item.updatedAt || 0).getTime() <= now)
-      .sort((a, b) => (
-        new Date(b.startsAt || b.updatedAt || 0) - new Date(a.startsAt || a.updatedAt || 0)
-      ) || (
-        new Date(b.publishedAt || b.updatedAt || 0) - new Date(a.publishedAt || a.updatedAt || 0)
-      ));
-    const workout = eligibleWorkouts.find((item) => item.studentId === student?.id)
-      || eligibleWorkouts.find((item) => item.studentKey === student?.studentKey)
-      || null;
-    return { ...result, workout };
+      .sort((a, b) => a.code.localeCompare(b.code, "pt-BR", { numeric: true })
+        || a.title.localeCompare(b.title, "pt-BR")
+        || new Date(b.publishedAt || b.updatedAt || 0) - new Date(a.publishedAt || a.updatedAt || 0));
+    return { ...result, workouts };
+  },
+
+  async archivePublishedWorkout(workoutId) {
+    const client = await getSupabase();
+    const authContext = await authRepository.getAuthContext();
+    if (!client || !authRepository.canWriteAsCoach(authContext) || !workoutId) {
+      return { archived: false, reason: "not-authenticated-as-coach" };
+    }
+    try {
+      const { data, error } = await client
+        .from(PLANS_TABLE)
+        .update({ status: "archived", updated_at: new Date().toISOString() })
+        .eq("id", workoutId)
+        .eq("coach_id", authContext.coachId)
+        .select("id, status, updated_at")
+        .single();
+      if (error || data?.status !== "archived") return { archived: false, error };
+      writePublishedWorkouts(this.listPublishedWorkouts().filter((workout) => workout.id !== workoutId));
+      return { archived: true, workoutId, updatedAt: data.updated_at };
+    } catch (error) {
+      return { archived: false, error };
+    }
+  },
+
+  async fetchLatestWorkoutForCurrentStudent(student) {
+    const result = await this.fetchWorkoutsForCurrentStudent(student);
+    return { ...result, workout: result.workouts?.[0] || null };
   }
 };

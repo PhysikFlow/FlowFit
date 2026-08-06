@@ -8,23 +8,19 @@
     <title>FlowFit - Aluno</title>
     <link rel="icon" type="image/svg+xml" href="assets/icons/app-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="css/tokens.css?v=auth-flow-20260805" />
-    <link rel="stylesheet" href="css/components.css?v=auth-flow-20260805" />
-    <link rel="stylesheet" href="css/app.css?v=auth-flow-20260805" />
-    <script type="module" src="js/app.js?v=auth-flow-20260805b"></script>
+    <link rel="stylesheet" href="css/tokens.css?v=access-v2-20260805" />
+    <link rel="stylesheet" href="css/components.css?v=access-v2-20260805" />
+    <link rel="stylesheet" href="css/app.css?v=access-v2-20260805" />
+    <script type="module" src="js/app.js?v=access-v2-20260805"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title">
       <div class="onboarding__panel card">
         <span class="eyebrow"><span data-brand-name>FlowFit</span> aluno</span>
-        <h1 id="onboarding-title" data-auth-title>Entrar no app</h1>
-        <p data-auth-copy>Use o email cadastrado pelo seu personal.</p>
+        <h1 id="onboarding-title" data-auth-title>Acessar meus treinos</h1>
+        <p data-auth-copy>Google e email funcionam no primeiro acesso e nos próximos.</p>
 
-        <form class="onboarding-form" data-onboarding-form data-auth-mode="signin">
-          <div class="auth-mode-tabs auth-mode-tabs--student" aria-label="Escolha entrar ou ativar convite">
-            <button class="is-active" type="button" data-auth-mode-button="signin"><strong>Entrar</strong><small>Já tenho conta</small></button>
-            <button type="button" data-auth-mode-button="signup"><strong>Ativar convite</strong><small>Primeiro acesso</small></button>
-          </div>
+        <form class="onboarding-form" data-onboarding-form data-auth-mode="access">
           <div class="auth-social-block">
             <button class="button button--quiet button--block oauth-button" type="button" data-oauth-provider="google">
               <svg class="oauth-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -33,26 +29,16 @@
                 <path fill="#fbbc05" d="M6.4 13.8a6 6 0 0 1 0-3.6V7.6H3.1a10 10 0 0 0 0 8.8l3.3-2.6Z" />
                 <path fill="#ea4335" d="M12 6.1c1.5 0 2.8.5 3.8 1.5l2.8-2.8A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.9 5.6l3.3 2.6c.8-2.3 3-4.1 5.6-4.1Z" />
               </svg>
-              <span data-oauth-label>Entrar com Google</span>
+              <span data-oauth-label>Continuar com Google</span>
             </button>
           </div>
           <div class="auth-divider"><span>ou com email</span></div>
-          <label data-signup-only>
-            Nome
-            <input type="text" name="name" autocomplete="name" placeholder="Seu nome" />
-          </label>
           <label>
             Email
             <input type="email" name="email" autocomplete="email" placeholder="email cadastrado pelo personal" required />
           </label>
-          <label>
-            Senha
-            <input type="password" name="password" autocomplete="current-password" minlength="6" placeholder="Mínimo 6 caracteres" required />
-          </label>
-          <button class="auth-link-button" type="button" data-auth-reset>Esqueci minha senha</button>
-          <p class="form-status" data-auth-status>Entre para ver seu treino.</p>
-          <button class="button button--block" type="submit" data-auth-submit data-access-app>Entrar</button>
-          <p class="auth-secondary-action" data-auth-secondary>Primeiro acesso? Use “Ativar convite”.</p>
+          <p class="form-status" data-auth-status>Use o email informado ao personal ou abra o convite recebido.</p>
+          <button class="button button--block" type="submit" data-auth-submit data-access-app>Enviar link de acesso</button>
         </form>
       </div>
     </section>
@@ -117,6 +103,11 @@
           <h1 id="workout-title" data-workout-title>Nenhum treino publicado</h1>
           <p data-workout-focus>Aguardando prescrição do personal.</p>
         </header>
+
+        <section class="workout-picker" data-workout-picker hidden aria-label="Treinos disponíveis">
+          <div class="section-title section-title--compact"><h2>Meus treinos</h2><span data-available-workout-count>0 disponíveis</span></div>
+          <div class="workout-picker__list" data-workout-options></div>
+        </section>
 
         <article class="workout-summary card">
           <div class="workout-summary__top">
@@ -269,6 +260,11 @@
         </section>
 
         <div class="section-title"><h2>Personal</h2><span>acompanhamento</span></div>
+        <label class="coach-selector card" data-coach-selector-field hidden>
+          Personal ativo
+          <select data-coach-selector aria-label="Selecionar personal"></select>
+          <small>Ao trocar, o app carrega os treinos e o tema desse personal.</small>
+        </label>
         <article class="setting-row card">
           <span class="avatar coach-photo" data-coach-photo>PF</span>
           <div><strong data-coach-name>Personal</strong><small>Responsável pela prescrição e ajustes do plano.</small></div>

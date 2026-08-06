@@ -903,6 +903,12 @@ body.is-auth-locked {
   flex-wrap: wrap;
 }
 
+.workout-card__actions {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 7rem;
+}
+
 .workout-card p {
   display: -webkit-box;
   overflow: hidden;

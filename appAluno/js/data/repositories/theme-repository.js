@@ -4,7 +4,7 @@ import { LEGACY_REMOTE_THEME_KEY, REMOTE_THEME_KEY, normalizeBrandTheme } from "
 import { authRepository } from "./auth-repository.js";
 
 const TABLE = "brand_theme";
-const THEME_COLUMNS_BASE = "brand_name, tagline, accent, mode";
+const THEME_COLUMNS_BASE = "coach_id, brand_name, tagline, accent, mode, updated_at";
 const THEME_COLUMNS_EXTENDED = [
   THEME_COLUMNS_BASE,
   "background_color",
@@ -17,7 +17,11 @@ const THEME_COLUMNS_EXTENDED = [
 
 // O app usa camelCase; o banco usa snake_case. A conversao fica confinada aqui.
 // O cache local guarda o shape do app (camelCase), entao aceitamos ambos.
-const toAppTheme = (row) => row ? normalizeBrandTheme(row) : null;
+const toAppTheme = (row) => row ? {
+  ...normalizeBrandTheme(row),
+  coachId: String(row.coach_id || row.coachId || ""),
+  updatedAt: String(row.updated_at || row.updatedAt || "")
+} : null;
 
 const isMissingThemeColumn = (error) => {
   const message = String(error?.message || "");
@@ -27,52 +31,57 @@ const isMissingThemeColumn = (error) => {
     || /could not find .* column/i.test(message);
 };
 
-const readCachedTheme = () => {
-  const current = Platform.storage.get(REMOTE_THEME_KEY);
+const scopedThemeKey = (userId, coachId) => `${REMOTE_THEME_KEY}:${String(userId || "anonymous")}:${String(coachId || "none")}`;
+
+const readCachedTheme = ({ userId, coachId, allowLegacy = false } = {}) => {
+  const current = Platform.storage.get(scopedThemeKey(userId, coachId));
   if (current) return toAppTheme(current);
 
+  if (!allowLegacy) return null;
   const legacy = Platform.storage.get(LEGACY_REMOTE_THEME_KEY);
   if (!legacy) return null;
 
   const migrated = toAppTheme(legacy);
-  Platform.storage.set(REMOTE_THEME_KEY, migrated);
+  Platform.storage.set(scopedThemeKey(userId, coachId), migrated);
   return migrated;
 };
 
-const writeCachedTheme = (theme) => {
-  const normalized = normalizeBrandTheme(theme);
-  Platform.storage.set(REMOTE_THEME_KEY, normalized);
-  Platform.storage.set(LEGACY_REMOTE_THEME_KEY, normalized);
+const writeCachedTheme = (theme, { userId, coachId } = {}) => {
+  const normalized = toAppTheme({ ...theme, coach_id: coachId || theme?.coachId, updated_at: theme?.updatedAt });
+  Platform.storage.set(scopedThemeKey(userId, coachId), normalized);
   return normalized;
 };
 
-const clearCachedTheme = () => {
-  Platform.storage.remove(REMOTE_THEME_KEY);
-  Platform.storage.remove(LEGACY_REMOTE_THEME_KEY);
+const clearCachedTheme = ({ userId, coachId } = {}) => {
+  Platform.storage.remove(scopedThemeKey(userId, coachId));
 };
 
 export const themeRepository = {
   // Retorna o tema de marca branca (ou null). Busca na nuvem e cai no cache local.
-  async fetchBrandTheme() {
+  async fetchBrandTheme(coachId = "") {
     const client = await getSupabase();
     const authContext = await authRepository.getAuthContext();
+    const resolvedCoachId = String(coachId || (authContext?.role === "coach" ? authContext.coachId : "")).trim();
+    const cacheContext = {
+      userId: authContext?.user?.id || "anonymous",
+      coachId: resolvedCoachId
+    };
+    if (!resolvedCoachId) return null;
     if (client) {
       try {
         let query = client
           .from(TABLE)
           .select(THEME_COLUMNS_EXTENDED)
-          .limit(1);
-
-        if (authContext?.role === "coach") query = query.eq("coach_id", authContext.coachId);
+          .eq("coach_id", resolvedCoachId)
+          .maybeSingle();
 
         let { data, error } = await query;
         if (isMissingThemeColumn(error)) {
           query = client
             .from(TABLE)
             .select(THEME_COLUMNS_BASE)
-            .limit(1);
-
-          if (authContext?.role === "coach") query = query.eq("coach_id", authContext.coachId);
+            .eq("coach_id", resolvedCoachId)
+            .maybeSingle();
           const fallback = await query;
           data = fallback.data;
           error = fallback.error;
@@ -81,25 +90,25 @@ export const themeRepository = {
         if (!error) {
           if (row) {
             const theme = toAppTheme(row);
-            writeCachedTheme(theme);
+            writeCachedTheme(theme, cacheContext);
             return theme;
           }
 
           // Resposta online e vazia e autoritativa: nao reutiliza tema de outra
           // conta ou de um banco que acabou de ser limpo.
-          clearCachedTheme();
+          clearCachedTheme(cacheContext);
           return null;
         }
       } catch {
         // offline: usa o cache local abaixo
       }
     }
-    return readCachedTheme();
+    return readCachedTheme({ ...cacheContext, allowLegacy: authContext?.role === "coach" });
   },
 
   // Salva o tema localmente (otimista) e tenta sincronizar com a nuvem.
   async saveBrandTheme(theme) {
-    const normalized = writeCachedTheme(theme);
+    const normalized = normalizeBrandTheme(theme);
     const client = await getSupabase();
     const authContext = await authRepository.getAuthContext();
     if (!client || !authContext?.user || !authRepository.canWriteAsCoach(authContext)) {
@@ -121,9 +130,11 @@ export const themeRepository = {
         updated_at: new Date().toISOString()
       };
 
-      let { error } = await client
+      let { data, error } = await client
         .from(TABLE)
-        .upsert(payload, { onConflict: "coach_id" });
+        .upsert(payload, { onConflict: "coach_id" })
+        .select(THEME_COLUMNS_EXTENDED)
+        .single();
 
       let partial = false;
       if (isMissingThemeColumn(error)) {
@@ -136,12 +147,20 @@ export const themeRepository = {
           tagline: normalized.tagline,
           accent: normalized.accent,
           mode: normalized.mode,
-          updated_at: new Date().toISOString()
-          }, { onConflict: "coach_id" });
+          updated_at: payload.updated_at
+          }, { onConflict: "coach_id" })
+          .select(THEME_COLUMNS_BASE)
+          .single();
+        data = fallback.data;
         error = fallback.error;
       }
 
-      return { synced: !error, error, partial, theme: normalized };
+      if (error || !data) return { synced: false, error, partial, theme: normalized };
+      const confirmedTheme = writeCachedTheme(toAppTheme(data), {
+        userId: authContext.user.id,
+        coachId: authContext.coachId
+      });
+      return { synced: true, error: null, partial, theme: confirmedTheme, updatedAt: confirmedTheme.updatedAt };
     } catch (error) {
       return { synced: false, error, theme: normalized };
     }
