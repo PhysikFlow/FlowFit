@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="pt-BR" data-mode="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#7667ff" />
+    <meta name="description" content="Administração de personals da plataforma FlowFit." />
+    <title>FlowFit - Administração</title>
+    <link rel="icon" type="image/svg+xml" href="../appAluno/assets/icons/app-icon.svg" />
+    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=admin-v1-20260807" />
+    <link rel="stylesheet" href="../appAluno/css/components.css?v=admin-v1-20260807" />
+    <link rel="stylesheet" href="css/app.css?v=admin-v1-20260807" />
+    <script type="module" src="js/app.js?v=admin-v1-20260807"></script>
+  </head>
+  <body class="is-auth-locked">
+    <section class="auth-gate" data-auth-gate aria-labelledby="admin-auth-title">
+      <form class="auth-card card" data-auth-form>
+        <span class="eyebrow">Área restrita</span>
+        <h1 id="admin-auth-title">Administração FlowFit</h1>
+        <p>Entre com uma conta previamente autorizada no Supabase.</p>
+        <label>Email <input type="email" name="email" autocomplete="email" required /></label>
+        <label>Senha <input type="password" name="password" autocomplete="current-password" required /></label>
+        <p class="form-status" data-auth-status>Somente administradores cadastrados podem continuar.</p>
+        <button class="button button--block" type="submit" data-auth-submit>Entrar</button>
+        <div class="auth-divider"><span>ou</span></div>
+        <button class="button button--quiet button--block" type="button" data-oauth-provider="google">Continuar com Google</button>
+        <button class="auth-link-button" type="button" data-auth-gate-sign-out hidden>Sair desta conta</button>
+      </form>
+    </section>
+
+    <aside class="admin-sidebar" aria-label="Navegação administrativa">
+      <div class="admin-brand">
+        <span class="surface-icon" data-icon="database"></span>
+        <div><strong>FlowFit</strong><small>Administração</small></div>
+      </div>
+      <nav>
+        <a class="is-active" href="#personals"><span data-icon="users"></span>Personals</a>
+      </nav>
+      <small class="admin-sidebar__foot">Controle manual de acesso</small>
+    </aside>
+
+    <main class="admin-main">
+      <header class="admin-topbar">
+        <div>
+          <span class="eyebrow">Operação da plataforma</span>
+          <h1>Personals</h1>
+        </div>
+        <div class="topbar-actions">
+          <span class="session-chip" data-auth-user></span>
+          <button class="button button--quiet" type="button" data-refresh>Atualizar</button>
+          <button class="button button--quiet" type="button" data-sign-out>Sair</button>
+        </div>
+      </header>
+
+      <section class="overview-grid" aria-label="Visão geral dos acessos">
+        <article class="metric-card card"><span>Ativos</span><strong data-count="active">0</strong><small>pagamento em dia</small></article>
+        <article class="metric-card card"><span>Em teste</span><strong data-count="trial">0</strong><small>período de avaliação</small></article>
+        <article class="metric-card card"><span>Atrasados</span><strong data-count="past_due">0</strong><small>uso liberado com aviso</small></article>
+        <article class="metric-card card"><span>Suspensos</span><strong data-count="suspended">0</strong><small>acesso bloqueado</small></article>
+        <article class="metric-card metric-card--quiet card"><span>Pendentes</span><strong data-count="pending">0</strong><small>aguardam aprovação</small></article>
+        <article class="metric-card metric-card--quiet card"><span>Cancelados</span><strong data-count="cancelled">0</strong><small>contas encerradas</small></article>
+      </section>
+
+      <section class="data-panel card" id="personals">
+        <header class="panel-header">
+          <div><h2>Lista de personals</h2><p><span data-list-count>0</span> registros encontrados</p></div>
+          <form class="filters" data-filter-form role="search">
+            <label class="search-field"><span class="sr-only">Pesquisar</span><input type="search" name="search" placeholder="Nome ou email" autocomplete="off" /></label>
+            <label><span class="sr-only">Filtrar por status</span>
+              <select name="status">
+                <option value="">Todos os status</option>
+                <option value="pending">Aguardando aprovação</option>
+                <option value="trial">Em teste</option>
+                <option value="active">Ativo</option>
+                <option value="past_due">Pagamento atrasado</option>
+                <option value="suspended">Suspenso</option>
+                <option value="cancelled">Cancelado</option>
+              </select>
+            </label>
+          </form>
+        </header>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Personal</th><th>Cadastro</th><th>Alunos</th><th>Plano</th><th>Vencimento</th><th>Status</th><th><span class="sr-only">Abrir</span></th></tr></thead>
+            <tbody data-coach-rows><tr><td colspan="7" class="table-empty">Carregando personals...</td></tr></tbody>
+          </table>
+        </div>
+        <section class="coach-cards" data-coach-cards aria-label="Personals"></section>
+        <p class="form-status list-status" data-list-status aria-live="polite"></p>
+      </section>
+    </main>
+
+    <div class="drawer-backdrop" data-drawer-backdrop hidden></div>
+    <aside class="detail-drawer" data-detail-drawer aria-hidden="true" aria-labelledby="detail-title">
+      <header class="drawer-header">
+        <div><span class="eyebrow">Detalhes do personal</span><h2 id="detail-title" data-detail-name>Personal</h2><p data-detail-email></p></div>
+        <button class="icon-button" type="button" data-close-drawer aria-label="Fechar">×</button>
+      </header>
+
+      <div class="drawer-body">
+        <section class="detail-summary" data-detail-summary></section>
+
+        <form class="detail-form" data-detail-form>
+          <input type="hidden" name="coachId" />
+          <div class="form-grid">
+            <label>Status
+              <select name="status" required>
+                <option value="pending">Aguardando aprovação</option>
+                <option value="trial">Em teste</option>
+                <option value="active">Ativo</option>
+                <option value="past_due">Pagamento atrasado</option>
+                <option value="suspended">Suspenso</option>
+                <option value="cancelled">Cancelado</option>
+              </select>
+            </label>
+            <label>Plano <input name="plan" maxlength="80" placeholder="Plano piloto" required /></label>
+            <label class="form-span">Vencimento <input type="datetime-local" name="accessExpiresAt" /></label>
+            <label class="form-span">Mensagem exibida ao personal
+              <textarea name="statusNote" maxlength="500" rows="3" placeholder="Ex.: Entre em contato para regularizar o pagamento."></textarea>
+            </label>
+            <label class="form-span">Observações administrativas
+              <textarea name="adminNotes" maxlength="5000" rows="5" placeholder="Visível somente para administradores."></textarea>
+            </label>
+          </div>
+          <p class="form-status" data-detail-status>As alterações ficam registradas no histórico.</p>
+          <button class="button button--block" type="submit">Salvar alterações</button>
+        </form>
+
+        <section class="quick-actions" aria-label="Ações rápidas">
+          <h3>Ações rápidas</h3>
+          <div>
+            <button class="button button--quiet" type="button" data-status-action="trial">Aprovar para teste</button>
+            <button class="button button--quiet" type="button" data-status-action="active">Ativar</button>
+            <button class="button button--warning" type="button" data-status-action="suspended">Suspender</button>
+            <button class="button button--danger" type="button" data-status-action="cancelled">Cancelar</button>
+          </div>
+        </section>
+
+        <section class="history-panel">
+          <h3>Histórico de alterações</h3>
+          <div data-history-list><p class="empty-copy">Nenhuma alteração administrativa registrada.</p></div>
+        </section>
+      </div>
+    </aside>
+
+    <div class="toast" role="status" aria-live="polite" data-toast></div>
+  </body>
+</html>

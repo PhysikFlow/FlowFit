@@ -93,3 +93,35 @@ select
   updated_at as last_theme_update
 from public.brand_theme
 order by updated_at desc;
+
+-- Administração de personals. As consultas abaixo funcionam depois de
+-- supabase/admin-console.sql e ajudam a conferir o primeiro acesso.
+select
+  p.coach_status,
+  count(*) as coach_count
+from public.profiles p
+where p.role = 'coach'
+group by p.coach_status
+order by p.coach_status;
+
+select
+  u.email as admin_email,
+  pa.user_id,
+  pa.created_at
+from public.platform_admins pa
+join auth.users u on u.id = pa.user_id
+order by pa.created_at;
+
+select
+  p.user_id as coach_id,
+  p.name,
+  u.email,
+  p.coach_status,
+  coalesce(cas.plan, 'Plano piloto') as plan,
+  p.coach_trial_ends_at as access_expires_at,
+  cas.updated_at as last_admin_update
+from public.profiles p
+join auth.users u on u.id = p.user_id
+left join public.coach_admin_settings cas on cas.coach_id = p.user_id
+where p.role = 'coach'
+order by p.created_at desc;

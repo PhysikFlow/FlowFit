@@ -146,10 +146,21 @@ const buildCoachAccess = (profile) => {
   }
 
   const status = normalizeCoachStatus(profile.coachStatus);
-  if (COACH_ALLOWED_STATUSES.has(status)) return { ok: true, status };
+  const statusNote = normalizeText(profile.coachStatusNote);
+  if (COACH_ALLOWED_STATUSES.has(status)) {
+    const defaultMessage = status === COACH_STATUS.PAST_DUE
+      ? "Seu pagamento está pendente. O uso continua liberado enquanto você regulariza o acesso."
+      : "";
+    return {
+      ok: true,
+      status,
+      warning: status === COACH_STATUS.PAST_DUE,
+      message: statusNote || defaultMessage
+    };
+  }
 
   const messages = {
-    [COACH_STATUS.PENDING]: "Seu cadastro de personal está aguardando liberação.",
+    [COACH_STATUS.PENDING]: "Seu cadastro de personal está aguardando aprovação.",
     [COACH_STATUS.SUSPENDED]: "Seu acesso de personal está suspenso.",
     [COACH_STATUS.CANCELLED]: "Esta conta de personal foi cancelada."
   };
@@ -158,7 +169,7 @@ const buildCoachAccess = (profile) => {
     ok: false,
     reason: "coach-status-blocked",
     status,
-    message: messages[status] || "Seu acesso de personal não está ativo."
+    message: statusNote || messages[status] || "Seu acesso de personal não está ativo."
   };
 };
 

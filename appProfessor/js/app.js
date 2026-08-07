@@ -49,6 +49,8 @@ const authSubmit = document.querySelector("[data-auth-submit]");
 const authSecondary = document.querySelector("[data-auth-secondary]");
 const authUser = document.querySelector("[data-auth-user]");
 const authGateSignOut = document.querySelector("[data-auth-gate-sign-out]");
+const coachAccessNotice = document.querySelector("[data-coach-access-notice]");
+const coachAccessMessage = document.querySelector("[data-coach-access-message]");
 const coachProfileForm = document.querySelector("[data-coach-profile-form]");
 const coachProfileStatus = document.querySelector("[data-coach-profile-status]");
 const coachNameInput = document.querySelector("[data-coach-name-input]");
@@ -1712,7 +1714,7 @@ authForm?.addEventListener("submit", async (event) => {
   setAuthStatus(authAction === "signup" ? "Criando conta de professor..." : "Entrando...", "");
 
   const result = authAction === "signup"
-    ? await authRepository.signUp({ ...data, role: "coach", redirectTo: getAuthRedirectUrl(), coachStatus: authRepository.coachStatus.TRIAL })
+    ? await authRepository.signUp({ ...data, role: "coach", redirectTo: getAuthRedirectUrl(), coachStatus: authRepository.coachStatus.PENDING })
     : await authRepository.signIn({ ...data, role: "coach" });
 
   if (!result.ok) {
@@ -1742,6 +1744,7 @@ const signOutProfessor = async () => {
   syncAuthMode("signin");
   setAuthStatus("Sessão encerrada.", "");
   setAuthGateSignOutVisible(false);
+  if (coachAccessNotice) coachAccessNotice.hidden = true;
 };
 
 document.querySelector("[data-sign-out]")?.addEventListener("click", signOutProfessor);
@@ -1759,7 +1762,7 @@ const startAuthenticatedPanel = async () => {
   const profileResult = await authRepository.ensureProfile({
     role: "coach",
     name: session.user.user_metadata?.display_name || session.user.email,
-    coachStatus: authRepository.coachStatus.TRIAL
+    coachStatus: authRepository.coachStatus.PENDING
   });
   if (profileResult.roleMismatch) {
     await authRepository.signOut();
@@ -1788,6 +1791,8 @@ const startAuthenticatedPanel = async () => {
 
   setAuthLocked(false);
   setAuthGateSignOutVisible(false);
+  if (coachAccessNotice) coachAccessNotice.hidden = !coachAccess.warning;
+  if (coachAccessMessage) coachAccessMessage.textContent = coachAccess.message || "Regularize o acesso para evitar uma suspensão.";
   setText("[data-auth-user]", authContext.email);
   if (authUser) authUser.title = authContext.email;
   students = [];

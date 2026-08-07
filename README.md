@@ -8,6 +8,7 @@ Base web, mobile-first e sem dependencias de framework para um produto de treino
 - `appAluno/js/data/repositories/`: Auth, alunos, treinos e marca branca via Supabase, com cache local/offline.
 - `appAluno/js/core/`: adaptadores de plataforma, tema e estado local.
 - `appProfessor/`: painel do personal para alunos, treinos e marca branca.
+- `admin/`: painel restrito para aprovação, planos e controle de acesso dos personals.
 - `supabase/schema.sql`: schema Supabase com Auth/RLS para professor e aluno.
 - `PLANEJAMENTO.md`: arquitetura, fases e criterios de evolucao.
 
@@ -35,6 +36,7 @@ O projeto roda em GitHub Pages sem backend proprio. Por isso, login e autorizaca
    - adicione em Redirect URLs:
      - `https://physikflow.github.io/FlowFit/appProfessor/`
      - `https://physikflow.github.io/FlowFit/appAluno/`
+     - `https://physikflow.github.io/FlowFit/admin/`
      - opcional durante testes: `https://physikflow.github.io/FlowFit/**`
 3. Em `appAluno/js/config.js`, confira `SUPABASE_URL` e `SUPABASE_ANON_KEY`.
 4. Em Authentication > Providers > Email, mantenha o provedor habilitado; o template de Magic Link deve usar a URL de confirmação do Supabase.
@@ -79,6 +81,31 @@ Depois abra:
 3. Não rode `supabase/reset-development-data.sql`; ele continua reservado para uma limpeza deliberada do ambiente de desenvolvimento.
 
 A migração mantém alunos, contas, temas, treinos e históricos existentes. Ela adiciona o acesso direto por email, preserva a RPC antiga de convite por compatibilidade e cria a publicação transacional de treinos.
+
+## Painel administrativo
+
+Em uma instalação existente, rode `supabase/admin-console.sql` depois de `supabase/update-student-access.sql`. A migração não altera o status dos personals já cadastrados; apenas faz novos cadastros começarem como `pending`.
+
+Crie ou autentique primeiro a conta que será administradora. Depois execute uma única vez no SQL Editor, trocando o email:
+
+```sql
+insert into public.platform_admins (user_id, created_by)
+select id, id
+from auth.users
+where lower(email) = lower('seu@email.com')
+on conflict (user_id) do nothing;
+```
+
+Abra `/admin/` e entre com essa mesma conta. Não existe cadastro de administrador pelo frontend. A lista, os detalhes e as alterações usam RPCs `security definer` que verificam `platform_admins`; as tabelas administrativas também têm RLS e não aceitam escrita direta do navegador.
+
+O campo de vencimento reutiliza `profiles.coach_trial_ends_at` como data geral de acesso nesta fase manual. O motivo/mensagem ao personal reutiliza `profiles.coach_status_note`. Observações internas ficam separadas em `coach_admin_settings` e nunca entram nas consultas comuns do personal.
+
+Comportamento dos status:
+
+- `pending`: bloqueia e informa que o cadastro aguarda aprovação;
+- `trial` e `active`: liberam o painel normalmente;
+- `past_due`: libera o painel com aviso persistente de pagamento pendente;
+- `suspended` e `cancelled`: bloqueiam o painel e exibem a mensagem definida pela administração.
 
 ## Publicacao de treinos
 
