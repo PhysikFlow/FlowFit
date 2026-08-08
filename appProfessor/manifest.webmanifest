@@ -1,0 +1,20 @@
+{
+  "name": "FlowFit Professor",
+  "short_name": "FlowFit Pro",
+  "description": "Painel do personal para gerenciar alunos, treinos e marca do aplicativo.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#090b10",
+  "theme_color": "#7667ff",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "../appAluno/assets/icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

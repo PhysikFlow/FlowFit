@@ -12,6 +12,7 @@ const navItems = [...document.querySelectorAll("[data-nav]")];
 const jumpButtons = [...document.querySelectorAll("[data-nav-jump]")];
 const title = document.querySelector("[data-page-title]");
 const toast = document.querySelector("[data-toast]");
+const installAppButton = document.querySelector("[data-install-app]");
 const brandInput = document.querySelector("[data-brand-input]");
 const taglineInput = document.querySelector("[data-tagline-input]");
 const accentInput = document.querySelector("[data-accent-input]");
@@ -88,6 +89,7 @@ let dataStatus = "Local";
 let authContext = null;
 let authAction = "signin";
 let editingWorkoutId = "";
+let deferredInstallPrompt = null;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -1826,6 +1828,29 @@ const boot = async () => {
   window.FlowFitProfessorReady = true;
   await startAuthenticatedPanel();
 };
+
+if (Platform.canUseServiceWorker() && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+}
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  if (installAppButton) installAppButton.hidden = false;
+});
+
+installAppButton?.addEventListener("click", async () => {
+  if (!deferredInstallPrompt) return;
+  installAppButton.hidden = true;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice.catch(() => null);
+  deferredInstallPrompt = null;
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  if (installAppButton) installAppButton.hidden = true;
+});
 
 boot().catch((error) => {
   console.error("Falha ao iniciar appProfessor", error);

@@ -5,12 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#7667ff" />
     <meta name="description" content="Painel do personal para gerenciar alunos, treinos e marca do aplicativo." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="FlowFit Professor" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>FlowFit - Professor</title>
     <link rel="icon" type="image/svg+xml" href="../appAluno/assets/icons/app-icon.svg" />
-    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=access-v2-20260805" />
-    <link rel="stylesheet" href="../appAluno/css/components.css?v=access-v2-20260805" />
-    <link rel="stylesheet" href="css/app.css?v=access-v2-20260805" />
-    <script type="module" src="js/app.js?v=access-v2-20260805"></script>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=professor-mobile-20260808" />
+    <link rel="stylesheet" href="../appAluno/css/components.css?v=professor-mobile-20260808" />
+    <link rel="stylesheet" href="css/app.css?v=professor-mobile-20260808" />
+    <script type="module" src="js/app.js?v=professor-mobile-20260808"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title">
@@ -83,6 +88,7 @@
           <span class="session-chip" data-auth-user></span>
           <button class="button button--quiet" type="button" data-nav-jump="students">Adicionar aluno</button>
           <button class="button" type="button" data-nav-jump="workouts" data-focus-workout-form>Novo treino</button>
+          <button class="button button--quiet" type="button" data-install-app hidden>Instalar</button>
           <button class="button button--quiet" type="button" data-sign-out>Sair</button>
         </div>
       </header>
