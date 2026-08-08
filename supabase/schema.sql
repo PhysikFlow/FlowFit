@@ -26,7 +26,7 @@ create table if not exists public.profiles (
   phone      text not null default '',
   whatsapp   text not null default '',
   cref       text not null default '',
-  coach_status text not null default 'trial',
+  coach_status text not null default 'pending',
   coach_trial_ends_at timestamptz,
   coach_status_note text not null default '',
   created_at timestamptz not null default now(),
@@ -170,7 +170,7 @@ alter table public.profiles
   add column if not exists phone text not null default '',
   add column if not exists whatsapp text not null default '',
   add column if not exists cref text not null default '',
-  add column if not exists coach_status text not null default 'trial',
+  add column if not exists coach_status text not null default 'pending',
   add column if not exists coach_trial_ends_at timestamptz,
   add column if not exists coach_status_note text not null default '';
 
@@ -744,7 +744,7 @@ create policy "profiles_insert_own"
   with check (
     (select auth.uid()) = user_id
     and role = 'coach'
-    and coach_status = 'trial'
+    and coach_status = 'pending'
   );
 
 create policy "profiles_update_own"
@@ -1248,7 +1248,7 @@ create policy "workout_feedback_delete_coach"
     )
   );
 
-+-- ============================================================================
+-- ============================================================================
 -- FlowFit: painel administrativo de personals (migração incremental)
 --
 -- Pode ser executada mais de uma vez. Não apaga nem altera o status de contas

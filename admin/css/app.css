@@ -23,6 +23,7 @@ body {
 
 body.is-auth-locked { overflow: hidden; }
 body * { min-width: 0; }
+[hidden] { display: none !important; }
 
 .sr-only {
   position: absolute;
