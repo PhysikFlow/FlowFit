@@ -201,7 +201,7 @@ export const studentRepository = {
     const localStudents = this.listStudents();
     const authContext = await authRepository.getAuthContext();
     const client = await getSupabase();
-    if (!client || !authContext?.user || authContext.role !== "coach") {
+    if (!client || !authContext?.user || !authRepository.canWriteAsCoach(authContext)) {
       return { synced: false, reason: "not-authenticated-as-coach", students: localStudents };
     }
 

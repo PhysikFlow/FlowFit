@@ -270,7 +270,7 @@ export const sessionRepository = {
     const client = await getSupabase();
     const authContext = await authRepository.getAuthContext();
     const localSessions = this.listCachedSessions();
-    if (!client || !authContext?.user || authContext.role !== "coach") {
+    if (!client || !authContext?.user || !authRepository.canWriteAsCoach(authContext)) {
       return { synced: false, reason: "not-authenticated-as-coach", sessions: localSessions };
     }
 

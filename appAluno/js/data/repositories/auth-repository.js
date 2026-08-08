@@ -38,6 +38,11 @@ export const COACH_STATUS = Object.freeze({
 
 const VALID_ROLES = new Set(Object.values(AUTH_ROLES));
 const VALID_COACH_STATUSES = new Set(Object.values(COACH_STATUS));
+const ROLE_RANK = Object.freeze({
+  [AUTH_ROLES.STUDENT]: 1,
+  [AUTH_ROLES.COACH]: 2,
+  [AUTH_ROLES.ADMIN]: 3
+});
 const COACH_ALLOWED_STATUSES = new Set([
   COACH_STATUS.TRIAL,
   COACH_STATUS.ACTIVE,
@@ -61,6 +66,21 @@ const normalizeRole = (value, fallback = AUTH_ROLES.STUDENT) => {
 const normalizeCoachStatus = (value, fallback = COACH_STATUS.TRIAL) => {
   const status = normalizeText(value).toLowerCase();
   return VALID_COACH_STATUSES.has(status) ? status : fallback;
+};
+
+const roleRank = (role) => ROLE_RANK[normalizeRole(role, "")] || 0;
+
+const roleAtLeast = (actualRole, requiredRole) => {
+  const actualRank = roleRank(actualRole);
+  const requiredRank = roleRank(requiredRole);
+  return actualRank > 0 && requiredRank > 0 && actualRank >= requiredRank;
+};
+
+const roleLabel = (role) => {
+  if (role === AUTH_ROLES.ADMIN) return "administrador";
+  if (role === AUTH_ROLES.COACH) return "professor";
+  if (role === AUTH_ROLES.STUDENT) return "aluno";
+  return "acesso";
 };
 
 const normalizeRedirectUrl = (value) => {
@@ -137,7 +157,17 @@ const buildCoachAccess = (profile) => {
     };
   }
 
-  if (profile.role !== AUTH_ROLES.COACH) {
+  if (profile.role === AUTH_ROLES.ADMIN) {
+    return {
+      ok: true,
+      status: COACH_STATUS.ACTIVE,
+      admin: true,
+      warning: false,
+      message: ""
+    };
+  }
+
+  if (!roleAtLeast(profile.role, AUTH_ROLES.COACH)) {
     return {
       ok: false,
       reason: "wrong-role",
@@ -185,8 +215,29 @@ export const authRepository = {
     return buildCoachAccess(profile);
   },
 
+  canAccessRole(profileOrContext, requiredRole) {
+    const role = profileOrContext?.role || profileOrContext?.profile?.role || "";
+    return roleAtLeast(role, requiredRole);
+  },
+
+  canAccessAdmin(profileOrContext) {
+    return this.canAccessRole(profileOrContext, AUTH_ROLES.ADMIN);
+  },
+
+  canAccessCoach(profileOrContext) {
+    return this.canAccessRole(profileOrContext, AUTH_ROLES.COACH);
+  },
+
+  canAccessStudent(profileOrContext) {
+    return this.canAccessRole(profileOrContext, AUTH_ROLES.STUDENT);
+  },
+
+  getRoleLabel(role) {
+    return roleLabel(role);
+  },
+
   canWriteAsCoach(authContext) {
-    return authContext?.role === AUTH_ROLES.COACH && buildCoachAccess(authContext.profile).ok;
+    return Boolean(authContext?.user && buildCoachAccess(authContext.profile).ok);
   },
 
   async getClient() {
@@ -255,7 +306,15 @@ export const authRepository = {
     const existing = await this.getProfile();
 
     if (existing) {
-      if (existing.role !== safeRole) return { synced: true, profile: existing, roleMismatch: true };
+      if (!roleAtLeast(existing.role, safeRole)) {
+        return {
+          synced: true,
+          profile: existing,
+          roleMismatch: true,
+          existingRole: existing.role,
+          requestedRole: safeRole
+        };
+      }
       return { synced: true, profile: existing };
     }
 
@@ -365,7 +424,10 @@ export const authRepository = {
     const profileResult = await this.ensureProfile({ role, name, createIfMissing: createProfile });
     if (profileResult.roleMismatch) {
       await client.auth.signOut();
-      return { ok: false, message: "Esta conta já existe com outro tipo de acesso." };
+      return {
+        ok: false,
+        message: `Esta conta já existe como ${roleLabel(profileResult.existingRole)} e não pode acessar como ${roleLabel(profileResult.requestedRole)}.`
+      };
     }
 
     return { ok: true, session: data.session, user: data.user, profile: profileResult.profile };
@@ -405,7 +467,10 @@ export const authRepository = {
     const profileResult = await this.ensureProfile({ role: safeRole, name: safeName, coachStatus });
     if (profileResult.roleMismatch) {
       await client.auth.signOut();
-      return { ok: false, message: "Esta conta já existe com outro tipo de acesso." };
+      return {
+        ok: false,
+        message: `Esta conta já existe como ${roleLabel(profileResult.existingRole)} e não pode acessar como ${roleLabel(profileResult.requestedRole)}.`
+      };
     }
 
     return { ok: true, session, user: data.user, profile: profileResult.profile };

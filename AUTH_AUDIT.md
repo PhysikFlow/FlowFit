@@ -6,6 +6,41 @@
 
 ---
 
+## Atualização de implementação — 2026-08-08
+
+Regra adotada para a próxima fase:
+
+- A identidade de autenticação deve ser única por pessoa/email no Supabase Auth sempre que possível.
+- `profiles.role` passa a representar o **maior papel** da conta, não um app exclusivo:
+  - `admin` > `coach` > `student`.
+  - `coach` continua sendo o valor interno para professor/personal por compatibilidade.
+- Matriz de acesso:
+  - `admin`: pode abrir Admin, Professor e Aluno.
+  - `coach`: pode abrir Professor e Aluno.
+  - `student`: pode abrir somente Aluno.
+- O método de login não define papel. Google, link mágico e email/senha apenas autenticam a identidade.
+- O frontend não promove nem rebaixa papel automaticamente:
+  - uma conta `admin` pode entrar em telas que exigem `coach` ou `student`;
+  - uma conta `coach` pode entrar em telas que exigem `student`;
+  - uma conta `student` não vira `coach` por abrir o painel do professor.
+- A área do aluno continua protegida por vínculo real:
+  - entrar no app do aluno não libera dados de qualquer aluno;
+  - treinos/dados só aparecem se houver `students.student_user_id` ou convite/email válido vinculado.
+- O backend recebeu funções de autorização reutilizáveis:
+  - `role_rank(role)`;
+  - `current_profile_role()`;
+  - `has_role_at_least(required_role)`;
+  - `can_operate_as_coach()`.
+- Policies e RPCs de escrita do professor passam a aceitar `admin` operando como professor, mas ainda exigem `coach_id = auth.uid()::text` para operações comuns. A administração global continua concentrada nas funções do `/admin`.
+- `/admin` reconhece tanto a allowlist `platform_admins` quanto `profiles.role = 'admin'`.
+- Foi criado `supabase/diagnose-auth-roles.sql` para auditar usuários, roles, admins e vínculos antes de qualquer limpeza.
+
+Ponto operacional importante:
+
+- O SQL de bootstrap do primeiro administrador promove o email configurado para `profiles.role = 'admin'` e também mantém a linha em `platform_admins`. Isso não apaga dados, mas altera a permissão dessa conta quando o SQL for executado no Supabase.
+
+---
+
 ## Atualização de implementação — 2026-08-05
 
 Regra adotada para o piloto:

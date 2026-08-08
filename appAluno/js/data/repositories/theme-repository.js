@@ -61,7 +61,7 @@ export const themeRepository = {
   async fetchBrandTheme(coachId = "") {
     const client = await getSupabase();
     const authContext = await authRepository.getAuthContext();
-    const resolvedCoachId = String(coachId || (authContext?.role === "coach" ? authContext.coachId : "")).trim();
+    const resolvedCoachId = String(coachId || (authRepository.canWriteAsCoach(authContext) ? authContext.coachId : "")).trim();
     const cacheContext = {
       userId: authContext?.user?.id || "anonymous",
       coachId: resolvedCoachId
@@ -103,7 +103,7 @@ export const themeRepository = {
         // offline: usa o cache local abaixo
       }
     }
-    return readCachedTheme({ ...cacheContext, allowLegacy: authContext?.role === "coach" });
+    return readCachedTheme({ ...cacheContext, allowLegacy: authRepository.canWriteAsCoach(authContext) });
   },
 
   // Salva o tema localmente (otimista) e tenta sincronizar com a nuvem.

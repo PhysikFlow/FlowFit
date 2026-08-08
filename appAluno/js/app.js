@@ -757,7 +757,7 @@ const startAuthenticatedApp = async () => {
   }
 
   const authContextBeforeClaim = await authRepository.getAuthContext();
-  if (authContextBeforeClaim?.role && authContextBeforeClaim.role !== "student") {
+  if (authContextBeforeClaim?.role && !authRepository.canAccessStudent(authContextBeforeClaim)) {
     await authRepository.signOut();
     Store.resetOnboarding();
     currentStudent = emptyStudent;
@@ -765,7 +765,7 @@ const startAuthenticatedApp = async () => {
     renderAll();
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
-    setAuthStatus("Esta conta não é de aluno. Use o painel do professor ou entre com outro email.", "warning");
+    setAuthStatus("Esta conta não tem permissão para acessar a área do aluno.", "warning");
     return false;
   }
 
@@ -827,7 +827,7 @@ const startAuthenticatedApp = async () => {
       }
     };
   }
-  if (authContext?.role !== "student") {
+  if (!authRepository.canAccessStudent(authContext)) {
     await authRepository.signOut();
     Store.resetOnboarding();
     currentStudent = emptyStudent;
@@ -835,7 +835,7 @@ const startAuthenticatedApp = async () => {
     renderAll();
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
-    setAuthStatus("A conta autenticada possui outro tipo de acesso. Use o email do convite ou entre com outra conta.", "warning");
+    setAuthStatus("A conta autenticada não tem permissão para acessar a área do aluno.", "warning");
     return false;
   }
 

@@ -3,6 +3,9 @@
 # Wrapper Qt/QML e builds nativos ficam fora deste repositorio web.
 qtWebView/
 
+# Cache local do Qt Maintenance Tool/installer.
+.qt-installer-cache/
+
 # Dependencias e saidas comuns de projetos web.
 node_modules/
 dist/
@@ -49,6 +52,10 @@ desktop.ini
 .vscode/
 .qtc_clangd/
 .qt/
+*.user
+.qmake.stash
+CMakeCache.txt
+CMakeFiles/
 
 # Temporarios.
 *.tmp

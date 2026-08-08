@@ -471,14 +471,14 @@ export const workoutRepository = {
   async fetchPublishedWorkouts({ studentId = "", coachId = "" } = {}) {
     const client = await getSupabase();
     const authContext = await authRepository.getAuthContext();
-    const resolvedCoachId = String(coachId || (authContext?.role === "coach" ? authContext.coachId : "")).trim();
+    const resolvedCoachId = String(coachId || (authRepository.canWriteAsCoach(authContext) ? authContext.coachId : "")).trim();
     const resolvedStudentId = String(studentId || "").trim();
     const localWorkouts = this.listPublishedWorkouts().filter((workout) => (
       (!resolvedCoachId || workout.coachId === resolvedCoachId)
       && (!resolvedStudentId || workout.studentId === resolvedStudentId)
     ));
     if (!client || !authContext?.user) return { synced: false, reason: "not-authenticated", workouts: localWorkouts };
-    if (authContext.role === "student" && (!resolvedCoachId || !resolvedStudentId)) {
+    if (authRepository.canAccessStudent(authContext) && !authRepository.canAccessCoach(authContext) && (!resolvedCoachId || !resolvedStudentId)) {
       return { synced: false, reason: "student-scope-required", workouts: [] };
     }
 

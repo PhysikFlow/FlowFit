@@ -8,8 +8,9 @@
 --    - Redirect URLs: URL do GitHub Pages e subpastas appAluno/appProfessor
 --
 -- Arquitetura:
--- - profiles.role = 'admin', 'coach' ou 'student'
+-- - profiles.role guarda o maior papel da identidade: admin > coach > student
 -- - profiles.coach_status controla se o personal pode operar o painel
+-- - "coach" é o valor interno usado para o papel de professor/personal
 -- - professor/personal grava dados com coach_id = auth.uid()::text
 -- - aluno ativa acesso somente por token de convite e grava students.student_user_id
 -- - tabelas publicas ficam com RLS habilitado; anon nao acessa dados reais
@@ -279,6 +280,70 @@ create index if not exists workout_set_logs_session_position_idx
 create index if not exists workout_feedback_session_idx
   on public.workout_feedback (session_id);
 
+-- Hierarquia de acesso:
+-- admin > coach/professor > student/aluno.
+-- A role salva em profiles representa o maior acesso daquela identidade.
+create or replace function public.role_rank(p_role text)
+returns integer
+language sql
+immutable
+set search_path = pg_catalog, public
+as $$
+  select case lower(trim(coalesce(p_role, '')))
+    when 'admin' then 3
+    when 'coach' then 2
+    when 'student' then 1
+    else 0
+  end;
+$$;
+
+create or replace function public.current_profile_role()
+returns text
+language sql
+stable
+security definer
+set search_path = pg_catalog, public
+as $$
+  select p.role
+  from public.profiles p
+  where p.user_id = auth.uid()
+  limit 1;
+$$;
+
+create or replace function public.has_role_at_least(p_required_role text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public
+as $$
+  select auth.uid() is not null
+     and public.role_rank(public.current_profile_role()) >= public.role_rank(p_required_role)
+     and public.role_rank(p_required_role) > 0;
+$$;
+
+create or replace function public.can_operate_as_coach()
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public
+as $$
+  select auth.uid() is not null
+     and exists (
+       select 1
+       from public.profiles p
+       where p.user_id = auth.uid()
+         and (
+           p.role = 'admin'
+           or (
+             p.role = 'coach'
+             and p.coach_status in ('trial', 'active', 'past_due')
+           )
+         )
+     );
+$$;
+
 -- O token pode ser validado antes do cadastro sem expor os dados do aluno.
 create or replace function public.validate_student_invite(p_token text, p_email text default null)
 returns table (valid boolean, email_matches boolean, reason text)
@@ -345,7 +410,9 @@ begin
     from public.profiles p
    where p.user_id = v_user_id;
 
-  if v_profile_role is not null and v_profile_role <> 'student' then
+  -- Uma conta com papel maior (coach/admin) tambem pode usar a area do aluno,
+  -- mas o acesso aos dados continua exigindo vinculo por convite/email abaixo.
+  if v_profile_role is not null and public.role_rank(v_profile_role) < public.role_rank('student') then
     raise exception 'account_has_different_role';
   end if;
 
@@ -456,12 +523,7 @@ declare
   v_count integer := 0;
   v_result jsonb;
 begin
-  if v_user_id is null or not exists (
-    select 1 from public.profiles p
-     where p.user_id = v_user_id
-       and p.role = 'coach'
-       and p.coach_status in ('trial', 'active', 'past_due')
-  ) then
+  if v_user_id is null or not public.can_operate_as_coach() then
     raise exception 'coach_access_blocked';
   end if;
 
@@ -605,12 +667,7 @@ begin
     raise exception 'student_not_found_for_coach';
   end if;
 
-  if not exists (
-    select 1 from public.profiles p
-     where p.user_id = v_user_id
-       and p.role = 'coach'
-       and p.coach_status in ('trial', 'active', 'past_due')
-  ) then
+  if not public.can_operate_as_coach() then
     raise exception 'coach_access_blocked';
   end if;
 
@@ -630,11 +687,19 @@ begin
 end;
 $$;
 
-revoke all on function public.validate_student_invite(text, text) from public;
-revoke all on function public.claim_student_access(text) from public;
-revoke all on function public.claim_student_invite(text) from public;
-revoke all on function public.publish_student_workout(jsonb, jsonb) from public;
-revoke all on function public.renew_student_invite(text) from public;
+revoke all on function public.role_rank(text) from public, anon, authenticated;
+revoke all on function public.current_profile_role() from public, anon, authenticated;
+revoke all on function public.has_role_at_least(text) from public, anon, authenticated;
+revoke all on function public.can_operate_as_coach() from public, anon, authenticated;
+revoke all on function public.validate_student_invite(text, text) from public, anon, authenticated;
+revoke all on function public.claim_student_access(text) from public, anon, authenticated;
+revoke all on function public.claim_student_invite(text) from public, anon, authenticated;
+revoke all on function public.publish_student_workout(jsonb, jsonb) from public, anon, authenticated;
+revoke all on function public.renew_student_invite(text) from public, anon, authenticated;
+grant execute on function public.role_rank(text) to authenticated;
+grant execute on function public.current_profile_role() to authenticated;
+grant execute on function public.has_role_at_least(text) to authenticated;
+grant execute on function public.can_operate_as_coach() to authenticated;
 grant execute on function public.validate_student_invite(text, text) to anon, authenticated;
 grant execute on function public.claim_student_access(text) to authenticated;
 grant execute on function public.claim_student_invite(text) to authenticated;
@@ -729,7 +794,7 @@ create policy "profiles_select_own_or_linked_coach"
   using (
     (select auth.uid()) = user_id
     or (
-      role = 'coach'
+      role in ('coach', 'admin')
       and exists (
         select 1 from public.students s
          where s.coach_id = profiles.user_id::text
@@ -771,12 +836,7 @@ create policy "brand_theme_insert_coach"
   to authenticated
   with check (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 create policy "brand_theme_update_coach"
@@ -784,21 +844,11 @@ create policy "brand_theme_update_coach"
   to authenticated
   using (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   )
   with check (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 create policy "students_select_authenticated_owner"
@@ -814,12 +864,7 @@ create policy "students_insert_coach"
   to authenticated
   with check (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 create policy "students_update_coach"
@@ -827,21 +872,11 @@ create policy "students_update_coach"
   to authenticated
   using (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   )
   with check (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 create policy "students_delete_coach"
@@ -849,12 +884,7 @@ create policy "students_delete_coach"
   to authenticated
   using (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 create policy "workout_plans_select_authenticated_owner"
@@ -876,12 +906,7 @@ create policy "workout_plans_insert_coach"
   to authenticated
   with check (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 create policy "workout_plans_update_coach"
@@ -889,21 +914,11 @@ create policy "workout_plans_update_coach"
   to authenticated
   using (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   )
   with check (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 create policy "workout_plans_delete_coach"
@@ -911,12 +926,7 @@ create policy "workout_plans_delete_coach"
   to authenticated
   using (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 create policy "workout_exercises_select_authenticated_owner"
@@ -941,12 +951,7 @@ create policy "workout_exercises_insert_coach"
   to authenticated
   with check (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 create policy "workout_exercises_update_coach"
@@ -954,21 +959,11 @@ create policy "workout_exercises_update_coach"
   to authenticated
   using (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   )
   with check (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 create policy "workout_exercises_delete_coach"
@@ -976,12 +971,7 @@ create policy "workout_exercises_delete_coach"
   to authenticated
   using (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 create policy "workout_sessions_select_authenticated_owner"
@@ -1017,12 +1007,7 @@ create policy "workout_sessions_update_owner"
   using (
     (
       coach_id = (select auth.uid())::text
-      and exists (
-        select 1 from public.profiles p
-        where p.user_id = (select auth.uid())
-          and p.role = 'coach'
-          and p.coach_status in ('trial', 'active', 'past_due')
-      )
+      and public.can_operate_as_coach()
     )
     or exists (
       select 1
@@ -1035,12 +1020,7 @@ create policy "workout_sessions_update_owner"
   with check (
     (
       coach_id = (select auth.uid())::text
-      and exists (
-        select 1 from public.profiles p
-        where p.user_id = (select auth.uid())
-          and p.role = 'coach'
-          and p.coach_status in ('trial', 'active', 'past_due')
-      )
+      and public.can_operate_as_coach()
     )
     or exists (
       select 1
@@ -1056,12 +1036,7 @@ create policy "workout_sessions_delete_coach"
   to authenticated
   using (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 create policy "workout_set_logs_select_authenticated_owner"
@@ -1103,12 +1078,7 @@ create policy "workout_set_logs_update_owner"
   using (
     (
       coach_id = (select auth.uid())::text
-      and exists (
-        select 1 from public.profiles p
-        where p.user_id = (select auth.uid())
-          and p.role = 'coach'
-          and p.coach_status in ('trial', 'active', 'past_due')
-      )
+      and public.can_operate_as_coach()
     )
     or exists (
       select 1
@@ -1124,12 +1094,7 @@ create policy "workout_set_logs_update_owner"
   with check (
     (
       coach_id = (select auth.uid())::text
-      and exists (
-        select 1 from public.profiles p
-        where p.user_id = (select auth.uid())
-          and p.role = 'coach'
-          and p.coach_status in ('trial', 'active', 'past_due')
-      )
+      and public.can_operate_as_coach()
     )
     or exists (
       select 1
@@ -1148,12 +1113,7 @@ create policy "workout_set_logs_delete_coach"
   to authenticated
   using (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 create policy "workout_feedback_select_authenticated_owner"
@@ -1195,12 +1155,7 @@ create policy "workout_feedback_update_owner"
   using (
     (
       coach_id = (select auth.uid())::text
-      and exists (
-        select 1 from public.profiles p
-        where p.user_id = (select auth.uid())
-          and p.role = 'coach'
-          and p.coach_status in ('trial', 'active', 'past_due')
-      )
+      and public.can_operate_as_coach()
     )
     or exists (
       select 1
@@ -1216,12 +1171,7 @@ create policy "workout_feedback_update_owner"
   with check (
     (
       coach_id = (select auth.uid())::text
-      and exists (
-        select 1 from public.profiles p
-        where p.user_id = (select auth.uid())
-          and p.role = 'coach'
-          and p.coach_status in ('trial', 'active', 'past_due')
-      )
+      and public.can_operate_as_coach()
     )
     or exists (
       select 1
@@ -1240,12 +1190,7 @@ create policy "workout_feedback_delete_coach"
   to authenticated
   using (
     coach_id = (select auth.uid())::text
-    and exists (
-      select 1 from public.profiles p
-      where p.user_id = (select auth.uid())
-        and p.role = 'coach'
-        and p.coach_status in ('trial', 'active', 'past_due')
-    )
+    and public.can_operate_as_coach()
   );
 
 -- ============================================================================
@@ -1298,10 +1243,18 @@ security definer
 set search_path = pg_catalog, public
 as $$
   select auth.uid() is not null
-     and exists (
-       select 1
-       from public.platform_admins pa
-       where pa.user_id = auth.uid()
+     and (
+       exists (
+         select 1
+         from public.platform_admins pa
+         where pa.user_id = auth.uid()
+       )
+       or exists (
+         select 1
+         from public.profiles p
+         where p.user_id = auth.uid()
+           and p.role = 'admin'
+       )
      );
 $$;
 
@@ -1673,12 +1626,12 @@ grant select on public.platform_admins to authenticated;
 grant select on public.coach_admin_settings to authenticated;
 grant select on public.coach_admin_history to authenticated;
 
-revoke all on function public.is_platform_admin() from public;
-revoke all on function public.admin_get_overview() from public;
-revoke all on function public.admin_list_coaches(text, text) from public;
-revoke all on function public.admin_get_coach(uuid) from public;
-revoke all on function public.admin_list_coach_history(uuid) from public;
-revoke all on function public.admin_update_coach(uuid, text, text, timestamptz, text, text) from public;
+revoke all on function public.is_platform_admin() from public, anon, authenticated;
+revoke all on function public.admin_get_overview() from public, anon, authenticated;
+revoke all on function public.admin_list_coaches(text, text) from public, anon, authenticated;
+revoke all on function public.admin_get_coach(uuid) from public, anon, authenticated;
+revoke all on function public.admin_list_coach_history(uuid) from public, anon, authenticated;
+revoke all on function public.admin_update_coach(uuid, text, text, timestamptz, text, text) from public, anon, authenticated;
 
 grant execute on function public.is_platform_admin() to authenticated;
 grant execute on function public.admin_get_overview() to authenticated;
@@ -1704,6 +1657,20 @@ begin
     raise exception 'A conta recursaocausaexaustao@gmail.com ainda não existe em Authentication > Users.'
       using hint = 'Entre ou crie essa conta primeiro e execute o SQL novamente.';
   end if;
+
+  insert into public.profiles (user_id, role, name, headline, coach_status, updated_at)
+  select
+    u.id,
+    'admin',
+    coalesce(nullif(split_part(u.email, '@', 1), ''), 'Administrador'),
+    'Administrador da plataforma',
+    'active',
+    now()
+  from auth.users u
+  where u.id = v_admin_id
+  on conflict (user_id) do update
+    set role = 'admin',
+        updated_at = now();
 
   insert into public.platform_admins (user_id, created_by)
   values (v_admin_id, v_admin_id)

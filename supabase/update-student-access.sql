@@ -7,6 +7,67 @@ create unique index students_coach_email_unique_idx
   on public.students (coach_id, lower(trim(email)))
   where email is not null and trim(email) <> '';
 
+create or replace function public.role_rank(p_role text)
+returns integer
+language sql
+immutable
+set search_path = pg_catalog, public
+as $$
+  select case lower(trim(coalesce(p_role, '')))
+    when 'admin' then 3
+    when 'coach' then 2
+    when 'student' then 1
+    else 0
+  end;
+$$;
+
+create or replace function public.current_profile_role()
+returns text
+language sql
+stable
+security definer
+set search_path = pg_catalog, public
+as $$
+  select p.role
+  from public.profiles p
+  where p.user_id = auth.uid()
+  limit 1;
+$$;
+
+create or replace function public.has_role_at_least(p_required_role text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public
+as $$
+  select auth.uid() is not null
+     and public.role_rank(public.current_profile_role()) >= public.role_rank(p_required_role)
+     and public.role_rank(p_required_role) > 0;
+$$;
+
+create or replace function public.can_operate_as_coach()
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public
+as $$
+  select auth.uid() is not null
+     and exists (
+       select 1
+       from public.profiles p
+       where p.user_id = auth.uid()
+         and (
+           p.role = 'admin'
+           or (
+             p.role = 'coach'
+             and p.coach_status in ('trial', 'active', 'past_due')
+           )
+         )
+     );
+$$;
+
 create or replace function public.validate_student_invite(p_token text, p_email text default null)
 returns table (valid boolean, email_matches boolean, reason text)
 language plpgsql
@@ -50,7 +111,9 @@ begin
   if v_user_id is null or v_user_email = '' then raise exception 'student_access_requires_authenticated_email'; end if;
 
   select p.role into v_profile_role from public.profiles p where p.user_id = v_user_id;
-  if v_profile_role is not null and v_profile_role <> 'student' then raise exception 'account_has_different_role'; end if;
+  if v_profile_role is not null and public.role_rank(v_profile_role) < public.role_rank('student') then
+    raise exception 'account_has_different_role';
+  end if;
 
   if trim(coalesce(p_token, '')) <> '' then
     select s.* into v_token_student
@@ -133,10 +196,7 @@ declare
   v_count integer := 0;
   v_result jsonb;
 begin
-  if v_user_id is null or not exists (
-    select 1 from public.profiles p where p.user_id = v_user_id and p.role = 'coach'
-      and p.coach_status in ('trial', 'active', 'past_due')
-  ) then raise exception 'coach_access_blocked'; end if;
+  if v_user_id is null or not public.can_operate_as_coach() then raise exception 'coach_access_blocked'; end if;
   if v_workout_id = '' or v_student_id = '' then raise exception 'workout_id_and_student_required'; end if;
   if not exists (select 1 from public.students s where s.id = v_student_id and s.coach_id = v_coach_id) then
     raise exception 'student_not_found_for_coach';
@@ -206,10 +266,18 @@ begin
 end;
 $$;
 
-revoke all on function public.validate_student_invite(text, text) from public;
-revoke all on function public.claim_student_access(text) from public;
-revoke all on function public.claim_student_invite(text) from public;
-revoke all on function public.publish_student_workout(jsonb, jsonb) from public;
+revoke all on function public.role_rank(text) from public, anon, authenticated;
+revoke all on function public.current_profile_role() from public, anon, authenticated;
+revoke all on function public.has_role_at_least(text) from public, anon, authenticated;
+revoke all on function public.can_operate_as_coach() from public, anon, authenticated;
+revoke all on function public.validate_student_invite(text, text) from public, anon, authenticated;
+revoke all on function public.claim_student_access(text) from public, anon, authenticated;
+revoke all on function public.claim_student_invite(text) from public, anon, authenticated;
+revoke all on function public.publish_student_workout(jsonb, jsonb) from public, anon, authenticated;
+grant execute on function public.role_rank(text) to authenticated;
+grant execute on function public.current_profile_role() to authenticated;
+grant execute on function public.has_role_at_least(text) to authenticated;
+grant execute on function public.can_operate_as_coach() to authenticated;
 grant execute on function public.validate_student_invite(text, text) to anon, authenticated;
 grant execute on function public.claim_student_access(text) to authenticated;
 grant execute on function public.claim_student_invite(text) to authenticated;
@@ -222,7 +290,7 @@ create policy "profiles_select_own_or_linked_coach"
   using (
     (select auth.uid()) = user_id
     or (
-      role = 'coach'
+      role in ('coach', 'admin')
       and exists (
         select 1 from public.students s
          where s.coach_id = profiles.user_id::text

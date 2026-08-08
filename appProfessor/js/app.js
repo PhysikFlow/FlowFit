@@ -1772,7 +1772,8 @@ const startAuthenticatedPanel = async () => {
     setAuthLocked(true);
     syncAuthMode("signin", { preserveStatus: true });
     setAuthGateSignOutVisible(false);
-    setAuthStatus("Esta conta já existe como aluno. Use outro email para o painel do professor.", "warning");
+    const label = authRepository.getRoleLabel(profileResult.existingRole);
+    setAuthStatus(`Esta conta existe como ${label} e não tem acesso ao painel do professor.`, "warning");
     return;
   }
   if (!profileResult.synced && !profileResult.profile) {

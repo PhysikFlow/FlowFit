@@ -48,10 +48,18 @@ security definer
 set search_path = pg_catalog, public
 as $$
   select auth.uid() is not null
-     and exists (
-       select 1
-       from public.platform_admins pa
-       where pa.user_id = auth.uid()
+     and (
+       exists (
+         select 1
+         from public.platform_admins pa
+         where pa.user_id = auth.uid()
+       )
+       or exists (
+         select 1
+         from public.profiles p
+         where p.user_id = auth.uid()
+           and p.role = 'admin'
+       )
      );
 $$;
 
@@ -423,12 +431,12 @@ grant select on public.platform_admins to authenticated;
 grant select on public.coach_admin_settings to authenticated;
 grant select on public.coach_admin_history to authenticated;
 
-revoke all on function public.is_platform_admin() from public;
-revoke all on function public.admin_get_overview() from public;
-revoke all on function public.admin_list_coaches(text, text) from public;
-revoke all on function public.admin_get_coach(uuid) from public;
-revoke all on function public.admin_list_coach_history(uuid) from public;
-revoke all on function public.admin_update_coach(uuid, text, text, timestamptz, text, text) from public;
+revoke all on function public.is_platform_admin() from public, anon, authenticated;
+revoke all on function public.admin_get_overview() from public, anon, authenticated;
+revoke all on function public.admin_list_coaches(text, text) from public, anon, authenticated;
+revoke all on function public.admin_get_coach(uuid) from public, anon, authenticated;
+revoke all on function public.admin_list_coach_history(uuid) from public, anon, authenticated;
+revoke all on function public.admin_update_coach(uuid, text, text, timestamptz, text, text) from public, anon, authenticated;
 
 grant execute on function public.is_platform_admin() to authenticated;
 grant execute on function public.admin_get_overview() to authenticated;
@@ -454,6 +462,20 @@ begin
     raise exception 'A conta recursaocausaexaustao@gmail.com ainda não existe em Authentication > Users.'
       using hint = 'Entre ou crie essa conta primeiro e execute supabase/admin-console.sql novamente.';
   end if;
+
+  insert into public.profiles (user_id, role, name, headline, coach_status, updated_at)
+  select
+    u.id,
+    'admin',
+    coalesce(nullif(split_part(u.email, '@', 1), ''), 'Administrador'),
+    'Administrador da plataforma',
+    'active',
+    now()
+  from auth.users u
+  where u.id = v_admin_id
+  on conflict (user_id) do update
+    set role = 'admin',
+        updated_at = now();
 
   insert into public.platform_admins (user_id, created_by)
   values (v_admin_id, v_admin_id)
