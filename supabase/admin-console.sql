@@ -437,9 +437,36 @@ grant execute on function public.admin_get_coach(uuid) to authenticated;
 grant execute on function public.admin_list_coach_history(uuid) to authenticated;
 grant execute on function public.admin_update_coach(uuid, text, text, timestamptz, text, text) to authenticated;
 
+-- Primeiro administrador da instalação. A conta precisa existir em
+-- Authentication > Users antes da execução desta migration.
+do $flowfit_admin_bootstrap$
+declare
+  v_admin_id uuid;
+begin
+  select u.id
+    into v_admin_id
+  from auth.users u
+  where lower(u.email) = lower('recursaocausaexaustao@gmail.com')
+  order by u.created_at
+  limit 1;
+
+  if v_admin_id is null then
+    raise exception 'A conta recursaocausaexaustao@gmail.com ainda não existe em Authentication > Users.'
+      using hint = 'Entre ou crie essa conta primeiro e execute supabase/admin-console.sql novamente.';
+  end if;
+
+  insert into public.platform_admins (user_id, created_by)
+  values (v_admin_id, v_admin_id)
+  on conflict (user_id) do nothing;
+end;
+$flowfit_admin_bootstrap$;
+
 commit;
 
--- Depois da migração, defina o primeiro administrador manualmente no SQL Editor:
--- insert into public.platform_admins (user_id, created_by)
--- select id, id from auth.users where lower(email) = lower('seu@email.com')
--- on conflict (user_id) do nothing;
+-- Confirmação exibida ao final no SQL Editor.
+select
+  u.email as admin_email,
+  pa.created_at as admin_since
+from public.platform_admins pa
+join auth.users u on u.id = pa.user_id
+where lower(u.email) = lower('recursaocausaexaustao@gmail.com');

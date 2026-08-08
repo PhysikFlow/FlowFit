@@ -86,15 +86,7 @@ A migração mantém alunos, contas, temas, treinos e históricos existentes. El
 
 Em uma instalação existente, rode `supabase/admin-console.sql` depois de `supabase/update-student-access.sql`. A migração não altera o status dos personals já cadastrados; apenas faz novos cadastros começarem como `pending`.
 
-Crie ou autentique primeiro a conta que será administradora. Depois execute uma única vez no SQL Editor, trocando o email:
-
-```sql
-insert into public.platform_admins (user_id, created_by)
-select id, id
-from auth.users
-where lower(email) = lower('seu@email.com')
-on conflict (user_id) do nothing;
-```
+A migration já registra `recursaocausaexaustao@gmail.com` como primeiro administrador. Essa conta precisa aparecer antes em `Authentication > Users`; se ainda não existir, entre ou crie a conta primeiro e execute `supabase/admin-console.sql` novamente. O SQL interrompe a execução com uma mensagem clara quando não encontra o usuário e mostra o email administrativo ao concluir.
 
 Abra `/admin/` e entre com essa mesma conta. Não existe cadastro de administrador pelo frontend. A lista, os detalhes e as alterações usam RPCs `security definer` que verificam `platform_admins`; as tabelas administrativas também têm RLS e não aceitam escrita direta do navegador.
 
