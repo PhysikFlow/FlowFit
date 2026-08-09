@@ -5,9 +5,9 @@
   --accent-saturation: 96%;
   --accent-lightness: 68%;
   --color-accent: hsl(var(--hue-accent) var(--accent-saturation) var(--accent-lightness));
-  --color-accent-strong: hsl(var(--hue-accent) 88% 59%);
-  --color-accent-soft: hsl(var(--hue-accent) 82% 68% / 0.14);
-  --color-accent-line: hsl(var(--hue-accent) 88% 70% / 0.28);
+  --color-accent-strong: color-mix(in srgb, var(--color-accent) 84%, var(--color-text));
+  --color-accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  --color-accent-line: color-mix(in srgb, var(--color-accent) 28%, transparent);
 
   --color-bg: #090b10;
   --color-bg-elevated: #10131a;
@@ -58,7 +58,7 @@
   --radius-lg: 1.35rem;
   --radius-pill: 999px;
   --shadow-card: 0 1rem 3rem rgb(0 0 0 / 0.24);
-  --shadow-accent: 0 0.8rem 2rem hsl(var(--hue-accent) 80% 45% / 0.22);
+  --shadow-accent: 0 0.8rem 2rem color-mix(in srgb, var(--color-accent) 22%, transparent);
   --nav-height: 5.25rem;
   --content-max: 34rem;
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);

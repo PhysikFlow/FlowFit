@@ -1,23 +1,23 @@
-const CACHE_NAME = "flowfit-aluno-v46";
+const CACHE_NAME = "flowfit-aluno-v48";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./assets/icons/app-icon.svg",
-  "./css/tokens.css?v=build-20260809-6",
-  "./css/components.css?v=build-20260809-7",
+  "./css/tokens.css?v=build-20260809-7",
+  "./css/components.css?v=build-20260809-8",
   "./css/app.css?v=build-20260809-6",
-  "./js/app.js?v=build-20260809-6",
+  "./js/app.js?v=build-20260809-8",
   "./js/data/repositories/auth-repository.js?v=build-20260809-6",
   "./js/data/repositories/student-repository.js?v=build-20260809-6",
-  "./js/data/repositories/theme-repository.js?v=build-20260809-6",
+  "./js/data/repositories/theme-repository.js?v=build-20260809-7",
   "./js/data/repositories/workout-repository.js?v=build-20260809-6",
   "./js/data/repositories/session-repository.js?v=build-20260809-6",
   "./js/config.js?v=build-20260809-6",
-  "./js/core/brand-theme.js?v=build-20260809-6",
+  "./js/core/brand-theme.js?v=build-20260809-7",
   "./js/core/icons.js?v=build-20260809-6",
   "./js/core/platform.js?v=build-20260809-6",
   "./js/core/store.js?v=build-20260809-6",
-  "./js/core/theme.js?v=build-20260809-6",
+  "./js/core/theme.js?v=build-20260809-7",
   "./js/core/supabase.js?v=build-20260809-6",
   "./manifest.webmanifest"
 ];

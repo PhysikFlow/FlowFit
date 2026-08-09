@@ -13,6 +13,7 @@ const STATUS_LABELS = Object.freeze({
 
 const authGate = document.querySelector("[data-auth-gate]");
 const authForm = document.querySelector("[data-auth-form]");
+const authSessionCheck = document.querySelector("[data-auth-session-check]");
 const authStatus = document.querySelector("[data-auth-status]");
 const authSubmit = document.querySelector("[data-auth-submit]");
 const gateSignOut = document.querySelector("[data-auth-gate-sign-out]");
@@ -83,6 +84,12 @@ const showToast = (message) => {
 const setAuthLocked = (locked) => {
   authGate?.classList.toggle("is-hidden", !locked);
   document.body.classList.toggle("is-auth-locked", locked);
+};
+
+const setAuthChecking = (checking) => {
+  if (authSessionCheck) authSessionCheck.hidden = !checking;
+  if (authForm) authForm.hidden = checking;
+  authGate?.setAttribute("aria-busy", String(checking));
 };
 
 const badge = (status) => `<span class="status-badge" data-status="${escapeHtml(status)}">${escapeHtml(STATUS_LABELS[status] || status)}</span>`;
@@ -245,9 +252,11 @@ const saveDetail = async ({ targetStatus } = {}) => {
 };
 
 const startAdmin = async () => {
+  setAuthChecking(true);
   const session = await authRepository.getSession();
   if (!session?.user) {
     setAuthLocked(true);
+    setAuthChecking(false);
     gateSignOut.hidden = true;
     return;
   }
@@ -256,12 +265,14 @@ const startAdmin = async () => {
   const result = await refreshDashboard();
   if (!result.ok) {
     setAuthLocked(true);
+    setAuthChecking(false);
     gateSignOut.hidden = false;
     setStatus(authStatus, result.message, "warning");
     return;
   }
   gateSignOut.hidden = true;
   setAuthLocked(false);
+  setAuthChecking(false);
 };
 
 authForm?.addEventListener("submit", async (event) => {
@@ -294,6 +305,7 @@ const signOut = async () => {
   renderCoaches();
   closeDrawer();
   setAuthLocked(true);
+  setAuthChecking(false);
   gateSignOut.hidden = true;
   setStatus(authStatus, "Sessão encerrada.");
 };
@@ -336,5 +348,6 @@ renderIcons();
 startAdmin().catch((error) => {
   console.error("Falha ao iniciar administração", error);
   setAuthLocked(true);
+  setAuthChecking(false);
   setStatus(authStatus, "Não foi possível iniciar a administração. Recarregue a página.", "warning");
 });

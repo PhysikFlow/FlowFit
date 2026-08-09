@@ -57,7 +57,7 @@ const backgroundEffects = {
   aurora: "radial-gradient(circle at 85% 3%, var(--color-accent-soft), transparent 18rem)",
   spotlight: "radial-gradient(circle at 50% -10%, var(--color-accent-soft), transparent 24rem)",
   diagonal: "linear-gradient(135deg, var(--color-accent-soft), transparent 32%)",
-  mesh: "radial-gradient(circle at 12% 8%, var(--color-accent-soft), transparent 22rem), radial-gradient(circle at 92% 0%, hsl(var(--hue-accent) 80% 55% / 0.1), transparent 18rem)"
+  mesh: "radial-gradient(circle at 12% 8%, var(--color-accent-soft), transparent 22rem), radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent 18rem)"
 };
 
 const hexToRgb = (hex, fallback = DEFAULT_BRAND_THEME.accent) => {
@@ -83,7 +83,13 @@ const relativeLuminance = (hex) => {
 
 export const inferModeFromColor = (hex) => relativeLuminance(hex) > 0.56 ? "light" : "dark";
 
-const readableOnColor = (hex) => relativeLuminance(hex) > 0.5 ? "#10131a" : "#ffffff";
+const readableOnColor = (hex) => {
+  const luminance = relativeLuminance(hex);
+  const lightContrast = 1.05 / (luminance + 0.05);
+  const darkLuminance = relativeLuminance("#10131a");
+  const darkContrast = (luminance + 0.05) / (darkLuminance + 0.05);
+  return darkContrast >= lightContrast ? "#10131a" : "#ffffff";
+};
 
 export const contrastRatio = (foreground, background) => {
   const lighter = Math.max(relativeLuminance(foreground), relativeLuminance(background));
@@ -159,6 +165,7 @@ export const applyThemeTokens = (theme) => {
   root.style.setProperty("--hue-accent", String(accent.hue));
   root.style.setProperty("--accent-saturation", `${accent.saturation}%`);
   root.style.setProperty("--accent-lightness", `${accent.lightness}%`);
+  root.style.setProperty("--color-accent", normalized.accent);
   root.style.setProperty("--color-bg", normalized.backgroundColor);
   root.style.setProperty("--color-bg-elevated", `color-mix(in srgb, ${normalized.surfaceColor} 88%, ${normalized.backgroundColor})`);
   root.style.setProperty("--color-surface", normalized.surfaceColor);

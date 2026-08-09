@@ -7,14 +7,19 @@
     <meta name="description" content="Administração de personals da plataforma FlowFit." />
     <title>FlowFit - Administração</title>
     <link rel="icon" type="image/svg+xml" href="../appAluno/assets/icons/app-icon.svg" />
-    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260809-6" />
-    <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260809-7" />
+    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260809-7" />
+    <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260809-8" />
     <link rel="stylesheet" href="css/app.css?v=build-20260809-7" />
-    <script type="module" src="js/app.js?v=build-20260809-6"></script>
+    <script type="module" src="js/app.js?v=build-20260809-7"></script>
   </head>
   <body class="is-auth-locked">
-    <section class="auth-gate" data-auth-gate aria-labelledby="admin-auth-title">
-      <form class="auth-card card" data-auth-form>
+    <section class="auth-gate" data-auth-gate aria-labelledby="admin-auth-title" aria-busy="true">
+      <div class="auth-session-check card" data-auth-session-check role="status" aria-live="polite">
+        <span class="auth-session-spinner" aria-hidden="true"></span>
+        <strong>Verificando sua sessão</strong>
+        <small>Validando o acesso administrativo.</small>
+      </div>
+      <form class="auth-card card" data-auth-form hidden>
         <span class="eyebrow">Área restrita</span>
         <h1 id="admin-auth-title">Administração FlowFit</h1>
         <p>Entre com sua conta administrativa.</p>

@@ -12,14 +12,19 @@
     <title>FlowFit - Professor</title>
     <link rel="icon" type="image/svg+xml" href="../appAluno/assets/icons/app-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260809-6" />
-    <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260809-7" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260809-9" />
-    <script type="module" src="js/app.js?v=build-20260809-9"></script>
+    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260809-7" />
+    <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260809-8" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260809-11" />
+    <script type="module" src="js/app.js?v=build-20260809-12"></script>
   </head>
   <body>
-    <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title">
-      <form class="auth-card card" data-auth-form data-auth-mode="signin">
+    <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title" aria-busy="true">
+      <div class="auth-session-check card" data-auth-session-check role="status" aria-live="polite">
+        <span class="auth-session-spinner" aria-hidden="true"></span>
+        <strong>Verificando sua sessão</strong>
+        <small>Preparando o painel do professor.</small>
+      </div>
+      <form class="auth-card card" data-auth-form data-auth-mode="signin" hidden>
         <span class="eyebrow">FlowFit professor</span>
         <h1 id="professor-auth-title" data-auth-title>Entrar no painel</h1>
         <p data-auth-copy>Gerencie alunos, treinos e marca em um só lugar.</p>
@@ -284,6 +289,19 @@
             <details class="theme-editor__section" open>
               <summary aria-label="Cores do aplicativo"><span class="eyebrow">Cores</span><span class="chip">4 cores</span></summary>
               <div class="theme-editor__section-body">
+                <section class="theme-palette-picker" aria-labelledby="theme-palette-title">
+                  <div class="theme-palette-picker__head">
+                    <div>
+                      <strong id="theme-palette-title">Paletas prontas</strong>
+                      <small data-theme-palette-context>Combinações seguras para fundo escuro.</small>
+                    </div>
+                    <div class="theme-palette-picker__modes" aria-label="Tipo de paleta">
+                      <button class="theme-palette-mode is-active" type="button" data-theme-palette-mode="dark" aria-pressed="true">Escuras</button>
+                      <button class="theme-palette-mode" type="button" data-theme-palette-mode="light" aria-pressed="false">Claras</button>
+                    </div>
+                  </div>
+                  <div class="theme-palette-grid" data-theme-palette-list></div>
+                </section>
                 <div class="theme-editor__colors">
                 <label class="color-field">Cor de destaque
                   <span>

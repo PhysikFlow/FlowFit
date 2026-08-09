@@ -1,11 +1,11 @@
 import { Platform } from "./core/platform.js?v=build-20260809-6";
 import { Store } from "./core/store.js?v=build-20260809-6";
-import { Theme } from "./core/theme.js?v=build-20260809-6";
+import { Theme } from "./core/theme.js?v=build-20260809-7";
 import { svgIcon } from "./core/icons.js?v=build-20260809-6";
-import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260809-6";
+import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260809-7";
 import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260809-6";
 import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260809-6";
-import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260809-6";
+import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260809-7";
 import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260809-6";
 import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260809-6";
 
@@ -13,6 +13,8 @@ const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
 const onboarding = document.querySelector("[data-onboarding]");
 const onboardingForm = document.querySelector("[data-onboarding-form]");
+const authSessionCheck = document.querySelector("[data-auth-session-check]");
+const authContent = document.querySelector("[data-auth-content]");
 const accessAppButton = document.querySelector("[data-access-app]");
 const authStatus = document.querySelector("[data-auth-status]");
 const finishStatus = document.querySelector("[data-finish-status]");
@@ -239,6 +241,12 @@ const setStatus = (target, message, state = "") => {
 
 const setAuthStatus = (message, state = "") => setStatus(authStatus, message, state);
 const setFinishStatus = (message, state = "") => setStatus(finishStatus, message, state);
+
+const setAuthChecking = (checking) => {
+  if (authSessionCheck) authSessionCheck.hidden = !checking;
+  if (authContent) authContent.hidden = checking;
+  onboarding?.setAttribute("aria-busy", String(checking));
+};
 
 const getAuthRedirectUrl = () => {
   const url = new URL(window.location.href);
@@ -923,6 +931,7 @@ const retryPendingSessions = async () => {
 };
 
 const startAuthenticatedApp = async () => {
+  setAuthChecking(true);
   const session = await authRepository.getSession();
   if (!session?.user) {
     activateAnonymousStore();
@@ -931,6 +940,7 @@ const startAuthenticatedApp = async () => {
     renderAll();
     syncOnboarding();
     syncAuthMode("signin");
+    setAuthChecking(false);
     return false;
   }
 
@@ -943,6 +953,7 @@ const startAuthenticatedApp = async () => {
     renderAll();
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
+    setAuthChecking(false);
     setAuthStatus("Esta conta não tem permissão para acessar a área do aluno.", "warning");
     return false;
   }
@@ -964,6 +975,7 @@ const startAuthenticatedApp = async () => {
     renderAll();
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
+    setAuthChecking(false);
     setAuthStatus(
       accessToken
         ? "Este convite é inválido, expirou ou pertence a outro email. Peça um novo link ao personal."
@@ -987,6 +999,7 @@ const startAuthenticatedApp = async () => {
       renderAll();
       syncOnboarding();
       syncAuthMode("signin", { preserveStatus: true });
+      setAuthChecking(false);
       setAuthStatus("Primeiro acesso exige o link de convite enviado pelo seu personal.", "warning");
       return false;
     }
@@ -1014,6 +1027,7 @@ const startAuthenticatedApp = async () => {
     renderAll();
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
+    setAuthChecking(false);
     setAuthStatus("A conta autenticada não tem permissão para acessar a área do aluno.", "warning");
     return false;
   }
@@ -1029,6 +1043,7 @@ const startAuthenticatedApp = async () => {
     renderAll();
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
+    setAuthChecking(false);
     setAuthStatus("Sua conta não tem nenhum aluno vinculado. Abra o convite enviado pelo personal.", "warning");
     Platform.notify("Peça ao personal para enviar um novo link de convite.");
     return false;
@@ -1049,6 +1064,7 @@ const startAuthenticatedApp = async () => {
   const retriedSessions = await retryPendingSessions();
   renderAll();
   syncOnboarding();
+  setAuthChecking(false);
   navigate(location.hash.slice(1) || "home", false);
 
   if (studentResult.multiple) {
@@ -1373,6 +1389,7 @@ const signOut = async () => {
   renderAll();
   syncOnboarding();
   syncAuthMode("signin");
+  setAuthChecking(false);
   setAuthStatus("Sessão encerrada.", "");
   Platform.notify("Sessão encerrada.");
 };
@@ -1438,6 +1455,17 @@ if (Platform.canUseServiceWorker() && "serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
 }
 
-startAuthenticatedApp().finally(() => {
-  markRuntimeReady();
-});
+startAuthenticatedApp()
+  .catch((error) => {
+    console.error("Falha ao verificar acesso do aluno", error);
+    window.FlowFitAlunoErrors = window.FlowFitAlunoErrors || [];
+    window.FlowFitAlunoErrors.push(String(error?.message || error));
+    activateAnonymousStore();
+    syncOnboarding();
+    syncAuthMode("signin", { preserveStatus: true });
+    setAuthChecking(false);
+    setAuthStatus("Não foi possível verificar sua sessão. Tente novamente.", "warning");
+  })
+  .finally(() => {
+    markRuntimeReady();
+  });

@@ -1,9 +1,9 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260809-6";
-import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260809-6";
+import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260809-7";
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260809-6";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260809-6";
-import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260809-6";
+import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260809-7";
 import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260809-6";
 import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260809-6";
 
@@ -49,6 +49,8 @@ const studentSearchInput = document.querySelector("[data-student-search]");
 const workoutSearchInput = document.querySelector("[data-workout-search]");
 const authGate = document.querySelector("[data-auth-gate]");
 const authForm = document.querySelector("[data-auth-form]");
+const authSessionCheck = document.querySelector("[data-auth-session-check]");
+const authContent = authForm;
 const authStatus = document.querySelector("[data-auth-status]");
 const authTitle = document.querySelector("[data-auth-title]");
 const authCopy = document.querySelector("[data-auth-copy]");
@@ -71,6 +73,9 @@ const coachWhatsappInput = document.querySelector("[data-coach-whatsapp-input]")
 const coachPhoneInput = document.querySelector("[data-coach-phone-input]");
 const contrastStatus = document.querySelector("[data-contrast-status]");
 const saveThemeButton = document.querySelector("[data-save-theme]");
+const themePaletteList = document.querySelector("[data-theme-palette-list]");
+const themePaletteContext = document.querySelector("[data-theme-palette-context]");
+const themePaletteModeButtons = [...document.querySelectorAll("[data-theme-palette-mode]")];
 const inviteStudentOptions = document.querySelector("[data-invite-student-options]");
 const inviteMessage = document.querySelector("[data-invite-message]");
 const inviteStatus = document.querySelector("[data-invite-status]");
@@ -86,6 +91,89 @@ const ACCOUNT_PLAN = {
   activeStudentLimit: 20
 };
 
+const THEME_PALETTES = [
+  {
+    id: "flowfit-night",
+    name: "Violeta",
+    mode: "dark",
+    accent: "#7667ff",
+    backgroundColor: "#090b10",
+    surfaceColor: "#151922",
+    textColor: "#f7f7fa",
+    backgroundStyle: "aurora"
+  },
+  {
+    id: "ocean-night",
+    name: "Oceano",
+    mode: "dark",
+    accent: "#38bdf8",
+    backgroundColor: "#06131c",
+    surfaceColor: "#10232e",
+    textColor: "#f4fbff",
+    backgroundStyle: "spotlight"
+  },
+  {
+    id: "emerald-night",
+    name: "Esmeralda",
+    mode: "dark",
+    accent: "#34d399",
+    backgroundColor: "#07130f",
+    surfaceColor: "#11241d",
+    textColor: "#f1faf6",
+    backgroundStyle: "mesh"
+  },
+  {
+    id: "sunset-night",
+    name: "Pôr do sol",
+    mode: "dark",
+    accent: "#fb923c",
+    backgroundColor: "#180d08",
+    surfaceColor: "#2b1910",
+    textColor: "#fff7ed",
+    backgroundStyle: "diagonal"
+  },
+  {
+    id: "indigo-day",
+    name: "Índigo",
+    mode: "light",
+    accent: "#5b4cf0",
+    backgroundColor: "#f4f4fb",
+    surfaceColor: "#ffffff",
+    textColor: "#171827",
+    backgroundStyle: "aurora"
+  },
+  {
+    id: "teal-day",
+    name: "Verde água",
+    mode: "light",
+    accent: "#0f766e",
+    backgroundColor: "#effaf8",
+    surfaceColor: "#ffffff",
+    textColor: "#10201d",
+    backgroundStyle: "mesh"
+  },
+  {
+    id: "berry-day",
+    name: "Framboesa",
+    mode: "light",
+    accent: "#be185d",
+    backgroundColor: "#fff1f5",
+    surfaceColor: "#ffffff",
+    textColor: "#2a1520",
+    backgroundStyle: "spotlight"
+  },
+  {
+    id: "cobalt-day",
+    name: "Cobalto",
+    mode: "light",
+    accent: "#2563eb",
+    backgroundColor: "#eff6ff",
+    surfaceColor: "#ffffff",
+    textColor: "#172033",
+    backgroundStyle: "diagonal"
+  }
+];
+
 let toastTimer;
 let themeSaveTimer;
 let students = studentRepository.listStudents();
@@ -100,6 +188,7 @@ let deferredInstallPrompt = null;
 let studentSearchQuery = "";
 let workoutSearchQuery = "";
 let studentSessionOpen = false;
+let themePaletteMode = inferModeFromColor(backgroundInput?.value || DEFAULT_BRAND_THEME.backgroundColor);
 
 const compactProfessorQuery = window.matchMedia("(max-width: 760px)");
 
@@ -223,6 +312,55 @@ const updateContrastStatus = () => {
 
   if (saveThemeButton) saveThemeButton.disabled = !isReadable;
   return isReadable;
+};
+
+const isCurrentThemePalette = (palette) => {
+  const theme = readTheme();
+  return ["accent", "backgroundColor", "surfaceColor", "textColor"]
+    .every((key) => String(theme[key] || "").toLowerCase() === palette[key]);
+};
+
+const renderThemePalettes = ({ syncToTheme = false } = {}) => {
+  if (!themePaletteList) return;
+  if (syncToTheme) {
+    themePaletteMode = inferModeFromColor(backgroundInput?.value || DEFAULT_BRAND_THEME.backgroundColor);
+  }
+
+  const isLight = themePaletteMode === "light";
+  if (themePaletteContext) {
+    themePaletteContext.textContent = `Combinações seguras para fundo ${isLight ? "claro" : "escuro"}.`;
+  }
+  themePaletteModeButtons.forEach((button) => {
+    const active = button.dataset.themePaletteMode === themePaletteMode;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+
+  const fragment = document.createDocumentFragment();
+  THEME_PALETTES.filter((palette) => palette.mode === themePaletteMode).forEach((palette) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "theme-palette";
+    button.dataset.themePalette = palette.id;
+    button.setAttribute("aria-pressed", String(isCurrentThemePalette(palette)));
+    button.setAttribute("aria-label", `Aplicar paleta ${palette.name}`);
+    button.style.setProperty("--palette-accent", palette.accent);
+    button.style.setProperty("--palette-background", palette.backgroundColor);
+    button.style.setProperty("--palette-surface", palette.surfaceColor);
+    button.style.setProperty("--palette-text", palette.textColor);
+    button.innerHTML = `
+      <span class="theme-palette__name">${escapeHtml(palette.name)}</span>
+      <span class="theme-palette__swatches" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+    `;
+    button.addEventListener("click", () => {
+      fillThemeInputs({ ...readTheme(), ...palette });
+      applyTheme();
+      showToast(`Paleta ${palette.name} aplicada.`);
+      queueThemeSave();
+    });
+    fragment.append(button);
+  });
+  themePaletteList.replaceChildren(fragment);
 };
 
 const getAuthRedirectUrl = () => {
@@ -417,6 +555,12 @@ const setAuthLocked = (locked) => {
   document.body.classList.toggle("is-auth-locked", locked);
 };
 
+const setAuthChecking = (checking) => {
+  if (authSessionCheck) authSessionCheck.hidden = !checking;
+  if (authContent) authContent.hidden = checking;
+  authGate?.setAttribute("aria-busy", String(checking));
+};
+
 const readLocalBrandAssets = () => Platform.storage.get(LOCAL_BRAND_ASSETS_KEY, {});
 
 const writeLocalBrandAssets = (assets = {}) => {
@@ -503,6 +647,7 @@ const fillThemeInputs = (theme) => {
   if (backgroundStyleInput) backgroundStyleInput.value = normalized.backgroundStyle;
   syncHexInputsFromColors();
   updateContrastStatus();
+  renderThemePalettes({ syncToTheme: true });
   return normalized;
 };
 
@@ -1400,6 +1545,7 @@ const renderAll = () => {
   renderWorkouts();
   renderDashboard();
   applyTheme();
+  renderThemePalettes({ syncToTheme: true });
 };
 
 navItems.forEach((item) => item.addEventListener("click", (event) => {
@@ -1663,11 +1809,17 @@ const themeInputs = [
 themeInputs.forEach((input) => input.addEventListener("input", handleThemeControlChange));
 themeInputs.forEach((input) => input.addEventListener("change", handleThemeControlChange));
 
+themePaletteModeButtons.forEach((button) => button.addEventListener("click", () => {
+  themePaletteMode = button.dataset.themePaletteMode === "light" ? "light" : "dark";
+  renderThemePalettes();
+}));
+
 colorHexPairs.forEach(([color, hex]) => {
   const syncFromColor = () => {
     hex.value = String(color.value || "").toLowerCase();
     hex.classList.remove("is-invalid");
     handleThemeControlChange();
+    renderThemePalettes({ syncToTheme: color === backgroundInput });
   };
 
   color.addEventListener("input", syncFromColor);
@@ -1685,6 +1837,7 @@ colorHexPairs.forEach(([color, hex]) => {
     color.value = normalized;
     hex.value = normalized;
     handleThemeControlChange();
+    renderThemePalettes({ syncToTheme: color === backgroundInput });
   });
   hex.addEventListener("blur", () => {
     const normalized = normalizeHexInput(hex.value);
@@ -1972,6 +2125,7 @@ const signOutProfessor = async () => {
   dataStatus = "Local";
   renderAll();
   setAuthLocked(true);
+  setAuthChecking(false);
   syncAuthMode("signin");
   setAuthStatus("Sessão encerrada.", "");
   setAuthGateSignOutVisible(false);
@@ -1983,9 +2137,11 @@ document.querySelector("[data-profile-sign-out]")?.addEventListener("click", sig
 authGateSignOut?.addEventListener("click", signOutProfessor);
 
 const startAuthenticatedPanel = async () => {
+  setAuthChecking(true);
   const session = await authRepository.getSession();
   if (!session?.user) {
     setAuthLocked(true);
+    setAuthChecking(false);
     syncAuthMode("signin");
     setAuthGateSignOutVisible(false);
     return;
@@ -2000,6 +2156,7 @@ const startAuthenticatedPanel = async () => {
     await authRepository.signOut();
     authContext = null;
     setAuthLocked(true);
+    setAuthChecking(false);
     syncAuthMode("signin", { preserveStatus: true });
     setAuthGateSignOutVisible(false);
     const label = authRepository.getRoleLabel(profileResult.existingRole);
@@ -2008,6 +2165,7 @@ const startAuthenticatedPanel = async () => {
   }
   if (!profileResult.synced && !profileResult.profile) {
     setAuthLocked(true);
+    setAuthChecking(false);
     setAuthGateSignOutVisible(true);
     setAuthStatus("Conta autenticada, mas o perfil não carregou. Recarregue a página.", "warning");
     return;
@@ -2017,12 +2175,14 @@ const startAuthenticatedPanel = async () => {
   const coachAccess = authRepository.getCoachAccess(authContext?.profile);
   if (!coachAccess.ok) {
     setAuthLocked(true);
+    setAuthChecking(false);
     setAuthGateSignOutVisible(true);
     setAuthStatus(coachAccess.message, "warning");
     return;
   }
 
   setAuthLocked(false);
+  setAuthChecking(false);
   setAuthGateSignOutVisible(false);
   if (coachAccessNotice) coachAccessNotice.hidden = !coachAccess.warning;
   if (coachAccessMessage) coachAccessMessage.textContent = coachAccess.message || "Regularize o acesso para evitar uma suspensão.";
@@ -2107,5 +2267,8 @@ boot().catch((error) => {
   window.FlowFitProfessorErrors.push(String(error?.message || error));
   document.body?.setAttribute("data-professor-error", String(error?.message || error).slice(0, 180));
   window.FlowFitProfessorReady = false;
-  showToast("Falha ao iniciar painel. Recarregue a página.");
+  setAuthLocked(true);
+  setAuthChecking(false);
+  setAuthStatus("Não foi possível verificar sua sessão. Tente novamente.", "warning");
+  showToast("Falha ao iniciar painel.");
 });
