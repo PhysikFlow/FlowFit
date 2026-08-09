@@ -445,7 +445,7 @@ const renderAccessSelectors = () => {
   const picker = document.querySelector("[data-workout-picker]");
   const options = document.querySelector("[data-workout-options]");
   const count = document.querySelector("[data-available-workout-count]");
-  if (picker) picker.hidden = availableWorkouts.length === 0;
+  if (picker) picker.hidden = availableWorkouts.length <= 1;
   if (count) count.textContent = `${availableWorkouts.length} ${availableWorkouts.length === 1 ? "disponível" : "disponíveis"}`;
   if (options) {
     options.innerHTML = availableWorkouts.map((workout) => `
@@ -466,14 +466,14 @@ const renderHome = () => {
     ? `Treino ${currentWorkout.code}`
     : upcomingWorkout ? `Agendado para ${availabilityLabel}` : "Sem treino ativo";
   document.querySelector("[data-home-title]").textContent = hasWorkout
-    ? "Seu próximo treino está aqui."
+    ? currentWorkout.title
     : upcomingWorkout ? "Próximo treino agendado." : "Aguardando seu primeiro treino.";
   document.querySelector("[data-home-summary]").textContent =
     !hasWorkout
       ? upcomingWorkout
         ? `Treino ${upcomingWorkout.code} - ${upcomingWorkout.title} será liberado em ${availabilityLabel}.`
         : "Seu personal ainda não publicou um treino para você."
-      : `${currentWorkout.title} - ${getCurrentExercises().length} exercícios - cerca de ${currentWorkout.estimatedMinutes} minutos.`;
+      : `${currentWorkout.focus ? `${currentWorkout.focus} · ` : ""}${getCurrentExercises().length} exercícios · ~${currentWorkout.estimatedMinutes} min`;
   const sessions = Store.state.sessions || [];
   const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
   const recentSessions = sessions.filter((session) => {
@@ -496,12 +496,12 @@ const renderHome = () => {
       : upcomingWorkout ? `Disponível em ${availabilityLabel}` : "Aguardando treino";
   }
   document.querySelector("[data-workout-title]").textContent = hasWorkout
-    ? currentWorkout.title
-    : upcomingWorkout ? `Treino ${upcomingWorkout.code} - ${upcomingWorkout.title}` : currentWorkout.title;
+    ? `Treino ${currentWorkout.code}`
+    : upcomingWorkout ? `Treino ${upcomingWorkout.code}` : "Treino";
   document.querySelector("[data-workout-focus]").textContent = hasWorkout
     ? currentWorkout.focus
     : upcomingWorkout ? `Disponível em ${availabilityLabel}` : currentWorkout.focus;
-  document.querySelector("[data-workout-plan-title]").textContent = currentWorkout.id === emptyWorkout.id ? "Sem treino ativo" : `Treino ${currentWorkout.code} - ${currentWorkout.title}`;
+  document.querySelector("[data-workout-plan-title]").textContent = currentWorkout.id === emptyWorkout.id ? "Sem treino ativo" : currentWorkout.title;
   document.querySelector("[data-workout-last]").textContent = currentWorkout.lastDoneLabel === "novo" ? "Ainda não executado" : `Última execução ${currentWorkout.lastDoneLabel}`;
   document.querySelector("[data-workout-minutes]").textContent = `${currentWorkout.estimatedMinutes} min`;
   document.querySelector("[data-workout-exercise-count]").textContent = `${getCurrentExercises().length} exercícios`;
@@ -527,7 +527,7 @@ const renderWorkoutProgress = () => {
   if (sessionDockTitle) sessionDockTitle.textContent = isReady ? "Treino completo" : nextExercise?.name || "Próxima série";
   if (sessionDockCopy) sessionDockCopy.textContent = isReady
     ? `${done} séries concluídas`
-    : `Série ${nextDone + 1} de ${nextTotal} · ${done}/${totalSets} no treino`;
+    : `${done}/${totalSets} séries · próxima ${nextDone + 1}/${nextTotal}`;
   if (sessionCta) sessionCta.textContent = isReady ? "Finalizar" : "Continuar";
   if (finishReadiness) finishReadiness.textContent = isReady ? "Pronto" : `${Math.max(0, totalSets - done)} restantes`;
   if (finishDisclosure) finishDisclosure.classList.toggle("is-ready", isReady);
@@ -744,6 +744,12 @@ const renderExercises = () => {
 const renderProgress = () => {
   const entries = Store.getProgressEntries([]);
   const historySection = document.querySelector("[data-progress-history]");
+  const progressPage = document.querySelector('[data-page="progress"]');
+  const progressHeading = progressPage?.querySelector(".page-heading");
+  if (progressDisclosure && progressPage) {
+    if (entries.length) progressPage.append(progressDisclosure);
+    else progressHeading?.after(progressDisclosure);
+  }
   if (progressDisclosure && progressDisclosure.dataset.initialized !== "true") {
     progressDisclosure.open = entries.length === 0;
     progressDisclosure.dataset.initialized = "true";

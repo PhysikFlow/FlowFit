@@ -10,8 +10,8 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="css/tokens.css?v=build-20260809-7" />
     <link rel="stylesheet" href="css/components.css?v=build-20260809-8" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260809-6" />
-    <script type="module" src="js/app.js?v=build-20260809-8"></script>
+    <link rel="stylesheet" href="css/app.css?v=build-20260809-7" />
+    <script type="module" src="js/app.js?v=build-20260809-9"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title" aria-busy="true">
@@ -88,9 +88,8 @@
       </section>
 
       <section class="page" data-page="workout" aria-labelledby="workout-title">
-        <header class="page-heading page-heading--compact">
-          <span class="eyebrow">Treino selecionado</span>
-          <h1 id="workout-title" data-workout-title>Nenhum treino publicado</h1>
+        <header class="page-heading page-heading--compact page-heading--tool">
+          <h1 id="workout-title" data-workout-title>Treino</h1>
           <p data-workout-focus>Aguardando prescrição do personal.</p>
         </header>
 
@@ -102,7 +101,6 @@
         <article class="workout-summary card" data-active-workout-only>
           <div class="workout-summary__top">
             <div>
-              <span class="eyebrow">Plano ativo</span>
               <h2 data-workout-plan-title>Sem treino ativo</h2>
               <p data-workout-last>Sem execução registrada</p>
             </div>
@@ -175,13 +173,12 @@
 
       <section class="page" data-page="progress" aria-labelledby="progress-title">
         <header class="page-heading">
-          <span class="eyebrow">Sua evolução</span>
-          <h1 id="progress-title">Consistência que aparece</h1>
-          <p>Medidas e treinos concluídos em um só lugar.</p>
+          <h1 id="progress-title">Evolução</h1>
+          <p>Medidas e treinos concluídos.</p>
         </header>
 
         <details class="form-disclosure card" data-progress-disclosure>
-          <summary><span><strong>Novo check-in</strong><small>Peso e medidas de hoje</small></span><span class="chip">Adicionar</span></summary>
+          <summary><span><strong>Novo check-in</strong><small>Peso e medidas de hoje</small></span></summary>
           <form class="progress-form" data-progress-form>
             <label>Peso <input type="number" name="weight" inputmode="decimal" min="20" step="0.1" placeholder="Ex: 79,2" aria-label="Peso atual em quilos" required /></label>
             <label>Cintura <input type="number" name="waist" inputmode="decimal" min="30" step="0.1" placeholder="Opcional" aria-label="Cintura atual em centímetros" /></label>
@@ -207,9 +204,8 @@
 
       <section class="page" data-page="schedule" aria-labelledby="schedule-title">
         <header class="page-heading">
-          <span class="eyebrow">Agenda e avisos</span>
-          <h1 id="schedule-title">O que vem agora</h1>
-          <p>Organize seus próximos treinos e avaliações.</p>
+          <h1 id="schedule-title">Agenda</h1>
+          <p>Treinos, avaliações e lembretes.</p>
         </header>
 
         <div class="filter-row" aria-label="Filtrar agenda">
@@ -223,7 +219,7 @@
         <section class="schedule-list" aria-label="Próximos lembretes" data-schedule-list></section>
 
         <details class="form-disclosure card" data-schedule-disclosure>
-          <summary><span><strong>Novo lembrete</strong><small>Lembrete pessoal</small></span><span class="chip">Adicionar</span></summary>
+          <summary><span><strong>Novo lembrete</strong><small>Lembrete pessoal</small></span></summary>
           <form class="schedule-form" data-schedule-form>
             <label>Título <input type="text" name="title" placeholder="Ex: Mobilidade" required /></label>
             <label>Data e horário <input type="datetime-local" name="time" required /></label>
@@ -241,8 +237,7 @@
 
       <section class="page" data-page="notifications" aria-labelledby="notifications-title">
         <header class="page-heading">
-          <span class="eyebrow">Central de avisos</span>
-          <h1 id="notifications-title">O que precisa da sua atenção</h1>
+          <h1 id="notifications-title">Notificações</h1>
           <p>Atualizações do seu acompanhamento.</p>
         </header>
 
@@ -263,13 +258,12 @@
           </div>
         </article>
 
-        <div class="section-title"><h2>Resumo</h2></div>
-        <section class="profile-summary" aria-label="Resumo do aluno">
-          <article class="stat card"><strong data-profile-goal>Não informado</strong><small>objetivo</small></article>
-          <article class="stat card"><strong data-profile-status>Carregando</strong><small>status</small></article>
+        <section class="profile-summary card" aria-label="Resumo do aluno">
+          <div class="profile-fact"><small>Objetivo</small><strong data-profile-goal>Não informado</strong></div>
+          <div class="profile-fact"><small>Status</small><strong data-profile-status>Carregando</strong></div>
         </section>
 
-        <div class="section-title"><h2>Personal</h2><span>acompanhamento</span></div>
+        <div class="section-title"><h2>Seu personal</h2></div>
         <label class="coach-selector card" data-coach-selector-field hidden>
           Personal ativo
           <select data-coach-selector aria-label="Selecionar personal"></select>
@@ -277,18 +271,20 @@
         </label>
         <article class="setting-row card">
           <span class="avatar coach-photo" data-coach-photo>PF</span>
-          <div><strong data-coach-name>Personal</strong><small>Responsável pela prescrição e ajustes do plano.</small></div>
-          <svg class="icon icon--muted" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+          <div><strong data-coach-name>Personal</strong><small>Prescrição e acompanhamento do seu treino.</small></div>
         </article>
 
-        <div class="section-title"><h2>Aparência</h2><span>marca do personal</span></div>
-        <section class="theme-controls card" aria-label="Personalização do tema">
-          <p class="form-status">Tema definido pelo seu personal.</p>
-          <button class="button button--quiet button--block" type="button" data-theme-reset>Restaurar aparência original</button>
+        <div class="section-title"><h2>Preferências</h2></div>
+        <section class="profile-settings card" aria-label="Preferências e conta">
+          <div class="profile-setting">
+            <div><strong>Aparência</strong><small>Tema definido pelo personal</small></div>
+            <button class="text-button" type="button" data-theme-reset>Restaurar</button>
+          </div>
+          <div class="profile-setting">
+            <div><strong>Conta</strong><small>Sessão neste aparelho</small></div>
+            <button class="text-button text-button--danger" type="button" data-reset-onboarding>Sair</button>
+          </div>
         </section>
-
-        <div class="section-title"><h2>Conta</h2><span>sessão</span></div>
-        <button class="button button--quiet button--block" type="button" data-reset-onboarding>Sair da conta</button>
       </section>
     </main>
 
