@@ -1,30 +1,28 @@
 # FlowFit Professor
 
-Esqueleto do painel usado pelo personal para administrar alunos, treinos, comunicacao, negocio e aparencia do app do aluno.
+Painel usado pelo personal para administrar alunos, publicar treinos e personalizar o app do aluno.
 
 ## Estado atual
 
-- HTML, CSS e JS puros.
-- Navegacao por hash.
-- Sem login, pagamentos ou banco de dados obrigatorio.
-- Alunos e treinos persistidos em repositórios local-first com Supabase opcional.
-- Marca branca salva localmente e, se Supabase estiver configurado, sincronizada na nuvem.
-- Publicacao local-first de treinos para o app do aluno via `flowfit.published-workouts`, com sync Supabase opcional.
-- Reaproveita tokens, componentes e icones compartilhados do `appAluno`.
+- HTML, CSS e JavaScript puros.
+- Navegação por hash.
+- Login por email/senha ou Google, com validação do papel de professor.
+- Alunos, convites, treinos e perfil sincronizados pelo Supabase.
+- Logo e foto permanecem locais; os demais tokens de marca são publicados para o app do aluno.
+- Layout responsivo para desktop, tablet e celular, com navegação inferior no mobile.
+- Tokens, componentes e ícones compartilhados com o `appAluno`.
 
-## Telas criadas
+## Áreas disponíveis
 
-- Dashboard: KPIs, prioridades e atividade recente.
-- Alunos: lista real, objetivo, status, treino ativo e cadastro persistido.
-- Treinos: modelos, treinos cadastrados, preview estruturado e publicacao local pelo bloco `Adicionar treino`.
-- Comunicacao: estado vazio ate autenticacao/notificacoes reais.
-- Negocio: agenda, financeiro e retencao como modulos nao configurados.
-- Aparencia: preview de marca branca com nome, frase, cor de destaque, modo claro/escuro e botao `Salvar e aplicar no app do aluno`.
+- Dashboard: indicadores, pendências e atividade recente.
+- Alunos: cadastro, convite, importação e acompanhamento de execuções.
+- Treinos: criação, edição, agendamento, publicação e arquivamento.
+- Aparência: marca, cores, tipografia, formas, fundo, logo, foto e prévia do aluno.
+- Perfil: informações profissionais, contato, CREF e uso do plano.
 
-## Proximos passos naturais
+## Próximos passos naturais
 
-1. Criar detalhe do aluno.
-2. Criar builder real de treino.
-3. Trocar o tenant demo por login real do personal.
-4. Evoluir sync de treinos para autenticacao real e historico de alteracoes.
-5. Separar dados por personal/tenant para marca branca.
+1. Validar o fluxo autenticado completo com dados reais em celular e desktop.
+2. Publicar logo e foto no Storage quando o upload remoto for priorizado.
+3. Ampliar filtros e acompanhamento conforme o volume real de alunos crescer.
+4. Automatizar cobrança e limites apenas depois de validar o produto principal.

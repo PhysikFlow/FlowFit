@@ -1,4 +1,4 @@
-import { getSupabase } from "../../core/supabase.js";
+import { getSupabase } from "../../core/supabase.js?v=build-20260809-6";
 
 const PROFILES_TABLE = "profiles";
 const PROFILE_COLUMNS_BASE = "user_id, role, name, created_at, updated_at";
@@ -153,7 +153,7 @@ const buildCoachAccess = (profile) => {
     return {
       ok: false,
       reason: "profile-missing",
-      message: "Conta autenticada, mas o perfil não carregou. Rode o SQL atualizado e recarregue a página."
+      message: "Conta autenticada, mas o perfil não carregou. Recarregue a página ou tente novamente mais tarde."
     };
   }
 

@@ -8,17 +8,17 @@
     <title>FlowFit - Aluno</title>
     <link rel="icon" type="image/svg+xml" href="assets/icons/app-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="css/tokens.css?v=access-v2-20260805" />
-    <link rel="stylesheet" href="css/components.css?v=access-v2-20260805" />
-    <link rel="stylesheet" href="css/app.css?v=access-v2-20260805" />
-    <script type="module" src="js/app.js?v=access-v2-20260805"></script>
+    <link rel="stylesheet" href="css/tokens.css?v=build-20260809-6" />
+    <link rel="stylesheet" href="css/components.css?v=build-20260809-7" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260809-6" />
+    <script type="module" src="js/app.js?v=build-20260809-6"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title">
       <div class="onboarding__panel card">
         <span class="eyebrow"><span data-brand-name>FlowFit</span> aluno</span>
         <h1 id="onboarding-title" data-auth-title>Acessar meus treinos</h1>
-        <p data-auth-copy>Google e email funcionam no primeiro acesso e nos próximos.</p>
+        <p data-auth-copy>Use o mesmo email cadastrado pelo seu personal.</p>
 
         <form class="onboarding-form" data-onboarding-form data-auth-mode="access">
           <div class="auth-social-block">
@@ -37,7 +37,7 @@
             Email
             <input type="email" name="email" autocomplete="email" placeholder="email cadastrado pelo personal" required />
           </label>
-          <p class="form-status" data-auth-status>Use o email informado ao personal ou abra o convite recebido.</p>
+          <p class="form-status" data-auth-status></p>
           <button class="button button--block" type="submit" data-auth-submit data-access-app>Enviar link de acesso</button>
         </form>
       </div>
@@ -53,9 +53,6 @@
           </div>
         </div>
         <div class="topbar__actions">
-          <button class="icon-button" type="button" aria-label="Sair da conta" data-sign-out>
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></svg>
-          </button>
           <button class="icon-button notification-button" type="button" aria-label="Abrir notificações" data-go="notifications">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>
             <span class="badge" data-notification-count>0</span>
@@ -68,38 +65,26 @@
 
       <section class="page is-active" data-page="home" aria-labelledby="home-title">
         <article class="welcome card">
-          <span class="eyebrow">Hoje - <span data-home-workout>Treino B</span></span>
-          <h1 id="home-title">Vamos construir mais um resultado?</h1>
-          <p data-home-summary>Costas e bíceps - 7 exercícios - cerca de 52 minutos.</p>
-          <button class="button" type="button" data-go="workout">Começar treino <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg></button>
+          <span class="eyebrow">Hoje - <span data-home-workout>carregando treino</span></span>
+          <h1 id="home-title" data-home-title>Seu próximo treino está aqui.</h1>
+          <p data-home-summary>Aguardando seus dados.</p>
+          <button class="button" type="button" data-go="workout" data-home-workout-action disabled><span data-home-workout-label>Aguardando treino</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg></button>
         </article>
 
         <div class="section-title">
-          <h2>Esta semana</h2>
-          <span>Meta: 4 treinos</span>
+          <h2>Últimos 7 dias</h2>
+          <span>atividade registrada</span>
         </div>
-        <section class="stats" aria-label="Resumo da semana">
-          <article class="stat card"><strong data-stat-done>3/4</strong><small>treinos concluídos</small></article>
-          <article class="stat card"><strong data-stat-volume>12,8t</strong><small>volume acumulado</small></article>
-          <article class="stat card"><strong data-stat-streak>6 dias</strong><small>sequência atual</small></article>
+        <section class="stats card" aria-label="Atividade dos últimos sete dias">
+          <article class="stat"><strong data-stat-done>0</strong><small>treinos</small></article>
+          <article class="stat"><strong data-stat-volume>0t</strong><small>volume</small></article>
+          <article class="stat"><strong data-stat-sets>0</strong><small>séries concluídas</small></article>
         </section>
-
-        <div class="section-title">
-          <h2>Progresso da meta</h2>
-          <span data-week-percent>75%</span>
-        </div>
-        <article class="week-card card">
-          <div class="week-card__head">
-            <div><span class="eyebrow">Consistência</span><h3 data-week-message>Semana em andamento</h3></div>
-            <strong data-week-delta>0%</strong>
-          </div>
-          <div class="progress-track" aria-label="75 por cento da meta semanal"><span data-week-progress style="--progress: 75%"></span></div>
-        </article>
       </section>
 
       <section class="page" data-page="workout" aria-labelledby="workout-title">
-        <header class="page-heading">
-          <span class="eyebrow">Treino de hoje</span>
+        <header class="page-heading page-heading--compact">
+          <span class="eyebrow">Treino selecionado</span>
           <h1 id="workout-title" data-workout-title>Nenhum treino publicado</h1>
           <p data-workout-focus>Aguardando prescrição do personal.</p>
         </header>
@@ -109,7 +94,7 @@
           <div class="workout-picker__list" data-workout-options></div>
         </section>
 
-        <article class="workout-summary card">
+        <article class="workout-summary card" data-active-workout-only>
           <div class="workout-summary__top">
             <div>
               <span class="eyebrow">Plano ativo</span>
@@ -121,16 +106,15 @@
           <div class="workout-summary__meta">
             <span class="chip" data-workout-exercise-count>0 exercícios</span>
             <span class="chip" data-workout-set-count>0 séries</span>
-            <span class="chip">RIR 2</span>
           </div>
           <div class="session-progress">
             <div class="section-title section-title--compact">
               <h2>Execução</h2>
-              <span data-session-count>0/23 séries</span>
+              <span data-session-count>0/0 séries</span>
             </div>
             <div class="progress-track" aria-label="Progresso do treino atual"><span data-session-progress style="--progress: 0%"></span></div>
           </div>
-          <div class="rest-timer" data-rest-timer aria-live="polite">
+          <div class="rest-timer" data-rest-timer aria-live="polite" hidden>
             <div>
               <span class="eyebrow">Descanso</span>
               <strong data-rest-label>Pronto para iniciar</strong>
@@ -139,61 +123,80 @@
           </div>
         </article>
 
-        <div class="section-title"><h2>Exercícios</h2><span>toque para registrar</span></div>
-        <section class="exercise-list" aria-label="Lista de exercícios" data-exercise-list></section>
+        <div class="section-title" data-active-workout-only><h2>Exercícios</h2><span>toque para registrar</span></div>
+        <section class="exercise-list" aria-label="Lista de exercícios" data-exercise-list data-active-workout-only></section>
 
-        <div class="section-title"><h2>Finalizar</h2><span>envia ao professor</span></div>
-        <form class="finish-feedback card" data-finish-feedback>
-          <label>Como foi?
-            <select name="effort" data-feedback-effort>
-              <option value="easy">Leve</option>
-              <option value="ok" selected>Na medida</option>
-              <option value="hard">Pesado</option>
-            </select>
-          </label>
-          <label>Dor ou desconforto?
-            <select name="pain" data-feedback-pain>
-              <option value="none" selected>Não senti dor</option>
-              <option value="mild">Leve desconforto</option>
-              <option value="pain">Senti dor</option>
-            </select>
-          </label>
-          <label>Nota para o personal
-            <textarea name="note" rows="3" placeholder="Ex: aumentei carga no supino, mas senti ombro no crucifixo." data-feedback-note></textarea>
-          </label>
-          <p class="form-status" data-finish-status>Ao concluir, o professor verá cargas, reps, volume e feedback.</p>
-        </form>
-        <div class="button-group">
-          <button class="button button--block" type="button" data-finish>Concluir treino</button>
-          <button class="button button--quiet button--block" type="button" data-reset-workout>Reiniciar registro</button>
-        </div>
+        <details class="finish-disclosure card" data-finish-disclosure data-active-workout-only>
+          <summary>
+            <span><small>Encerramento</small><strong>Finalizar treino</strong></span>
+            <span class="chip" data-finish-readiness>Complete as séries</span>
+          </summary>
+          <div class="finish-disclosure__body">
+            <form class="finish-feedback" data-finish-feedback>
+              <label>Esforço
+                <select name="effort" data-feedback-effort>
+                  <option value="easy">Leve</option>
+                  <option value="ok" selected>Na medida</option>
+                  <option value="hard">Pesado</option>
+                </select>
+              </label>
+              <label>Dor ou desconforto?
+                <select name="pain" data-feedback-pain>
+                  <option value="none" selected>Não senti dor</option>
+                  <option value="mild">Leve desconforto</option>
+                  <option value="pain">Senti dor</option>
+                </select>
+              </label>
+              <label>Nota opcional
+                <textarea name="note" rows="3" placeholder="Algo que seu personal precisa saber?" data-feedback-note></textarea>
+              </label>
+              <p class="form-status" data-finish-status>As cargas, repetições e seu feedback serão enviados.</p>
+            </form>
+            <div class="button-group">
+              <button class="button button--block" type="button" data-finish>Concluir e enviar</button>
+              <button class="text-button" type="button" data-reset-workout>Reiniciar registro</button>
+            </div>
+          </div>
+        </details>
+
+        <aside class="session-dock" data-session-dock hidden aria-live="polite">
+          <div>
+            <strong data-session-dock-title>Próxima série</strong>
+            <small data-session-dock-copy>0 de 0 concluídas</small>
+          </div>
+          <button class="button" type="button" data-session-cta>Ir para a série</button>
+        </aside>
       </section>
 
       <section class="page" data-page="progress" aria-labelledby="progress-title">
         <header class="page-heading">
           <span class="eyebrow">Sua evolução</span>
           <h1 id="progress-title">Consistência que aparece</h1>
-          <p>Uma leitura simples do volume de treino, últimas medidas e histórico local.</p>
+          <p>Medidas e treinos concluídos em um só lugar.</p>
         </header>
 
-        <div class="section-title"><h2>Peso recente</h2><span>últimos registros</span></div>
-        <div class="chart card" role="img" aria-label="Gráfico de peso nos últimos registros" data-chart></div>
+        <details class="form-disclosure card" data-progress-disclosure>
+          <summary><span><strong>Novo check-in</strong><small>Peso e medidas de hoje</small></span><span class="chip">Adicionar</span></summary>
+          <form class="progress-form" data-progress-form>
+            <label>Peso <input type="number" name="weight" inputmode="decimal" min="20" step="0.1" placeholder="Ex: 79,2" aria-label="Peso atual em quilos" required /></label>
+            <label>Cintura <input type="number" name="waist" inputmode="decimal" min="30" step="0.1" placeholder="Opcional" aria-label="Cintura atual em centímetros" /></label>
+            <label>Braço <input type="number" name="arm" inputmode="decimal" min="10" step="0.1" placeholder="Opcional" aria-label="Braço atual em centímetros" /></label>
+            <button class="button button--block" type="submit">Salvar check-in</button>
+          </form>
+        </details>
 
-        <div class="section-title"><h2>Novo check-in</h2><span>hoje</span></div>
-        <form class="progress-form card" data-progress-form>
-          <label>Peso <input type="number" name="weight" inputmode="decimal" min="20" step="0.1" value="79.2" aria-label="Peso atual em quilos" /></label>
-          <label>Cintura <input type="number" name="waist" inputmode="decimal" min="30" step="0.1" value="81.8" aria-label="Cintura atual em centímetros" /></label>
-          <label>Braço <input type="number" name="arm" inputmode="decimal" min="10" step="0.1" value="39.1" aria-label="Braço atual em centímetros" /></label>
-          <button class="button button--block" type="submit">Salvar check-in</button>
-        </form>
+        <section data-progress-history hidden>
+          <div class="section-title"><h2>Peso recente</h2><span>últimos registros</span></div>
+          <div class="chart card" role="img" aria-label="Gráfico de peso nos últimos registros" data-chart></div>
 
-        <div class="section-title"><h2>Últimas medidas</h2><span data-measurements-date>12 jul 2026</span></div>
-        <section class="metric-list" aria-label="Medidas corporais" data-metric-list></section>
+          <div class="section-title"><h2>Últimas medidas</h2><span data-measurements-date>Sem registros</span></div>
+          <section class="metric-list" aria-label="Medidas corporais" data-metric-list></section>
 
-        <div class="section-title"><h2>Linha do tempo</h2><span>medidas</span></div>
-        <section class="measurement-history" aria-label="Histórico de medidas" data-measurement-history></section>
+          <div class="section-title"><h2>Linha do tempo</h2><span>medidas</span></div>
+          <section class="measurement-history" aria-label="Histórico de medidas" data-measurement-history></section>
+        </section>
 
-        <div class="section-title"><h2>Histórico</h2><span>local</span></div>
+        <div class="section-title"><h2>Treinos concluídos</h2></div>
         <section class="history-list" aria-label="Histórico de treinos concluídos" data-history-list></section>
       </section>
 
@@ -201,7 +204,7 @@
         <header class="page-heading">
           <span class="eyebrow">Agenda e avisos</span>
           <h1 id="schedule-title">O que vem agora</h1>
-          <p>Lembretes criados neste aparelho. Comunicação real entra depois da autenticação de mensagens.</p>
+          <p>Organize seus próximos treinos e avaliações.</p>
         </header>
 
         <div class="filter-row" aria-label="Filtrar agenda">
@@ -211,29 +214,31 @@
           <button type="button" data-schedule-filter="Avaliacao">Avaliação</button>
         </div>
 
-        <div class="section-title"><h2>Novo lembrete</h2><span>local</span></div>
-        <form class="schedule-form card" data-schedule-form>
-          <label>Título <input type="text" name="title" value="Mobilidade antes do treino" required /></label>
-          <label>Horário <input type="text" name="time" value="Hoje, 17:40" required /></label>
-          <label>Tipo
-            <select name="type">
-              <option>Treino</option>
-              <option>Mensagem</option>
-              <option>Avaliacao</option>
-            </select>
-          </label>
-          <button class="button button--block" type="submit">Adicionar lembrete</button>
-        </form>
-
-        <div class="section-title"><h2>Próximos itens</h2><span data-schedule-count>0 pendentes</span></div>
+        <div class="section-title"><h2>Próximos itens</h2><span data-schedule-count>0 próximos</span></div>
         <section class="schedule-list" aria-label="Próximos lembretes" data-schedule-list></section>
+
+        <details class="form-disclosure card" data-schedule-disclosure>
+          <summary><span><strong>Novo lembrete</strong><small>Lembrete pessoal</small></span><span class="chip">Adicionar</span></summary>
+          <form class="schedule-form" data-schedule-form>
+            <label>Título <input type="text" name="title" placeholder="Ex: Mobilidade" required /></label>
+            <label>Data e horário <input type="datetime-local" name="time" required /></label>
+            <label>Tipo
+              <select name="type">
+                <option>Treino</option>
+                <option>Mensagem</option>
+                <option value="Avaliacao">Avaliação</option>
+              </select>
+            </label>
+            <button class="button button--block" type="submit">Adicionar lembrete</button>
+          </form>
+        </details>
       </section>
 
       <section class="page" data-page="notifications" aria-labelledby="notifications-title">
         <header class="page-heading">
           <span class="eyebrow">Central de avisos</span>
           <h1 id="notifications-title">O que precisa da sua atenção</h1>
-          <p>Avisos reais do personal entram na próxima etapa de comunicação.</p>
+          <p>Atualizações do seu acompanhamento.</p>
         </header>
 
         <div class="section-title">
@@ -245,18 +250,18 @@
 
       <section class="page" data-page="profile" aria-labelledby="profile-title">
         <article class="profile-card card">
-          <span class="avatar" aria-hidden="true" data-student-initials>LA</span>
+          <span class="avatar" aria-hidden="true" data-student-initials>AL</span>
           <div>
             <h1 id="profile-title" data-student-name>Aluno</h1>
-            <p class="muted" data-student-since>Aluno desde janeiro de 2026</p>
-            <span class="chip" data-student-plan>Plano Performance</span>
+            <p class="muted" data-student-since>Vínculo sendo carregado</p>
+            <span class="chip" data-student-plan>Sem plano</span>
           </div>
         </article>
 
-        <div class="section-title"><h2>Resumo</h2><span>dados locais</span></div>
+        <div class="section-title"><h2>Resumo</h2></div>
         <section class="profile-summary" aria-label="Resumo do aluno">
-          <article class="stat card"><strong data-profile-goal>Hipertrofia</strong><small>objetivo</small></article>
-          <article class="stat card"><strong data-profile-frequency>4x semana</strong><small>frequência</small></article>
+          <article class="stat card"><strong data-profile-goal>Não informado</strong><small>objetivo</small></article>
+          <article class="stat card"><strong data-profile-status>Carregando</strong><small>status</small></article>
         </section>
 
         <div class="section-title"><h2>Personal</h2><span>acompanhamento</span></div>
@@ -273,19 +278,12 @@
 
         <div class="section-title"><h2>Aparência</h2><span>marca do personal</span></div>
         <section class="theme-controls card" aria-label="Personalização do tema">
-          <p class="form-status">O visual deste app é configurado pelo seu personal. Use o botão abaixo apenas se o tema parecer quebrado neste aparelho.</p>
-          <button class="button button--quiet button--block" type="button" data-theme-reset>Limpar cache local do tema</button>
-        </section>
-
-        <div class="section-title"><h2>Conta</h2></div>
-        <section class="settings-list" aria-label="Configurações da conta">
-          <button class="setting-row setting-row--button card" type="button" data-go="notifications"><span class="surface-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg></span><div><strong>Notificações</strong><small>Lembretes de treino e mensagens</small></div><svg class="icon icon--muted" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg></button>
-          <article class="setting-row card"><span class="surface-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="4" /><path d="M12 12h8" /></svg></span><div><strong>Meu plano</strong><small>Renova em 12 de agosto</small></div><svg class="icon icon--muted" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg></article>
-          <article class="setting-row card"><span class="surface-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 5 6v6c0 4 3 7 7 9 4-2 7-5 7-9V6l-7-3Z" /><path d="m9 12 2 2 4-5" /></svg></span><div><strong>Privacidade</strong><small>Dados, fotos e permissões</small></div><svg class="icon icon--muted" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg></article>
+          <p class="form-status">Tema definido pelo seu personal.</p>
+          <button class="button button--quiet button--block" type="button" data-theme-reset>Restaurar aparência original</button>
         </section>
 
         <div class="section-title"><h2>Conta</h2><span>sessão</span></div>
-        <button class="button button--quiet button--block" type="button" data-reset-onboarding>Sair e trocar conta</button>
+        <button class="button button--quiet button--block" type="button" data-reset-onboarding>Sair da conta</button>
       </section>
     </main>
 

@@ -1,6 +1,6 @@
-import { Platform } from "../../core/platform.js";
-import { getSupabase } from "../../core/supabase.js";
-import { authRepository } from "./auth-repository.js";
+import { Platform } from "../../core/platform.js?v=build-20260809-6";
+import { getSupabase } from "../../core/supabase.js?v=build-20260809-6";
+import { authRepository } from "./auth-repository.js?v=build-20260809-6";
 
 export const WORKOUT_SESSIONS_KEY = "flowfit.workout-sessions";
 
@@ -226,7 +226,7 @@ export const sessionRepository = {
       const local = upsertLocalSession({
         ...normalized,
         syncStatus: "local",
-        syncMessage: "Sem sessão Supabase ativa. O treino ficou salvo neste aparelho."
+        syncMessage: "Sua sessão expirou. O treino ficou salvo neste aparelho."
       });
       return { synced: false, reason: "not-authenticated", session: local };
     }
@@ -264,6 +264,34 @@ export const sessionRepository = {
       });
       return { synced: false, error, session: failed };
     }
+  },
+
+  async syncPendingSessions({ studentId = "", coachId = "" } = {}) {
+    const resolvedStudentId = normalizeText(studentId);
+    const resolvedCoachId = normalizeText(coachId);
+    if (!resolvedStudentId || !resolvedCoachId) {
+      return { syncedCount: 0, failedCount: 0, sessions: [] };
+    }
+
+    const pending = this.listCachedSessions().filter((session) => (
+      session.syncStatus !== "synced"
+      && session.studentId === resolvedStudentId
+      && session.coachId === resolvedCoachId
+    ));
+    const sessions = [];
+    let syncedCount = 0;
+
+    for (const session of pending) {
+      const result = await this.syncSession(session);
+      if (result.session) sessions.push(result.session);
+      if (result.synced) syncedCount += 1;
+    }
+
+    return {
+      syncedCount,
+      failedCount: Math.max(0, pending.length - syncedCount),
+      sessions
+    };
   },
 
   async fetchCoachSessions({ studentId = "", limit = 80 } = {}) {

@@ -12,10 +12,10 @@
     <title>FlowFit - Professor</title>
     <link rel="icon" type="image/svg+xml" href="../appAluno/assets/icons/app-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=professor-mobile-20260808" />
-    <link rel="stylesheet" href="../appAluno/css/components.css?v=professor-mobile-20260808" />
-    <link rel="stylesheet" href="css/app.css?v=professor-mobile-20260808" />
-    <script type="module" src="js/app.js?v=professor-mobile-20260808"></script>
+    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260809-6" />
+    <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260809-7" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260809-9" />
+    <script type="module" src="js/app.js?v=build-20260809-9"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title">
@@ -31,7 +31,7 @@
         <label>Email <input type="email" name="email" autocomplete="email" placeholder="você@email.com" required /></label>
         <label>Senha <input type="password" name="password" autocomplete="current-password" minlength="6" placeholder="Mínimo 6 caracteres" required /></label>
         <button class="auth-link-button" type="button" data-auth-reset>Esqueci minha senha</button>
-        <p class="form-status" data-auth-status>Acesse sua conta de professor.</p>
+        <p class="form-status" data-auth-status></p>
         <button class="auth-link-button" type="button" data-auth-gate-sign-out hidden>Sair desta conta</button>
         <button class="button button--block" type="submit" data-auth-submit>Entrar</button>
         <p class="auth-secondary-action" data-auth-secondary>Não tem conta? Use “Criar conta”.</p>
@@ -44,7 +44,7 @@
               <path fill="#fbbc05" d="M6.4 13.8a6 6 0 0 1 0-3.6V7.6H3.1a10 10 0 0 0 0 8.8l3.3-2.6Z" />
               <path fill="#ea4335" d="M12 6.1c1.5 0 2.8.5 3.8 1.5l2.8-2.8A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.9 5.6l3.3 2.6c.8-2.3 3-4.1 5.6-4.1Z" />
             </svg>
-            Google
+            <span data-oauth-label>Entrar com Google</span>
           </button>
         </div>
       </form>
@@ -63,8 +63,6 @@
         <a class="is-active" href="#dashboard" data-nav="dashboard" aria-current="page"><span data-icon="chart"></span>Dashboard</a>
         <a href="#students" data-nav="students"><span data-icon="users"></span>Alunos</a>
         <a href="#workouts" data-nav="workouts"><span data-icon="dumbbell"></span>Treinos</a>
-        <a href="#messages" data-nav="messages"><span data-icon="message"></span>Comunicação</a>
-        <a href="#business" data-nav="business"><span data-icon="wallet"></span>Negócio</a>
         <a href="#appearance" data-nav="appearance"><span data-icon="palette"></span>Aparência</a>
       </nav>
 
@@ -81,14 +79,13 @@
       <header class="topbar">
         <div>
           <span class="mobile-topbar-brand"><span aria-hidden="true" data-brand-icon-mobile></span><strong data-brand-name>FlowFit</strong></span>
-          <span class="eyebrow" data-sync-eyebrow>Dados locais</span>
           <h1 data-page-title>Dashboard</h1>
         </div>
         <div class="topbar__actions">
           <span class="session-chip" data-auth-user></span>
-          <button class="button button--quiet" type="button" data-nav-jump="students">Adicionar aluno</button>
+          <button class="button button--quiet" type="button" data-nav-jump="students" data-open-student-form>Adicionar aluno</button>
           <button class="button" type="button" data-nav-jump="workouts" data-focus-workout-form>Novo treino</button>
-          <button class="button button--quiet" type="button" data-install-app hidden>Instalar</button>
+          <button class="button button--quiet" type="button" data-install-app aria-label="Instalar FlowFit Professor" hidden>Instalar</button>
           <button class="button button--quiet" type="button" data-sign-out>Sair</button>
         </div>
       </header>
@@ -114,32 +111,51 @@
         <section class="kpi-grid" aria-label="Indicadores principais">
           <article class="kpi card"><span class="surface-icon" data-icon="users"></span><div><strong data-kpi-students>0</strong><small>alunos ativos</small></div></article>
           <article class="kpi card"><span class="surface-icon" data-icon="dumbbell"></span><div><strong data-kpi-workouts>0</strong><small>treinos cadastrados</small></div></article>
-          <article class="kpi card"><span class="surface-icon" data-icon="calendar"></span><div><strong data-kpi-pending>0</strong><small>pendências</small></div></article>
         </section>
 
-        <article class="sync-status card">
-          <span class="surface-icon" data-icon="database"></span>
+        <div class="sync-status">
+          <span class="sync-status__dot" aria-hidden="true"></span>
           <div>
-            <span class="chip" data-sync-chip>Dados locais</span>
-            <strong data-sync-title>Modo local ativo</strong>
-            <small data-sync-detail>Aguardando conexão.</small>
+            <strong data-sync-title>Sincronizando</strong>
+            <small data-sync-detail>Carregando dados.</small>
           </div>
-        </article>
+          <span class="chip" data-sync-chip>Carregando</span>
+        </div>
 
         <div class="dashboard-grid">
           <article class="card panel">
-            <div class="section-title section-title--inline"><h2>Atenção hoje</h2><span>prioridades</span></div>
+            <div class="section-title section-title--inline"><h2>Para fazer</h2></div>
             <section class="task-list" data-task-list></section>
           </article>
           <article class="card panel">
-            <div class="section-title section-title--inline"><h2>Atividade recente</h2><span>dados reais</span></div>
+            <div class="section-title section-title--inline"><h2>Atividade recente</h2></div>
             <section class="activity-list" data-activity-list></section>
           </article>
         </div>
       </section>
 
       <section class="page" data-page="students" aria-label="Alunos e acompanhamento">
-        <form class="quick-form card" data-student-form>
+        <div class="page-toolbar">
+          <div class="page-toolbar__summary"><h2 class="sr-only">Alunos</h2><span data-student-count>0 cadastrados</span></div>
+          <div class="page-toolbar__actions">
+            <input class="list-search" type="search" placeholder="Buscar aluno" aria-label="Buscar aluno" autocomplete="off" data-student-search />
+            <button class="button" type="button" data-toggle-student-form>Novo aluno</button>
+          </div>
+        </div>
+
+        <section class="student-list" data-student-list aria-label="Lista de alunos"></section>
+        <section class="student-session-panel card" data-student-session-panel aria-label="Acompanhamento do aluno" hidden>
+          <article class="empty-state">
+            <strong>Selecione um aluno</strong>
+            <small>Veja treinos concluídos, cargas e feedback.</small>
+          </article>
+        </section>
+
+        <form class="quick-form quick-form--create card" data-student-form data-student-form-panel hidden>
+          <div class="form-heading">
+            <div><span class="eyebrow">Cadastro</span><h2>Novo aluno</h2></div>
+            <button class="icon-button" type="button" data-close-student-form aria-label="Fechar cadastro">×</button>
+          </div>
           <label>Nome <input name="name" placeholder="Nome completo do aluno" autocomplete="name" required /></label>
           <label>Email de acesso (opcional) <input type="email" name="email" placeholder="deixe vazio para convidar por link" autocomplete="email" /></label>
           <label>Objetivo
@@ -158,10 +174,12 @@
             </select>
           </label>
           <button class="button" type="submit">Salvar aluno</button>
-          <p class="form-status" data-student-sync-status>Mesmo email neste personal atualiza o aluno; em outro personal vira outro vínculo.</p>
+          <p class="form-status" data-student-sync-status>Mesmo email atualiza este vínculo; outros personais não são afetados.</p>
         </form>
 
-        <section class="student-tools-grid">
+        <details class="management-disclosure">
+          <summary>Convites e importação</summary>
+          <section class="student-tools-grid">
           <article class="student-invite card">
             <span class="eyebrow">Convite rápido</span>
             <h2>Enviar acesso ao aluno</h2>
@@ -180,7 +198,7 @@
           <form class="student-import card" data-student-import-form>
             <span class="eyebrow">Importação simples</span>
             <h2>Importar alunos por CSV</h2>
-            <p>Use uma planilha exportada como CSV. Nome é obrigatório; email, objetivo e status são opcionais.</p>
+            <p>Use CSV. Nome é obrigatório; os demais campos são opcionais.</p>
             <label class="file-picker">Arquivo CSV
               <input type="file" accept=".csv,text/csv" data-student-import-input />
               <small data-student-import-file>Nenhum arquivo selecionado</small>
@@ -188,39 +206,26 @@
             <button class="button button--block" type="submit">Importar alunos</button>
             <p class="form-status" data-student-import-status>Formato: nome,email,objetivo,status</p>
           </form>
-        </section>
-
-        <section class="student-list" data-student-list aria-label="Lista de alunos"></section>
-        <section class="student-session-panel card" data-student-session-panel aria-label="Acompanhamento do aluno">
-          <article class="empty-state">
-            <strong>Acompanhamento</strong>
-            <small>Selecione um aluno para ver treinos concluídos, cargas, volume e feedback.</small>
-          </article>
-        </section>
+          </section>
+        </details>
       </section>
 
       <section class="page" data-page="workouts" aria-label="Treinos, modelos e ajustes">
-        <div class="workout-builder card" id="add-workout">
-          <div class="workout-builder__intro">
+        <div class="page-toolbar">
+          <div class="page-toolbar__summary"><h2 class="sr-only">Treinos</h2><span data-workout-count>0 publicados</span></div>
+          <div class="page-toolbar__actions">
+            <input class="list-search" type="search" placeholder="Buscar treino" aria-label="Buscar treino" autocomplete="off" data-workout-search />
+            <button class="button" type="button" data-open-workout-form>Novo treino</button>
+          </div>
+        </div>
+        <section class="workout-list" data-workout-list aria-label="Treinos cadastrados"></section>
+
+        <div class="workout-builder card" id="add-workout" data-workout-builder hidden>
+          <button class="icon-button workout-builder__close" type="button" data-close-workout-form aria-label="Fechar editor de treino">×</button>
+          <div class="workout-builder__header">
             <span class="eyebrow" data-workout-builder-mode>Adicionar treino</span>
             <h2 data-workout-builder-title>Criar novo treino para um aluno</h2>
             <p data-workout-builder-copy>Ao publicar, o aluno recebe esse treino no app na próxima abertura ou atualização.</p>
-            <aside class="workout-preview" data-workout-preview aria-live="polite">
-              <div class="workout-preview__head">
-                <span class="surface-icon" aria-hidden="true" data-icon="dumbbell"></span>
-                <div>
-                  <strong>Preview do treino</strong>
-                  <small>Digite ou cole exercícios como “Supino reto 4x10”.</small>
-                </div>
-              </div>
-              <div class="workout-preview__stats">
-                <span><strong data-preview-exercises>0</strong><small>exercícios</small></span>
-                <span><strong data-preview-sets>0</strong><small>séries</small></span>
-                <span><strong data-preview-minutes>0</strong><small>min</small></span>
-              </div>
-              <section class="workout-preview__list" data-preview-list aria-label="Exercícios interpretados"></section>
-              <p class="form-status" data-workout-sync-status>Pronto para publicar.</p>
-            </aside>
           </div>
           <form class="quick-form quick-form--stack" data-workout-form>
             <label>Aluno
@@ -245,46 +250,41 @@
               <button class="button button--quiet button--block" type="button" data-cancel-workout-edit hidden>Cancelar edição</button>
             </div>
           </form>
+          <aside class="workout-preview" data-workout-preview aria-live="polite">
+            <div class="workout-preview__head">
+              <span class="surface-icon" aria-hidden="true" data-icon="dumbbell"></span>
+              <div>
+                <strong>Prévia do treino</strong>
+                <small>Cole exercícios como “Supino reto 4x10”.</small>
+              </div>
+            </div>
+            <div class="workout-preview__stats">
+              <span><strong data-preview-exercises>0</strong><small>exercícios</small></span>
+              <span><strong data-preview-sets>0</strong><small>séries</small></span>
+              <span><strong data-preview-minutes>0</strong><small>min</small></span>
+            </div>
+            <section class="workout-preview__list" data-preview-list aria-label="Exercícios interpretados"></section>
+            <p class="form-status" data-workout-sync-status>Pronto para publicar.</p>
+          </aside>
         </div>
 
-        <div class="section-title section-title--spaced"><h2>Treinos cadastrados</h2><span data-workout-count>0 itens</span></div>
-        <section class="workout-list" data-workout-list aria-label="Treinos cadastrados"></section>
-      </section>
-
-      <section class="page" data-page="messages" aria-label="Avisos, check-ins e lembretes">
-        <section class="message-grid">
-          <article class="card panel">
-            <h2>Caixa de entrada</h2>
-            <section class="message-list" data-message-list></section>
-          </article>
-          <article class="card panel">
-            <h2>Envio de avisos</h2>
-            <p>Chat e avisos entram na próxima etapa.</p>
-            <button class="button button--quiet button--block" type="button" disabled>Em desenvolvimento</button>
-          </article>
-        </section>
-      </section>
-
-      <section class="page" data-page="business" aria-label="Agenda, pagamentos e retenção">
-        <section class="business-grid">
-          <article class="card panel"><span class="surface-icon" data-icon="calendar"></span><h2>Agenda</h2><p>Consultas, reavaliações e lembretes recorrentes.</p><span class="chip">Não configurado</span></article>
-          <article class="card panel"><span class="surface-icon" data-icon="wallet"></span><h2>Financeiro</h2><p>PIX, cartão, boleto, assinatura e inadimplência.</p><span class="chip">Não configurado</span></article>
-          <article class="card panel"><span class="surface-icon" data-icon="chart"></span><h2>Retenção</h2><p>Alunos em risco, renovações e cancelamentos.</p><span class="chip">Não configurado</span></article>
-        </section>
       </section>
 
       <section class="page" data-page="appearance" aria-label="Aparência do app do aluno">
         <section class="appearance-grid">
           <form class="theme-editor card" data-theme-form>
-            <div class="theme-editor__section">
-              <span class="eyebrow">Identidade</span>
-              <label>Nome da marca <input name="brand" value="FlowFit" data-brand-input /></label>
-              <label>Frase curta <input name="tagline" value="Seu treino, no seu ritmo" data-tagline-input /></label>
-            </div>
+            <details class="theme-editor__section" open>
+              <summary aria-label="Identidade da marca"><span class="eyebrow">Identidade</span><span class="chip">Marca</span></summary>
+              <div class="theme-editor__section-body">
+                <label>Nome da marca <input name="brand" value="FlowFit" data-brand-input /></label>
+                <label>Frase curta <input name="tagline" value="Seu treino, no seu ritmo" data-tagline-input /></label>
+              </div>
+            </details>
 
-            <div class="theme-editor__section">
-              <span class="eyebrow">Cores</span>
-              <div class="theme-editor__colors">
+            <details class="theme-editor__section" open>
+              <summary aria-label="Cores do aplicativo"><span class="eyebrow">Cores</span><span class="chip">4 cores</span></summary>
+              <div class="theme-editor__section-body">
+                <div class="theme-editor__colors">
                 <label class="color-field">Cor de destaque
                   <span>
                     <input type="color" name="accent" value="#7667ff" data-accent-input />
@@ -309,60 +309,64 @@
                     <input type="text" value="#f7f7fa" maxlength="7" spellcheck="false" data-text-hex aria-label="Hex da cor do texto principal" />
                   </span>
                 </label>
+                </div>
+                <p class="contrast-meter form-status is-synced" data-contrast-status>Contraste aprovado.</p>
               </div>
-              <p class="contrast-meter form-status is-synced" data-contrast-status>Contraste aprovado.</p>
-            </div>
+            </details>
 
-            <div class="theme-editor__section">
-              <span class="eyebrow">Tipografia e forma</span>
-              <label>Fonte
-                <select name="font" data-font-input>
-                  <option value="system">Sistema do aparelho</option>
-                  <option value="serif">Serifada nativa</option>
-                  <option value="mono">Técnica mono</option>
-                </select>
-              </label>
-              <label>Arredondamento
-                <select name="radius" data-radius-input>
-                  <option value="soft">Suave</option>
-                  <option value="sharp">Mais reto</option>
-                  <option value="round">Bem redondo</option>
-                  <option value="pill">Pílula</option>
-                </select>
-              </label>
-              <label>Estilo de fundo
-                <select name="backgroundStyle" data-background-style-input>
-                  <option value="aurora">Aurora suave</option>
-                  <option value="spotlight">Spotlight</option>
-                  <option value="diagonal">Diagonal</option>
-                  <option value="mesh">Mesh</option>
-                  <option value="none">Cor sólida</option>
-                </select>
-              </label>
-            </div>
+            <details class="theme-editor__section">
+              <summary aria-label="Fonte, forma e estilo de fundo"><span class="eyebrow">Estilo</span><span class="chip">Fonte e forma</span></summary>
+              <div class="theme-editor__section-body">
+                <label>Fonte
+                  <select name="font" data-font-input>
+                    <option value="system">Sistema do aparelho</option>
+                    <option value="serif">Serifada nativa</option>
+                    <option value="mono">Técnica mono</option>
+                  </select>
+                </label>
+                <label>Arredondamento
+                  <select name="radius" data-radius-input>
+                    <option value="soft">Suave</option>
+                    <option value="sharp">Mais reto</option>
+                    <option value="round">Bem redondo</option>
+                    <option value="pill">Pílula</option>
+                  </select>
+                </label>
+                <label>Estilo de fundo
+                  <select name="backgroundStyle" data-background-style-input>
+                    <option value="aurora">Aurora suave</option>
+                    <option value="spotlight">Spotlight</option>
+                    <option value="diagonal">Diagonal</option>
+                    <option value="mesh">Mesh</option>
+                    <option value="none">Cor sólida</option>
+                  </select>
+                </label>
+              </div>
+            </details>
 
-            <div class="theme-editor__section">
-              <span class="eyebrow">Assets locais</span>
-              <label class="file-picker">Logo do app
-                <input type="file" accept="image/*" data-logo-input />
-                <small data-logo-file-name>Nenhum arquivo selecionado</small>
-              </label>
-              <label class="file-picker">Foto do personal
-                <input type="file" accept="image/*" data-photo-input />
-                <small data-photo-file-name>Nenhum arquivo selecionado</small>
-              </label>
-              <p class="asset-note">Logo e foto ainda ficam apenas neste navegador.</p>
-              <button class="button button--quiet button--block" type="button" data-clear-brand-assets>Limpar logo/foto local</button>
-            </div>
+            <details class="theme-editor__section">
+              <summary aria-label="Logo e foto"><span class="eyebrow">Logo e foto</span><span class="chip">Opcional</span></summary>
+              <div class="theme-editor__section-body">
+                <label class="file-picker">Logo do app
+                  <input type="file" accept="image/*" data-logo-input />
+                  <small data-logo-file-name>Nenhum arquivo selecionado</small>
+                </label>
+                <label class="file-picker">Foto do personal
+                  <input type="file" accept="image/*" data-photo-input />
+                  <small data-photo-file-name>Nenhum arquivo selecionado</small>
+                </label>
+                <p class="asset-note">Visualização salva somente neste navegador.</p>
+                <button class="button button--quiet button--block" type="button" data-clear-brand-assets>Remover imagens</button>
+              </div>
+            </details>
 
-            <p class="theme-editor__hint">O app usa as cores escolhidas aqui.</p>
-            <p class="form-status" data-theme-status>Altere e salve para aplicar.</p>
-            <button class="button button--block" type="button" data-save-theme>Salvar e aplicar no app do aluno</button>
-            <button class="button button--quiet button--block reset-theme-button" type="button" data-reset-theme>Resetar para o padrão FlowFit validado</button>
+            <p class="form-status" data-theme-status></p>
+            <button class="button button--block" type="button" data-save-theme>Publicar aparência</button>
+            <button class="button button--quiet button--block reset-theme-button" type="button" data-reset-theme>Restaurar padrão FlowFit</button>
           </form>
 
           <article class="student-preview card">
-            <span class="eyebrow">Preview aluno</span>
+            <span class="eyebrow">Prévia do aluno</span>
             <div class="preview-phone">
               <div class="preview-phone__bar"></div>
               <div class="preview-brand-strip">
@@ -430,7 +434,7 @@
                 </div>
               </div>
               <div class="profile-preview-card__panel">
-                <small>Como isso deve aparecer no produto</small>
+                <small>Visão do aluno</small>
                 <strong data-coach-name>Personal</strong>
                 <span data-coach-headline>Perfil do personal</span>
                 <span data-coach-bio>Bio profissional ainda não preenchida.</span>
@@ -441,8 +445,7 @@
 
             <article class="account-card card">
               <span class="eyebrow">Conta FlowFit</span>
-              <h2 data-account-plan>Plano piloto</h2>
-              <p>Limite operacional temporário até conectarmos cobrança real.</p>
+              <h2 data-account-plan>Plano inicial</h2>
               <div class="account-usage">
                 <div>
                   <strong data-account-active-students>0</strong>
@@ -454,13 +457,15 @@
                 </div>
               </div>
               <div class="progress-track" aria-label="Uso do limite de alunos"><span data-account-limit-progress style="--progress: 0%"></span></div>
-              <p class="form-status" data-account-status>Você está no plano piloto. Upgrade e cobrança entram depois.</p>
+              <p class="form-status" data-account-status></p>
             </article>
           </div>
         </section>
+        <button class="button button--quiet mobile-profile-signout" type="button" data-profile-sign-out>Sair da conta</button>
       </section>
     </main>
 
+    <div class="student-session-backdrop" data-student-session-backdrop hidden></div>
     <div class="toast" role="status" aria-live="polite" data-toast></div>
     <script>
       (() => {
@@ -478,8 +483,6 @@
           dashboard: "Dashboard",
           students: "Alunos",
           workouts: "Treinos",
-          messages: "Comunicação",
-          business: "Negócio",
           appearance: "Aparência",
           profile: "Perfil"
         };
@@ -500,10 +503,7 @@
         };
 
         const showFallbackNotice = () => {
-          const lastError = window.FlowFitProfessorErrors[window.FlowFitProfessorErrors.length - 1];
-          const message = lastError
-            ? `Modo básico: o painel interativo não carregou. Erro: ${lastError}`
-            : "Modo básico: o painel interativo não carregou. Abra por servidor local/GitHub Pages e recarregue.";
+          const message = "Não foi possível carregar o painel. Verifique sua conexão e recarregue a página.";
           document.querySelectorAll(".form-status").forEach((status) => {
             status.textContent = message;
             status.classList.add("is-warning");

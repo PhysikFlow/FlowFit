@@ -20,7 +20,7 @@ Base web, mobile-first e sem dependencias de framework para um produto de treino
 - Aluno entra com o mesmo email cadastrado pelo professor e ve apenas os proprios dados.
 - RLS habilitado para `profiles`, `brand_theme`, `students`, `workout_plans` e `workout_exercises`.
 - Dados anonimos/mockados removidos do fluxo principal do app do aluno.
-- Check-ins, series, cargas, repeticoes, historico e lembretes ainda ficam locais no aparelho.
+- Séries, cargas, repetições e feedback são enviados ao Supabase, com cache local e nova tentativa automática quando a conexão volta. Check-ins e lembretes pessoais ainda ficam no aparelho.
 - Marca branca sincronizada pelo professor e lida pelo aluno autorizado: nome, frase, cores, fonte, arredondamento e estilo de fundo.
 - Logo e foto do personal existem como preview/cache local por enquanto; ainda nao usam Supabase Storage.
 - A aparencia nao usa mais toggle claro/escuro separado no painel: o personal define as cores reais, o modo e inferido pelo fundo, e ha reset para o padrao FlowFit validado.
@@ -73,6 +73,16 @@ Depois abra:
 
 - `http://localhost:8080/appAluno/`
 - `http://localhost:8080/appProfessor/`
+
+## Validar a interface responsiva
+
+Com o servidor local ativo, rode:
+
+```powershell
+node scripts/ui-smoke.mjs http://127.0.0.1:8080
+```
+
+O teste percorre as páginas dos três apps em 320×700, 390×844 e 1440×900. Ele verifica overflow horizontal, erros de inicialização, elementos ocultos vazando, alvos principais muito pequenos, campos sem label, ações sem nome acessível e IDs duplicados. Para também gerar capturas, informe uma pasta como terceiro argumento.
 
 ## Atualizar um banco existente sem apagar dados
 

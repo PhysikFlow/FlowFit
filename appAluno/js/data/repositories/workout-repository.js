@@ -1,7 +1,7 @@
-import { Platform } from "../../core/platform.js";
-import { getSupabase } from "../../core/supabase.js";
-import { DEMO_COACH_ID } from "../../config.js";
-import { authRepository } from "./auth-repository.js";
+import { Platform } from "../../core/platform.js?v=build-20260809-6";
+import { getSupabase } from "../../core/supabase.js?v=build-20260809-6";
+import { DEMO_COACH_ID } from "../../config.js?v=build-20260809-6";
+import { authRepository } from "./auth-repository.js?v=build-20260809-6";
 
 export const PUBLISHED_WORKOUTS_KEY = "flowfit.published-workouts";
 
@@ -99,6 +99,46 @@ const normalizeIsoDate = (value, fallback = new Date().toISOString()) => {
   return Number.isNaN(date.getTime()) ? new Date(fallback).toISOString() : date.toISOString();
 };
 
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const LEGACY_UTC_MIDNIGHT_PATTERN = /^\d{4}-\d{2}-\d{2}T00:00:00(?:\.000)?Z$/;
+
+export const workoutDateInputValue = (value) => {
+  const raw = String(value || "").trim();
+  if (DATE_ONLY_PATTERN.test(raw)) return raw;
+  if (LEGACY_UTC_MIDNIGHT_PATTERN.test(raw)) return raw.slice(0, 10);
+
+  const date = raw ? new Date(raw) : new Date();
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+export const normalizeWorkoutStart = (value, fallback = new Date().toISOString()) => {
+  const raw = String(value || "").trim();
+  if (!DATE_ONLY_PATTERN.test(raw)) return normalizeIsoDate(raw, fallback);
+  const [year, month, day] = raw.split("-").map(Number);
+  const localMidnight = new Date(year, month - 1, day, 0, 0, 0, 0);
+  if (Number.isNaN(localMidnight.getTime())
+      || localMidnight.getFullYear() !== year
+      || localMidnight.getMonth() !== month - 1
+      || localMidnight.getDate() !== day) {
+    return normalizeIsoDate(fallback);
+  }
+  return localMidnight.toISOString();
+};
+
+export const workoutStartTimestamp = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return 0;
+  if (DATE_ONLY_PATTERN.test(raw) || LEGACY_UTC_MIDNIGHT_PATTERN.test(raw)) {
+    const dateKey = raw.slice(0, 10);
+    return new Date(`${dateKey}T00:00:00`).getTime();
+  }
+  return new Date(raw).getTime();
+};
+
 const isMissingWorkoutScheduleColumn = (error) => {
   const message = String(error?.message || error?.details || "").toLowerCase();
   return ["starts_at", "published_at", "version"].some((column) => message.includes(column));
@@ -126,7 +166,7 @@ const normalizeWorkout = (workout) => {
   const owner = normalizeText(workout?.owner, "Aluno");
   const studentKey = normalizeText(workout?.studentKey, studentKeyFromName(owner));
   const updatedAt = normalizeText(workout?.updatedAt, new Date().toISOString());
-  const startsAt = normalizeIsoDate(workout?.startsAt, updatedAt);
+  const startsAt = normalizeWorkoutStart(workout?.startsAt, updatedAt);
   const id = normalizeText(workout?.id, `published-${Date.now()}`);
   const studentId = normalizeText(workout?.studentId, fallbackStudentIdFromKey(studentKey));
   const exercises = Array.isArray(workout?.exercises)
@@ -218,7 +258,7 @@ export const createWorkoutFromProfessorForm = ({ student, studentName, studentId
     studentKey: resolvedStudentKey,
     source: "professor",
     status: "published",
-    startsAt: normalizeIsoDate(startsAt, now),
+    startsAt: normalizeWorkoutStart(startsAt, now),
     publishedAt: now,
     version: Math.max(1, Number.parseInt(version, 10) || 1),
     syncStatus: "pending",
@@ -335,7 +375,7 @@ export const workoutRepository = {
     const studentKey = studentKeyFromName(studentName);
     const now = Date.now();
     return this.listPublishedWorkouts()
-      .filter((workout) => new Date(workout.startsAt || workout.updatedAt || 0).getTime() <= now)
+      .filter((workout) => workoutStartTimestamp(workout.startsAt || workout.updatedAt) <= now)
       .find((workout) => workout.studentKey === studentKey) || null;
   },
 
@@ -363,7 +403,7 @@ export const workoutRepository = {
         p_exercises: toExerciseRows(normalized, authContext)
       });
       if (error || !data || Number(data.exercise_count || 0) !== normalized.exercises.length) {
-        const verificationError = error || new Error("O Supabase não confirmou todos os exercícios do treino.");
+        const verificationError = error || new Error("Não foi possível confirmar todos os exercícios do treino.");
         const failed = this.savePublishedWorkout({
           ...normalized,
           syncStatus: "failed",
@@ -375,7 +415,7 @@ export const workoutRepository = {
       const confirmedWorkout = this.savePublishedWorkout({
         ...normalized,
         syncStatus: "synced",
-        syncMessage: "Plano e exercícios confirmados pelo Supabase.",
+        syncMessage: "Treino publicado e pronto para o aluno.",
         updatedAt: data.updated_at || normalized.updatedAt
       });
       return { synced: true, workout: confirmedWorkout, partial: false, confirmation: data };
@@ -453,7 +493,7 @@ export const workoutRepository = {
         ...normalized,
         syncStatus: "synced",
         syncMessage: isMissingWorkoutScheduleColumn(planError)
-          ? "Sincronizado sem agendamento. Rode o SQL novo para salvar data e versão."
+          ? "Publicado sem agendamento. Tente republicar para completar."
           : "Sincronizado com o aluno."
       });
       return { synced: true, workout: syncedWorkout, partial: isMissingWorkoutScheduleColumn(planError) };
@@ -526,13 +566,17 @@ export const workoutRepository = {
     if (!student?.id || !student?.coachId) return { synced: false, reason: "student-scope-required", workouts: [] };
     const result = await this.fetchPublishedWorkouts({ studentId: student.id, coachId: student.coachId });
     const now = Date.now();
-    const workouts = (result.workouts || [])
-      .filter((item) => item.status === "published")
-      .filter((item) => new Date(item.startsAt || item.updatedAt || 0).getTime() <= now)
+    const publishedWorkouts = (result.workouts || [])
+      .filter((item) => item.status === "published");
+    const workouts = publishedWorkouts
+      .filter((item) => workoutStartTimestamp(item.startsAt || item.updatedAt) <= now)
       .sort((a, b) => a.code.localeCompare(b.code, "pt-BR", { numeric: true })
         || a.title.localeCompare(b.title, "pt-BR")
         || new Date(b.publishedAt || b.updatedAt || 0) - new Date(a.publishedAt || a.updatedAt || 0));
-    return { ...result, workouts };
+    const upcomingWorkouts = publishedWorkouts
+      .filter((item) => workoutStartTimestamp(item.startsAt || item.updatedAt) > now)
+      .sort((a, b) => workoutStartTimestamp(a.startsAt || a.updatedAt) - workoutStartTimestamp(b.startsAt || b.updatedAt));
+    return { ...result, workouts, upcomingWorkouts };
   },
 
   async archivePublishedWorkout(workoutId) {

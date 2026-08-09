@@ -7,23 +7,31 @@
     <meta name="description" content="Administração de personals da plataforma FlowFit." />
     <title>FlowFit - Administração</title>
     <link rel="icon" type="image/svg+xml" href="../appAluno/assets/icons/app-icon.svg" />
-    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=admin-v1-20260807" />
-    <link rel="stylesheet" href="../appAluno/css/components.css?v=admin-v1-20260807" />
-    <link rel="stylesheet" href="css/app.css?v=admin-v1-1-20260807" />
-    <script type="module" src="js/app.js?v=admin-v1-1-20260807"></script>
+    <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260809-6" />
+    <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260809-7" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260809-7" />
+    <script type="module" src="js/app.js?v=build-20260809-6"></script>
   </head>
   <body class="is-auth-locked">
     <section class="auth-gate" data-auth-gate aria-labelledby="admin-auth-title">
       <form class="auth-card card" data-auth-form>
         <span class="eyebrow">Área restrita</span>
         <h1 id="admin-auth-title">Administração FlowFit</h1>
-        <p>Entre com uma conta previamente autorizada no Supabase.</p>
+        <p>Entre com sua conta administrativa.</p>
         <label>Email <input type="email" name="email" autocomplete="email" required /></label>
         <label>Senha <input type="password" name="password" autocomplete="current-password" required /></label>
-        <p class="form-status" data-auth-status>Somente administradores cadastrados podem continuar.</p>
+        <p class="form-status" data-auth-status></p>
         <button class="button button--block" type="submit" data-auth-submit>Entrar</button>
         <div class="auth-divider"><span>ou</span></div>
-        <button class="button button--quiet button--block" type="button" data-oauth-provider="google">Continuar com Google</button>
+        <button class="button button--quiet button--block oauth-button" type="button" data-oauth-provider="google">
+          <svg class="oauth-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path fill="#4285f4" d="M21.6 12.2c0-.7-.1-1.3-.2-1.9H12v3.6h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.2 3-7.2Z" />
+            <path fill="#34a853" d="M12 22c2.7 0 5-.9 6.6-2.5L15.4 17c-.9.6-2 .9-3.4.9-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z" />
+            <path fill="#fbbc05" d="M6.4 13.8a6 6 0 0 1 0-3.6V7.6H3.1a10 10 0 0 0 0 8.8l3.3-2.6Z" />
+            <path fill="#ea4335" d="M12 6.1c1.5 0 2.8.5 3.8 1.5l2.8-2.8A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.9 5.6l3.3 2.6c.8-2.3 3-4.1 5.6-4.1Z" />
+          </svg>
+          Entrar com Google
+        </button>
         <button class="auth-link-button" type="button" data-auth-gate-sign-out hidden>Sair desta conta</button>
       </form>
     </section>
@@ -53,12 +61,12 @@
       </header>
 
       <section class="overview-grid" aria-label="Visão geral dos acessos">
-        <article class="metric-card card"><span>Ativos</span><strong data-count="active">0</strong><small>pagamento em dia</small></article>
-        <article class="metric-card card"><span>Em teste</span><strong data-count="trial">0</strong><small>período de avaliação</small></article>
-        <article class="metric-card card"><span>Atrasados</span><strong data-count="past_due">0</strong><small>uso liberado com aviso</small></article>
-        <article class="metric-card card"><span>Suspensos</span><strong data-count="suspended">0</strong><small>acesso bloqueado</small></article>
-        <article class="metric-card metric-card--quiet card"><span>Pendentes</span><strong data-count="pending">0</strong><small>aguardam aprovação</small></article>
-        <article class="metric-card metric-card--quiet card"><span>Cancelados</span><strong data-count="cancelled">0</strong><small>contas encerradas</small></article>
+        <article class="metric-card card"><span>Ativos</span><strong data-count="active">0</strong></article>
+        <article class="metric-card card"><span>Em teste</span><strong data-count="trial">0</strong></article>
+        <article class="metric-card card"><span>Atrasados</span><strong data-count="past_due">0</strong></article>
+        <article class="metric-card card"><span>Suspensos</span><strong data-count="suspended">0</strong></article>
+        <article class="metric-card metric-card--quiet card"><span>Pendentes</span><strong data-count="pending">0</strong></article>
+        <article class="metric-card metric-card--quiet card"><span>Cancelados</span><strong data-count="cancelled">0</strong></article>
       </section>
 
       <section class="data-panel card" id="personals">
@@ -114,7 +122,7 @@
                 <option value="cancelled">Cancelado</option>
               </select>
             </label>
-            <label>Plano <input name="plan" maxlength="80" placeholder="Plano piloto" required /></label>
+            <label>Plano <input name="plan" maxlength="80" placeholder="Plano inicial" required /></label>
             <label class="form-span">Vencimento <input type="datetime-local" name="accessExpiresAt" /></label>
             <label class="form-span">Mensagem exibida ao personal
               <textarea name="statusNote" maxlength="500" rows="3" placeholder="Ex.: Entre em contato para regularizar o pagamento."></textarea>
@@ -126,16 +134,6 @@
           <p class="form-status" data-detail-status>As alterações ficam registradas no histórico.</p>
           <button class="button button--block" type="submit">Salvar alterações</button>
         </form>
-
-        <section class="quick-actions" aria-label="Ações rápidas">
-          <h3>Ações rápidas</h3>
-          <div>
-            <button class="button button--quiet" type="button" data-status-action="trial">Aprovar para teste</button>
-            <button class="button button--quiet" type="button" data-status-action="active">Ativar</button>
-            <button class="button button--warning" type="button" data-status-action="suspended">Suspender</button>
-            <button class="button button--danger" type="button" data-status-action="cancelled">Cancelar</button>
-          </div>
-        </section>
 
         <section class="history-panel">
           <h3>Histórico de alterações</h3>

@@ -22,6 +22,7 @@ body {
 }
 
 body.is-auth-locked { overflow: hidden; }
+body.has-drawer { overflow: hidden; }
 body * { min-width: 0; }
 [hidden] { display: none !important; }
 
@@ -59,6 +60,12 @@ body * { min-width: 0; }
 .auth-card h1,
 .auth-card p { margin: 0; }
 .auth-card p { color: var(--color-muted); }
+.auth-card .oauth-button {
+  border-color: var(--color-line);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  box-shadow: none;
+}
 
 label {
   display: grid;
@@ -164,7 +171,6 @@ textarea {
 .admin-topbar h1,
 .panel-header h2,
 .drawer-header h2,
-.quick-actions h3,
 .history-panel h3 { margin: 0; }
 .topbar-actions { display: flex; align-items: center; gap: 0.5rem; }
 .session-chip { max-width: 17rem; overflow: hidden; color: var(--color-muted); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
@@ -176,7 +182,7 @@ textarea {
   margin-bottom: 1rem;
 }
 
-.metric-card { display: grid; gap: 0.22rem; padding: 0.9rem; box-shadow: none; }
+.metric-card { display: grid; gap: 0.3rem; padding: 0.8rem 0.9rem; box-shadow: none; }
 .metric-card span { color: var(--color-subtle); font-size: var(--text-xs); font-weight: 850; text-transform: uppercase; }
 .metric-card strong { font-size: 1.65rem; line-height: 1; }
 .metric-card small { color: var(--color-muted); font-size: 0.67rem; }
@@ -195,6 +201,11 @@ th { color: var(--color-muted); font-size: 0.66rem; letter-spacing: 0.06em; text
 td { font-size: var(--text-sm); }
 tbody tr { cursor: pointer; transition: background 150ms ease; }
 tbody tr:hover { background: var(--color-accent-soft); }
+tbody tr:focus-visible,
+.coach-card:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: -3px;
+}
 .identity-cell { display: grid; gap: 0.16rem; min-width: 12rem; }
 .identity-cell small { color: var(--color-muted); }
 .table-empty { padding: 2rem; color: var(--color-muted); text-align: center; }
@@ -238,8 +249,9 @@ tbody tr:hover { background: var(--color-accent-soft); }
   top: 0;
   right: 0;
   width: min(100%, 38rem);
-  height: 100vh;
+  height: 100dvh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-left: 1px solid var(--color-line);
   background: var(--color-bg);
   box-shadow: -1rem 0 3rem rgb(0 0 0 / 0.3);
@@ -255,14 +267,11 @@ tbody tr:hover { background: var(--color-accent-soft); }
 .summary-item small { color: var(--color-muted); font-size: 0.66rem; text-transform: uppercase; }
 .summary-item strong { font-size: var(--text-sm); }
 .detail-form,
-.quick-actions,
 .history-panel { padding: 1rem; border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-surface); }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
 .form-span { grid-column: 1 / -1; }
 .detail-form .form-status { min-height: 1.2rem; }
-.quick-actions,
 .history-panel { display: grid; gap: 0.75rem; }
-.quick-actions > div { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
 .history-item { display: grid; gap: 0.25rem; padding: 0.7rem 0; border-top: 1px solid var(--color-line); }
 .history-item:first-child { border-top: 0; }
 .history-item p { margin: 0; font-size: var(--text-sm); }
@@ -277,9 +286,7 @@ tbody tr:hover { background: var(--color-accent-soft); }
 
 @media (max-width: 52rem) {
   body { display: block; }
-  .admin-sidebar { position: static; height: auto; flex-direction: row; align-items: center; padding: 0.75rem 1rem; border-right: 0; border-bottom: 1px solid var(--color-line); }
-  .admin-sidebar nav,
-  .admin-sidebar__foot { display: none; }
+  .admin-sidebar { display: none; }
   .admin-topbar { align-items: flex-start; }
   .session-chip { display: none; }
   .panel-header { align-items: stretch; flex-direction: column; }
@@ -287,17 +294,28 @@ tbody tr:hover { background: var(--color-accent-soft); }
   .table-wrap { display: none; }
   .coach-cards { display: grid; gap: 0.6rem; padding: 0.75rem; }
   .coach-card { display: grid; gap: 0.55rem; padding: 0.8rem; border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-bg-elevated); cursor: pointer; }
+  .coach-card:hover,
+  .coach-card:focus-visible { border-color: var(--color-accent-line); background: var(--color-accent-soft); }
   .coach-card__head { display: flex; justify-content: space-between; gap: 0.5rem; }
+  .coach-card__status { display: flex; align-items: center; gap: 0.4rem; }
+  .coach-card__open { color: var(--color-accent); font-size: 1.35rem; line-height: 1; }
   .coach-card__meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; color: var(--color-muted); font-size: var(--text-xs); }
 }
 
 @media (max-width: 36rem) {
   .admin-topbar { display: grid; }
   .topbar-actions { display: grid; grid-template-columns: 1fr 1fr; }
-  .overview-grid { grid-template-columns: repeat(2, 1fr); }
+  .overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+  }
+  .metric-card { min-width: 0; padding: 0.72rem; }
   .filters,
   .form-grid { grid-template-columns: 1fr; }
   .form-span { grid-column: auto; }
   .detail-summary { grid-template-columns: 1fr 1fr; }
-  .quick-actions > div { grid-template-columns: 1fr; }
+  .coach-card__meta { grid-template-columns: 1fr 1fr; }
+  .coach-card__meta span:last-child { grid-column: 1 / -1; }
+  .drawer-header { padding-top: max(1rem, env(safe-area-inset-top)); }
+  .drawer-body { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
 }

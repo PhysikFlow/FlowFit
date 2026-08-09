@@ -1,4 +1,4 @@
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "../config.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "../config.js?v=build-20260809-6";
 
 const isConfigured = () => Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 

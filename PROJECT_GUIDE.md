@@ -334,7 +334,7 @@ Cadeira extensora 3x15
 ```
 
 5. Abra `appAluno/`, de preferência com `?email=aluno@teste.com` para preencher o email.
-6. Crie ou entre com uma conta de aluno usando o mesmo email cadastrado.
+6. Continue com Google ou solicite o link mágico usando o mesmo email cadastrado.
 7. Confirme que o treino aparece no app do aluno.
 
 ### Execução De Treino
@@ -344,10 +344,9 @@ Cadeira extensora 3x15
 3. Altere carga e repetições em pelo menos um exercício.
 4. Preencha feedback de esforço, dor/desconforto e nota.
 5. Clique em concluir.
-6. Confira se o histórico local do aluno foi atualizado.
+6. Confira se o histórico do aluno foi atualizado e se o estado do treino atual foi reiniciado.
 7. Se o Supabase estiver configurado, verifique as tabelas `workout_sessions`, `workout_set_logs` e `workout_feedback`.
-
-No painel do professor, o código para buscar execuções existe, mas o botão de atualização parece não estar conectado. Para validar o fluxo completo no painel, essa ligação precisa ser implementada ou confirmada.
+8. No painel do professor, abra **Alunos**, toque em **Acompanhar** e use **Atualizar** para confirmar a execução, cargas e feedback.
 
 ### Marca Branca
 
@@ -360,10 +359,11 @@ No painel do professor, o código para buscar execuções existe, mas o botão d
 
 ### Segurança Básica
 
-1. Entre no painel com uma conta criada como aluno. O painel deve bloquear.
-2. Entre no app do aluno com uma conta criada como professor. O app do aluno deve bloquear.
-3. Entre como aluno com um email ainda não cadastrado pelo professor. O app deve autenticar, mas mostrar estado vazio.
-4. Tente usar dois professores diferentes com alunos de mesmo email. A intenção do schema é isolar por `coach_id`; valide isso no Supabase antes de produção.
+1. Entre no painel do professor com uma conta cujo maior papel é aluno. O painel deve bloquear.
+2. Entre no Admin com uma conta de professor ou aluno. O painel deve bloquear.
+3. Confirme a hierarquia: admin entra nas três áreas; professor entra em Professor e Aluno; aluno entra somente em Aluno.
+4. Entre no app do aluno com um email ainda não cadastrado por um professor. O acesso aos dados deve ser recusado com uma mensagem objetiva.
+5. Use o mesmo email de aluno em dois professores e confirme que cada vínculo mantém treinos e tema separados por `coach_id`.
 
 ## Onde Normalmente Fazer Alterações
 
@@ -407,7 +407,7 @@ O parser atual é simples. Ele entende bem entradas como `Supino reto 4x10`, mas
 
 **Sincronização local-first**
 
-Muitos salvamentos acontecem localmente antes da nuvem. Isso melhora a sensação de uso, mas exige estratégia de retry. No código atual, há `syncStatus` e mensagens de falha, mas não vi uma fila robusta de reenvio automático.
+Os registros do treino são mantidos em cache antes da confirmação da nuvem. Sessões pendentes recebem `syncStatus` e são reenviadas na inicialização, quando o navegador volta a ficar online e pela ação de sincronização do app. Ao alterar esse fluxo, preserve a idempotência pelo ID da sessão.
 
 **Migrações de schema**
 
@@ -429,15 +429,13 @@ O código de plataforma passa por `Platform`. Hoje ele chama APIs do navegador c
 
 ## Limitações E Dívidas Conhecidas
 
-Não encontrei testes automatizados, `package.json` ou pipeline de build/teste no código versionado. Os testes hoje parecem ser manuais.
+O projeto ainda não possui pipeline de CI ou testes completos de regras de negócio. O smoke test `scripts/ui-smoke.mjs` cobre as rotas dos três apps em 320×700, 390×844 e 1440×900, incluindo overflow, inicialização e verificações básicas de acessibilidade.
 
 Comunicação, financeiro, agenda real, cobrança, chat, push notifications, avaliações completas e importação avançada ainda são roadmap ou estados vazios.
 
 Check-ins de evolução, lembretes, notificações lidas e parte do histórico ainda ficam locais no aparelho.
 
 Logo e foto do personal ficam em `localStorage` como Data URL. Ainda não usam Supabase Storage.
-
-O botão de atualizar execuções no painel é renderizado, e a função de busca existe, mas a ligação entre eles não apareceu no código atual. Isso deve ser corrigido antes de depender desse painel para acompanhamento real.
 
 `DEMO_COACH_ID` ainda existe como fallback em `config.js` e nos repositórios. No fluxo autenticado, o `coachId` vem do usuário logado, mas esse fallback merece revisão antes de produção.
 

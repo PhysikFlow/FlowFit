@@ -1,5 +1,5 @@
-import { getSupabase } from "../../appAluno/js/core/supabase.js";
-import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js";
+import { getSupabase } from "../../appAluno/js/core/supabase.js?v=build-20260809-6";
+import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260809-6";
 
 const messageFromError = (error, fallback) => {
   const message = String(error?.message || "").trim();
@@ -11,7 +11,7 @@ const messageFromError = (error, fallback) => {
 
 const rpc = async (name, params, fallback) => {
   const client = await getSupabase();
-  if (!client) return { ok: false, data: null, message: "Supabase não configurado." };
+  if (!client) return { ok: false, data: null, message: "Serviço indisponível no momento." };
   const { data, error } = await client.rpc(name, params);
   if (error) return { ok: false, data: null, error, message: messageFromError(error, fallback) };
   return { ok: true, data };
@@ -20,7 +20,7 @@ const rpc = async (name, params, fallback) => {
 export const adminRepository = {
   async signIn({ email, password } = {}) {
     const client = await getSupabase();
-    if (!client) return { ok: false, message: "Supabase não configurado." };
+    if (!client) return { ok: false, message: "Serviço indisponível no momento." };
     const { data, error } = await client.auth.signInWithPassword({
       email: String(email || "").trim().toLowerCase(),
       password: String(password || "")

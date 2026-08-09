@@ -1,23 +1,23 @@
-const CACHE_NAME = "flowfit-professor-v1";
+const CACHE_NAME = "flowfit-professor-v21";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./css/app.css",
-  "./js/app.js",
+  "./css/app.css?v=build-20260809-9",
+  "./js/app.js?v=build-20260809-9",
   "../appAluno/assets/icons/app-icon.svg",
-  "../appAluno/css/tokens.css",
-  "../appAluno/css/components.css",
-  "../appAluno/js/config.js",
-  "../appAluno/js/core/brand-theme.js",
-  "../appAluno/js/core/icons.js",
-  "../appAluno/js/core/platform.js",
-  "../appAluno/js/core/supabase.js",
-  "../appAluno/js/data/repositories/auth-repository.js",
-  "../appAluno/js/data/repositories/student-repository.js",
-  "../appAluno/js/data/repositories/theme-repository.js",
-  "../appAluno/js/data/repositories/workout-repository.js",
-  "../appAluno/js/data/repositories/session-repository.js"
+  "../appAluno/css/tokens.css?v=build-20260809-6",
+  "../appAluno/css/components.css?v=build-20260809-7",
+  "../appAluno/js/config.js?v=build-20260809-6",
+  "../appAluno/js/core/brand-theme.js?v=build-20260809-6",
+  "../appAluno/js/core/icons.js?v=build-20260809-6",
+  "../appAluno/js/core/platform.js?v=build-20260809-6",
+  "../appAluno/js/core/supabase.js?v=build-20260809-6",
+  "../appAluno/js/data/repositories/auth-repository.js?v=build-20260809-6",
+  "../appAluno/js/data/repositories/student-repository.js?v=build-20260809-6",
+  "../appAluno/js/data/repositories/theme-repository.js?v=build-20260809-6",
+  "../appAluno/js/data/repositories/workout-repository.js?v=build-20260809-6",
+  "../appAluno/js/data/repositories/session-repository.js?v=build-20260809-6"
 ];
 
 self.addEventListener("install", (event) => {
@@ -34,11 +34,17 @@ self.addEventListener("activate", (event) => {
 });
 
 const isConfigRequest = (request) => request.url.includes("/appAluno/js/config.js");
+const isNetworkFirstRequest = (request) => {
+  const url = new URL(request.url);
+  return request.mode === "navigate"
+    || url.pathname.endsWith(".html")
+    || url.pathname.endsWith(".js");
+};
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
-  if (isConfigRequest(event.request)) {
+  if (isConfigRequest(event.request) || isNetworkFirstRequest(event.request)) {
     event.respondWith(
       fetch(event.request).then((response) => {
         const copy = response.clone();

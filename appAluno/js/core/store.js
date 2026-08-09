@@ -1,8 +1,8 @@
-import { Platform } from "./platform.js";
+import { Platform } from "./platform.js?v=build-20260809-6";
 
 const APP_STATE_KEY = "flowfit.aluno.state";
 
-const defaultState = {
+const createDefaultState = () => ({
   onboarded: false,
   localProfile: {},
   activeWorkoutId: null,
@@ -14,12 +14,25 @@ const defaultState = {
   customScheduleItems: [],
   dismissedReminders: [],
   readNotifications: []
-};
+});
+
+const normalizeScopeId = (scopeId) => encodeURIComponent(String(scopeId || "anonymous").trim() || "anonymous");
+const stateKeyForScope = (scopeId) => `${APP_STATE_KEY}:${normalizeScopeId(scopeId)}`;
+const loadState = (scopeId) => ({
+  ...createDefaultState(),
+  ...Platform.storage.get(stateKeyForScope(scopeId), {})
+});
 
 export const Store = {
-  state: { ...defaultState, ...Platform.storage.get(APP_STATE_KEY, {}) },
+  scopeId: "anonymous",
+  state: loadState("anonymous"),
+  useScope(scopeId = "anonymous") {
+    this.scopeId = String(scopeId || "anonymous").trim() || "anonymous";
+    this.state = loadState(this.scopeId);
+    return this.state;
+  },
   save() {
-    Platform.storage.set(APP_STATE_KEY, this.state);
+    Platform.storage.set(stateKeyForScope(this.scopeId), this.state);
   },
   completeOnboarding(profile = {}) {
     this.state.onboarded = true;
@@ -62,7 +75,10 @@ export const Store = {
     this.save();
   },
   addSession(session) {
-    this.state.sessions = [session, ...(this.state.sessions || [])].slice(0, 12);
+    this.state.sessions = [
+      session,
+      ...(this.state.sessions || []).filter((item) => item?.id !== session?.id)
+    ].slice(0, 12);
     this.state.setLogs = {};
     this.state.exerciseLogs = {};
     this.save();

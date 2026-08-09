@@ -26,6 +26,9 @@ const iconPaths = {
   "chevron-right": [
     '<path d="m9 18 6-6-6-6" />'
   ],
+  "chevron-down": [
+    '<path d="m6 9 6 6 6-6" />'
+  ],
   clock: [
     '<circle cx="12" cy="12" r="8" />',
     '<path d="M12 8v5l3 2" />'

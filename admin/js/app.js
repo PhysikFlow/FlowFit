@@ -1,6 +1,6 @@
-import { svgIcon } from "../../appAluno/js/core/icons.js";
-import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js";
-import { adminRepository } from "./admin-repository.js";
+import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
+import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260809-6";
+import { adminRepository } from "./admin-repository.js?v=build-20260809-6";
 
 const STATUS_LABELS = Object.freeze({
   pending: "Aguardando aprovação",
@@ -50,6 +50,11 @@ const formatDateTime = (value, fallback = "Sem registro") => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return fallback;
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
+};
+
+const formatPlan = (value) => {
+  const plan = String(value || "").trim();
+  return !plan || plan.toLowerCase() === "plano piloto" ? "Plano inicial" : plan;
 };
 
 const toLocalInput = (value) => {
@@ -104,11 +109,11 @@ const renderCoaches = () => {
   }
 
   coachRows.innerHTML = coaches.map((coach) => `
-    <tr data-coach-id="${escapeHtml(coach.coach_id)}" tabindex="0">
+    <tr data-coach-id="${escapeHtml(coach.coach_id)}" tabindex="0" role="button" aria-label="Abrir ${escapeHtml(coach.name)}">
       <td><span class="identity-cell"><strong>${escapeHtml(coach.name)}</strong><small>${escapeHtml(coach.email)}</small></span></td>
       <td>${escapeHtml(formatDate(coach.registered_at))}</td>
       <td>${Number(coach.student_count || 0).toLocaleString("pt-BR")}</td>
-      <td>${escapeHtml(coach.plan || "Plano piloto")}</td>
+      <td>${escapeHtml(formatPlan(coach.plan))}</td>
       <td>${escapeHtml(formatDate(coach.access_expires_at, "Sem vencimento"))}</td>
       <td>${badge(coach.status)}</td>
       <td class="open-cell">Abrir</td>
@@ -116,9 +121,12 @@ const renderCoaches = () => {
   `).join("");
 
   coachCards.innerHTML = coaches.map((coach) => `
-    <article class="coach-card" data-coach-id="${escapeHtml(coach.coach_id)}" tabindex="0">
-      <div class="coach-card__head"><span class="identity-cell"><strong>${escapeHtml(coach.name)}</strong><small>${escapeHtml(coach.email)}</small></span>${badge(coach.status)}</div>
-      <div class="coach-card__meta"><span>${Number(coach.student_count || 0)} alunos</span><span>${escapeHtml(coach.plan || "Plano piloto")}</span><span>${escapeHtml(formatDate(coach.access_expires_at, "Sem venc."))}</span></div>
+    <article class="coach-card" data-coach-id="${escapeHtml(coach.coach_id)}" tabindex="0" role="button" aria-label="Abrir ${escapeHtml(coach.name)}">
+      <div class="coach-card__head">
+        <span class="identity-cell"><strong>${escapeHtml(coach.name)}</strong><small>${escapeHtml(coach.email)}</small></span>
+        <span class="coach-card__status">${badge(coach.status)}<span class="coach-card__open" aria-hidden="true">›</span></span>
+      </div>
+      <div class="coach-card__meta"><span>${Number(coach.student_count || 0)} alunos</span><span>${escapeHtml(formatPlan(coach.plan))}</span><span>${escapeHtml(coach.access_expires_at ? `Vence ${formatDate(coach.access_expires_at)}` : "Sem vencimento")}</span></div>
     </article>
   `).join("");
 };
@@ -140,7 +148,7 @@ const loadCoaches = async () => {
   }
   coaches = result.data || [];
   renderCoaches();
-  setStatus(listStatus, "Lista sincronizada com o Supabase.", "synced");
+  setStatus(listStatus, "Lista atualizada.", "synced");
   return result;
 };
 
@@ -180,7 +188,7 @@ const renderCoachDetail = (coach) => {
   `;
   detailForm.elements.coachId.value = coach.coach_id;
   detailForm.elements.status.value = coach.status;
-  detailForm.elements.plan.value = coach.plan || "Plano piloto";
+  detailForm.elements.plan.value = formatPlan(coach.plan);
   detailForm.elements.accessExpiresAt.value = toLocalInput(coach.access_expires_at);
   detailForm.elements.statusNote.value = coach.status_note || "";
   detailForm.elements.adminNotes.value = coach.admin_notes || "";
@@ -218,7 +226,7 @@ const saveDetail = async ({ targetStatus } = {}) => {
   const values = Object.fromEntries(new FormData(detailForm));
   if (targetStatus) detailForm.elements.status.value = targetStatus;
   const status = targetStatus || values.status;
-  setStatus(detailStatus, "Salvando no Supabase...");
+  setStatus(detailStatus, "Salvando alterações...");
   const result = await adminRepository.updateCoach({
     coachId: values.coachId,
     status,
@@ -231,7 +239,7 @@ const saveDetail = async ({ targetStatus } = {}) => {
     setStatus(detailStatus, result.message, "warning");
     return;
   }
-  setStatus(detailStatus, "Alterações confirmadas pelo Supabase.", "synced");
+  setStatus(detailStatus, "Alterações salvas.", "synced");
   showToast("Personal atualizado.");
   await Promise.all([refreshDashboard(), openCoach(values.coachId)]);
 };
@@ -313,23 +321,15 @@ document.querySelector("[data-coach-cards]")?.addEventListener("click", (event) 
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && drawer.classList.contains("is-open")) closeDrawer();
-  if (event.key === "Enter" && event.target.matches("[data-coach-id]")) openCoach(event.target.dataset.coachId);
+  if ((event.key === "Enter" || event.key === " ") && event.target.matches("[data-coach-id]")) {
+    event.preventDefault();
+    openCoach(event.target.dataset.coachId);
+  }
 });
 
 detailForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   await saveDetail();
-});
-
-document.querySelector(".quick-actions")?.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-status-action]");
-  if (!button || !selectedCoach) return;
-  const targetStatus = button.dataset.statusAction;
-  if (["suspended", "cancelled"].includes(targetStatus)) {
-    const verb = targetStatus === "cancelled" ? "cancelar" : "suspender";
-    if (!confirm(`Confirma ${verb} o acesso de ${selectedCoach.name}?`)) return;
-  }
-  await saveDetail({ targetStatus });
 });
 
 renderIcons();

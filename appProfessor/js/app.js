@@ -1,11 +1,11 @@
-import { svgIcon } from "../../appAluno/js/core/icons.js";
-import { Platform } from "../../appAluno/js/core/platform.js";
-import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js";
-import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js";
-import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js";
-import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js";
-import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutRepository } from "../../appAluno/js/data/repositories/workout-repository.js";
-import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js";
+import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
+import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260809-6";
+import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260809-6";
+import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260809-6";
+import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260809-6";
+import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260809-6";
+import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260809-6";
+import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260809-6";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -41,6 +41,12 @@ const previewSets = document.querySelector("[data-preview-sets]");
 const previewMinutes = document.querySelector("[data-preview-minutes]");
 const previewList = document.querySelector("[data-preview-list]");
 const workoutSyncStatus = document.querySelector("[data-workout-sync-status]");
+const studentFormPanel = document.querySelector("[data-student-form-panel]");
+const studentSessionPanel = document.querySelector("[data-student-session-panel]");
+const studentSessionBackdrop = document.querySelector("[data-student-session-backdrop]");
+const workoutBuilder = document.querySelector("[data-workout-builder]");
+const studentSearchInput = document.querySelector("[data-student-search]");
+const workoutSearchInput = document.querySelector("[data-workout-search]");
 const authGate = document.querySelector("[data-auth-gate]");
 const authForm = document.querySelector("[data-auth-form]");
 const authStatus = document.querySelector("[data-auth-status]");
@@ -48,6 +54,7 @@ const authTitle = document.querySelector("[data-auth-title]");
 const authCopy = document.querySelector("[data-auth-copy]");
 const authSubmit = document.querySelector("[data-auth-submit]");
 const authSecondary = document.querySelector("[data-auth-secondary]");
+const oauthLabel = document.querySelector("[data-oauth-label]");
 const authUser = document.querySelector("[data-auth-user]");
 const authGateSignOut = document.querySelector("[data-auth-gate-sign-out]");
 const coachAccessNotice = document.querySelector("[data-coach-access-notice]");
@@ -75,7 +82,7 @@ const studentImportFile = document.querySelector("[data-student-import-file]");
 const studentImportStatus = document.querySelector("[data-student-import-status]");
 
 const ACCOUNT_PLAN = {
-  name: "Plano piloto",
+  name: "Plano inicial",
   activeStudentLimit: 20
 };
 
@@ -90,6 +97,11 @@ let authContext = null;
 let authAction = "signin";
 let editingWorkoutId = "";
 let deferredInstallPrompt = null;
+let studentSearchQuery = "";
+let workoutSearchQuery = "";
+let studentSessionOpen = false;
+
+const compactProfessorQuery = window.matchMedia("(max-width: 760px)");
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -125,8 +137,6 @@ const pageTitles = {
   dashboard: "Dashboard",
   students: "Alunos",
   workouts: "Treinos",
-  messages: "Comunicação",
-  business: "Negócio",
   appearance: "Aparência",
   profile: "Perfil"
 };
@@ -228,14 +238,16 @@ const authModeContent = {
     title: "Entrar no painel",
     copy: "Gerencie alunos, treinos e marca em um só lugar.",
     submit: "Entrar",
-    status: "Acesse sua conta de professor.",
+    oauth: "Entrar com Google",
+    status: "",
     secondary: "Não tem conta? Use “Criar conta”."
   },
   signup: {
     title: "Criar conta de professor",
-    copy: "Comece seu painel em período de teste com email, senha e nome profissional.",
+    copy: "Crie seu acesso e configure o perfil profissional.",
     submit: "Criar conta",
-    status: "Contas novas de professor entram como teste no piloto.",
+    oauth: "Criar com Google",
+    status: "O acesso será liberado após a aprovação da conta.",
     secondary: "Já tem conta? Volte para “Entrar”."
   }
 };
@@ -247,6 +259,7 @@ const syncAuthMode = (mode = authAction, { preserveStatus = false } = {}) => {
   if (authTitle) authTitle.textContent = content.title;
   if (authCopy) authCopy.textContent = content.copy;
   if (authSubmit) authSubmit.textContent = content.submit;
+  if (oauthLabel) oauthLabel.textContent = content.oauth;
   if (authSecondary) authSecondary.textContent = content.secondary;
   authForm?.querySelector('input[name="password"]')?.setAttribute("autocomplete", authAction === "signup" ? "new-password" : "current-password");
   authForm?.querySelectorAll("[data-auth-mode-button]").forEach((button) => {
@@ -460,8 +473,8 @@ const handleLocalAssetInput = async (input, type) => {
     [`${prefix}Name`]: file.name
   });
   renderLocalBrandAssets();
-  setThemeStatus("Asset salvo apenas neste navegador. Ainda não é enviado para a nuvem.", "warning");
-  showToast(type === "logo" ? "Logo local atualizado." : "Foto local atualizada.");
+  setThemeStatus("Imagem atualizada somente neste navegador.", "warning");
+  showToast(type === "logo" ? "Logo atualizado." : "Foto atualizada.");
 };
 
 const readTheme = () => ({
@@ -500,15 +513,15 @@ const saveThemeNow = async ({ silent = false } = {}) => {
     if (!silent) showToast("Contraste insuficiente para salvar o tema.");
     return { synced: false, blocked: true, theme: readTheme() };
   }
-  setThemeStatus("Salvando marca branca...", "");
+  setThemeStatus("Publicando aparência...", "");
   const result = await themeRepository.saveBrandTheme(readTheme());
   const message = result.synced && result.partial
-    ? "Tema salvo parcialmente. Recarregue e tente salvar novamente."
+    ? "Aparência salva parcialmente. Recarregue e tente novamente."
     : result.synced
-    ? `Marca sincronizada e confirmada${result.updatedAt ? ` em ${formatUpdatedAt(result.updatedAt)}` : ""}.`
-    : "Marca não confirmada pelo Supabase. Verifique a conexão e tente novamente.";
+    ? `Aparência publicada${result.updatedAt ? ` em ${formatUpdatedAt(result.updatedAt)}` : ""}.`
+    : "Não foi possível publicar a aparência. Verifique a conexão e tente novamente.";
   setThemeStatus(message, result.synced && !result.partial ? "synced" : "warning");
-  if (!silent) showToast(result.synced && !result.partial ? "Tema sincronizado." : "Tema salvo com aviso.");
+  if (!silent) showToast(result.synced && !result.partial ? "Aparência publicada." : "Aparência salva com aviso.");
   return result;
 };
 
@@ -526,6 +539,42 @@ const showToast = (message) => {
   toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 2600);
 };
 
+const syncStudentSessionPresentation = () => {
+  if (!studentSessionPanel) return;
+  const isMobileSheet = compactProfessorQuery.matches && studentSessionOpen && !studentSessionPanel.hidden;
+  studentSessionPanel.classList.toggle("is-mobile-open", isMobileSheet);
+  studentSessionBackdrop?.toggleAttribute("hidden", !isMobileSheet);
+  document.body.classList.toggle("has-student-session-open", isMobileSheet);
+
+  if (compactProfessorQuery.matches) {
+    studentSessionPanel.setAttribute("role", "dialog");
+    studentSessionPanel.setAttribute("aria-modal", "true");
+    studentSessionPanel.setAttribute("aria-labelledby", "student-session-title");
+    studentSessionPanel.setAttribute("aria-hidden", String(!isMobileSheet));
+  } else {
+    studentSessionPanel.removeAttribute("role");
+    studentSessionPanel.removeAttribute("aria-modal");
+    studentSessionPanel.removeAttribute("aria-labelledby");
+    studentSessionPanel.removeAttribute("aria-hidden");
+  }
+};
+
+const setStudentSessionOpen = (open, { focus = true } = {}) => {
+  studentSessionOpen = Boolean(open && selectedStudentId && !studentSessionPanel?.hidden);
+  syncStudentSessionPresentation();
+  if (studentSessionOpen && compactProfessorQuery.matches && focus) {
+    window.setTimeout(() => studentSessionPanel?.querySelector("[data-student-session-close]")?.focus(), 80);
+  }
+};
+
+const revealStudentSession = () => {
+  if (compactProfessorQuery.matches) {
+    setStudentSessionOpen(true);
+    return;
+  }
+  studentSessionPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
 const navigate = (name, updateHash = true) => {
   const destination = pages.some((page) => page.dataset.page === name) ? name : "dashboard";
   pages.forEach((page) => page.classList.toggle("is-active", page.dataset.page === destination));
@@ -536,16 +585,39 @@ const navigate = (name, updateHash = true) => {
     else item.removeAttribute("aria-current");
   });
   if (title) title.textContent = pageTitles[destination] || "Painel";
-  if (updateHash) history.replaceState(null, "", `#${destination}`);
+  document.body.dataset.currentPage = destination;
+  if (destination !== "students") setStudentSessionOpen(false, { focus: false });
+  if (updateHash || destination !== name) history.replaceState(null, "", `#${destination}`);
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
+const setStudentFormOpen = (open, { focus = true } = {}) => {
+  if (!studentFormPanel) return;
+  if (open) setStudentSessionOpen(false, { focus: false });
+  studentFormPanel.hidden = !open;
+  if (!open) return;
+  studentFormPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (focus) window.setTimeout(() => studentFormPanel.querySelector("input, select, textarea")?.focus(), 260);
+};
+
+const setWorkoutBuilderOpen = (open, { focus = true } = {}) => {
+  if (!workoutBuilder) return;
+  workoutBuilder.hidden = !open;
+  if (!open) return;
+  workoutBuilder.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (focus) window.setTimeout(() => workoutForm?.querySelector("select, input, textarea")?.focus(), 260);
+};
+
 const focusWorkoutForm = () => {
-  workoutForm?.scrollIntoView({ behavior: "smooth", block: "start" });
-  window.setTimeout(() => workoutForm?.querySelector("select, input, textarea")?.focus(), 260);
+  setWorkoutBuilderOpen(true);
 };
 
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
+const normalizeSearch = (value) => String(value || "")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .trim()
+  .toLowerCase();
 
 const findExistingStudentForDraft = (draft) => {
   const normalizedEmail = normalizeEmail(draft.email);
@@ -589,20 +661,19 @@ const painLabel = (value) => ({
 }[value] || value || "sem dor");
 
 const formatDateForInput = (value) => {
-  const date = value ? new Date(value) : new Date();
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
+  return workoutDateInputValue(value);
 };
 
 const formatWorkoutStart = (value) => {
-  const date = value ? new Date(value) : new Date();
-  if (Number.isNaN(date.getTime())) return "entrada indefinida";
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(date);
+  const dateKey = workoutDateInputValue(value);
+  if (!dateKey) return "entrada indefinida";
+  const [year, month, day] = dateKey.split("-");
+  return `${day}/${month}/${year}`;
 };
 
 const getWorkoutStage = (workout) => {
-  const startsAt = new Date(workout?.startsAt || workout?.updatedAt || 0);
-  const isScheduled = !Number.isNaN(startsAt.getTime()) && startsAt.getTime() > Date.now();
+  const startsAt = workoutStartTimestamp(workout?.startsAt || workout?.updatedAt);
+  const isScheduled = Number.isFinite(startsAt) && startsAt > Date.now();
   return {
     label: isScheduled ? "Agendado" : "Ativo",
     detail: isScheduled ? `entra em ${formatWorkoutStart(workout.startsAt)}` : `vigente desde ${formatWorkoutStart(workout.startsAt || workout.updatedAt)}`
@@ -610,17 +681,16 @@ const getWorkoutStage = (workout) => {
 };
 
 const getWorkoutSyncLabel = (workout) => {
-  if (workout?.syncStatus === "synced") return "Nuvem";
+  if (workout?.syncStatus === "synced") return "Publicado";
   if (workout?.syncStatus === "failed") return "Pendente";
-  return "Local";
+  return "Rascunho";
 };
 
 const describeWorkoutSyncResult = (result) => {
-  if (result.synced && result.partial) return "Treino enviado. Rode o SQL novo para salvar data de entrada e versão.";
+  if (result.synced && result.partial) return "Treino enviado sem agendamento. Tente republicar para completar.";
   if (result.synced) return "Treino enviado. O aluno recebe quando abrir ou atualizar o app.";
-  if (result.reason === "not-authenticated-as-coach") return "Treino não enviado. Entre como professor para sincronizar com o aluno.";
-  const message = result.error?.message || result.workout?.syncMessage;
-  return message ? `Treino salvo, mas não enviado: ${message}` : "Treino salvo, mas ainda não foi enviado para a nuvem.";
+  if (result.reason === "not-authenticated-as-coach") return "Entre novamente para enviar o treino ao aluno.";
+  return "Treino salvo como rascunho. Verifique a conexão e tente publicar novamente.";
 };
 
 const parseSets = (prescription) => {
@@ -777,33 +847,47 @@ const renderTasks = () => {
   const target = document.querySelector("[data-task-list]");
   if (!target) return;
   const withoutWorkout = students.filter((student) => !getPublishedWorkoutForStudent(student));
+  const invitePending = students.filter((student) => student.inviteStatus !== "accepted");
   const checkinPending = students.filter((student) => student.status === "Aguardando check-in");
   const paymentPending = students.filter((student) => student.status === "Inadimplente");
   const tasks = [];
 
   if (!students.length) {
-    tasks.push({ type: "Alunos", title: "Cadastre o primeiro aluno", detail: "Use a tela Alunos para iniciar a base real do painel." });
+    tasks.push({ type: "Alunos", title: "Cadastre o primeiro aluno", detail: "Nome e contato bastam para começar.", go: "students", action: "new-student" });
   }
   if (withoutWorkout.length) {
-    tasks.push({ type: "Treinos", title: `${withoutWorkout.length} aluno(s) sem treino publicado`, detail: "Publique um treino para liberar a visualização no app do aluno." });
+    tasks.push({ type: "Treinos", title: `${withoutWorkout.length} sem treino publicado`, detail: "Crie e publique a prescrição.", go: "workouts", action: "new-workout", studentId: withoutWorkout[0].id });
+  }
+  if (invitePending.length) {
+    const expiredInvite = invitePending.find(isInviteExpired);
+    const nextInvite = expiredInvite || invitePending[0];
+    tasks.push({
+      type: "Acesso",
+      title: `${invitePending.length} ${invitePending.length === 1 ? "convite aguardando" : "convites aguardando"}`,
+      detail: expiredInvite ? "Renove e envie o link de acesso." : "Envie o link para o aluno entrar.",
+      go: "students",
+      action: "invite-student",
+      studentId: nextInvite.id
+    });
   }
   if (checkinPending.length) {
-    tasks.push({ type: "Check-in", title: `${checkinPending.length} check-in(s) pendente(s)`, detail: "Revise os alunos marcados como aguardando check-in." });
+    tasks.push({ type: "Check-in", title: `${checkinPending.length} aguardando check-in`, detail: "Abra o acompanhamento do aluno.", go: "students", studentId: checkinPending[0].id });
   }
   if (paymentPending.length) {
-    tasks.push({ type: "Financeiro", title: `${paymentPending.length} aluno(s) inadimplente(s)`, detail: "Controle manual até o módulo financeiro ser ativado." });
+    tasks.push({ type: "Financeiro", title: `${paymentPending.length} com pagamento pendente`, detail: "Revise o cadastro do aluno.", go: "students", studentId: paymentPending[0].id });
   }
 
   if (!tasks.length) {
-    target.innerHTML = `<article class="empty-state card"><strong>Nenhuma pendência operacional.</strong><small>Alunos ativos possuem treino publicado.</small></article>`;
+    target.innerHTML = `<article class="empty-state"><strong>Tudo resolvido.</strong><small>Nenhuma pendência agora.</small></article>`;
     return;
   }
 
   target.innerHTML = tasks.map((task) => `
-    <article class="task-row">
+    <button class="task-row" type="button" data-task-go="${escapeHtml(task.go)}" data-task-action="${escapeHtml(task.action || "open-student")}" ${task.studentId ? `data-task-student="${escapeHtml(task.studentId)}"` : ""}>
       <span class="chip">${escapeHtml(task.type)}</span>
       <div><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(task.detail)}</small></div>
-    </article>
+      <span class="task-row__arrow">${svgIcon("chevron-right")}</span>
+    </button>
   `).join("");
 };
 
@@ -834,7 +918,7 @@ const renderActivities = () => {
     .slice(0, 6);
 
   if (!activities.length) {
-    target.innerHTML = `<article class="empty-state card"><strong>Nenhuma atividade registrada.</strong><small>Cadastre um aluno ou publique um treino para preencher este painel.</small></article>`;
+    target.innerHTML = `<article class="empty-state"><strong>Ainda sem atividade.</strong><small>As primeiras ações aparecerão aqui.</small></article>`;
     return;
   }
 
@@ -848,29 +932,34 @@ const renderActivities = () => {
 
 const renderDashboard = () => {
   const activeStudents = students.filter((student) => student.status !== "Inadimplente").length;
-  const pendingCount = students.filter((student) => student.status !== "Ativo" || !getPublishedWorkoutForStudent(student)).length;
+  const isEmpty = students.length === 0;
+  const pendingCount = (isEmpty ? 1 : 0)
+    + students.filter((student) => !getPublishedWorkoutForStudent(student)).length
+    + students.filter((student) => student.inviteStatus !== "accepted").length
+    + students.filter((student) => student.status === "Aguardando check-in").length
+    + students.filter((student) => student.status === "Inadimplente").length;
   const isOnline = dataStatus === "Online";
   const isSyncing = dataStatus === "Sincronizando";
   setText("[data-kpi-students]", activeStudents);
   setText("[data-kpi-workouts]", workouts.length);
-  setText("[data-kpi-pending]", pendingCount);
   setText("[data-hero-pending]", pendingCount);
-  setText("[data-dashboard-headline]", pendingCount
-    ? `${pendingCount} pendência(s) para revisar hoje.`
-    : "Operação em dia.");
-  setText("[data-dashboard-summary]", !students.length
-    ? "Cadastre o primeiro aluno e publique um treino para liberar o app do aluno."
+  setText("[data-dashboard-headline]", isEmpty
+    ? "Comece pelo primeiro aluno."
     : pendingCount
-      ? "Priorize alunos sem treino publicado, check-ins pendentes ou status financeiro manual."
-      : "Alunos ativos possuem treino publicado e não há alertas operacionais agora.");
-  setText("[data-sync-eyebrow]", isOnline ? "Sincronizado" : isSyncing ? "Sincronizando" : "Offline");
+    ? `${pendingCount} ${pendingCount === 1 ? "item para resolver" : "itens para resolver"}.`
+    : "Tudo em dia.");
+  setText("[data-dashboard-summary]", isEmpty
+    ? "Cadastre o aluno e publique o primeiro treino."
+    : pendingCount
+      ? "Abra uma prioridade abaixo para continuar."
+      : "Sem pendências no momento.");
   setText("[data-sync-chip]", isOnline ? "Online" : isSyncing ? "Sincronizando" : "Local");
-  setText("[data-sync-title]", isOnline ? "Dados sincronizados" : isSyncing ? "Sincronizando" : "Modo offline");
+  setText("[data-sync-title]", isOnline ? "Sincronizado" : isSyncing ? "Sincronizando" : "Offline");
   setText("[data-sync-detail]", isOnline
-    ? "Tudo atualizado."
+    ? "Dados atualizados."
     : isSyncing
       ? "Atualizando dados..."
-      : "As alterações ficam neste aparelho até reconectar.");
+      : "Conecte-se para enviar alterações.");
 
   const syncStatus = document.querySelector("[data-sync-chip]")?.closest(".sync-status");
   syncStatus?.classList.toggle("is-online", isOnline);
@@ -896,10 +985,10 @@ const renderAccount = () => {
   setStatus(
     document.querySelector("[data-account-status]"),
     exceeded
-      ? `Limite excedido em ${activeCount - limit} aluno(s). Plano real/billing ainda não está conectado.`
+      ? `Limite excedido em ${activeCount - limit}. Arquive alunos inativos antes de adicionar novos.`
       : nearLimit
-        ? `Você está usando ${activeCount} de ${limit} alunos ativos do plano piloto.`
-        : "Você está no plano piloto. Upgrade e cobrança entram depois.",
+        ? `${activeCount} de ${limit} alunos ativos. Você está perto do limite.`
+        : "",
     exceeded || nearLimit ? "warning" : ""
   );
 };
@@ -1008,13 +1097,16 @@ const resetWorkoutFormMode = ({ resetForm = false } = {}) => {
 };
 
 const renderStudentSessionPanel = () => {
-  const target = document.querySelector("[data-student-session-panel]");
+  const target = studentSessionPanel;
   if (!target) return;
-  const selectedStudent = students.find((student) => student.id === selectedStudentId) || students[0] || null;
+  const selectedStudent = students.find((student) => student.id === selectedStudentId) || null;
   if (!selectedStudent) {
-    target.innerHTML = `<article class="empty-state"><strong>Acompanhamento</strong><small>Cadastre um aluno para acompanhar execuções reais.</small></article>`;
+    target.hidden = true;
+    target.innerHTML = "";
+    setStudentSessionOpen(false, { focus: false });
     return;
   }
+  target.hidden = false;
   selectedStudentId = selectedStudent.id;
   const sessions = getSessionsForStudent(selectedStudent.id);
   const totalSessions = sessions.length;
@@ -1034,47 +1126,62 @@ const renderStudentSessionPanel = () => {
       </article>
     `).join("");
     return `
-      <article class="session-card">
-        <div class="session-card__head">
+      <details class="session-card">
+        <summary class="session-card__summary">
           <div>
             <span class="eyebrow">${escapeHtml(formatUpdatedAt(session.finishedAt))}</span>
             <h3>${escapeHtml(session.workoutTitle)}</h3>
+            <span class="session-card__summary-line">${escapeHtml(session.completedSets)}/${escapeHtml(session.totalSets)} séries · ${escapeHtml(effortLabel(session.feedback?.effort))} · ${escapeHtml(painLabel(session.feedback?.pain))}</span>
           </div>
-          <span class="chip">${escapeHtml(formatVolume(session.volumeKg))}</span>
+          <span class="session-card__summary-action">
+            <span class="chip">${escapeHtml(formatVolume(session.volumeKg))}</span>
+            <span class="session-card__chevron">${svgIcon("chevron-down")}</span>
+          </span>
+        </summary>
+        <div class="session-card__body">
+          ${session.feedback?.note ? `<p class="session-card__note">${escapeHtml(session.feedback.note)}</p>` : ""}
+          <section class="session-log-list">${setRows || `<article class="empty-state"><strong>Sem detalhes das séries</strong><small>Este treino não possui registros por exercício.</small></article>`}</section>
         </div>
-        <div class="session-card__feedback">
-          <span class="chip">${escapeHtml(effortLabel(session.feedback?.effort))}</span>
-          <span class="chip">${escapeHtml(painLabel(session.feedback?.pain))}</span>
-          <span class="chip">${escapeHtml(session.completedSets)}/${escapeHtml(session.totalSets)} séries</span>
-        </div>
-        ${session.feedback?.note ? `<p class="session-card__note">${escapeHtml(session.feedback.note)}</p>` : ""}
-        <section class="session-log-list">${setRows || `<article class="empty-state"><strong>Sem logs por exercício.</strong><small>O aluno concluiu sem registros detalhados.</small></article>`}</section>
-      </article>
+      </details>
     `;
   }).join("");
 
   target.innerHTML = `
     <div class="student-session-panel__head">
       <div>
-        <span class="eyebrow">Acompanhamento real</span>
-        <h2>${escapeHtml(selectedStudent.name)}</h2>
+        <span class="eyebrow">Aluno selecionado</span>
+        <h2 id="student-session-title">${escapeHtml(selectedStudent.name)}</h2>
       </div>
-      <button class="button button--quiet" type="button" data-refresh-sessions>Atualizar execuções</button>
+      <div class="student-session-panel__actions">
+        <button class="button button--quiet" type="button" data-refresh-sessions>Atualizar</button>
+        <button class="icon-button student-session-panel__close" type="button" data-student-session-close aria-label="Fechar acompanhamento">×</button>
+      </div>
     </div>
     <div class="student-session-panel__metrics">
-      <span><strong>${totalSessions}</strong><small>treinos concluídos</small></span>
-      <span><strong>${lastSession ? formatUpdatedAt(lastSession.finishedAt) : "—"}</strong><small>última execução</small></span>
-      <span><strong>${formatVolume(totalVolume)}</strong><small>volume acumulado</small></span>
-      <span><strong>${painCount ? `${painCount} alerta(s)` : `${averageSets} séries`}</strong><small>${painCount ? "dor/desconforto" : "média por treino"}</small></span>
+      <span><strong>${totalSessions}</strong><small>concluídos</small></span>
+      <span><strong>${lastSession ? formatUpdatedAt(lastSession.finishedAt) : "—"}</strong><small>último treino</small></span>
+      <span><strong>${formatVolume(totalVolume)}</strong><small>volume</small></span>
+      <span><strong>${painCount ? `${painCount} alerta(s)` : `${averageSets} séries`}</strong><small>${painCount ? "dor/desconforto" : "média"}</small></span>
     </div>
     <section class="session-list">
-      ${sessionCards || `<article class="empty-state card"><strong>Nenhum treino concluído ainda.</strong><small>Quando o aluno finalizar no app, cargas, reps e feedback aparecem aqui.</small></article>`}
+      ${sessionCards || `<article class="empty-state"><strong>Sem treinos concluídos</strong><small>O histórico aparecerá após o primeiro treino.</small></article>`}
     </section>
   `;
+  syncStudentSessionPresentation();
 };
 
 const renderStudents = () => {
   const target = document.querySelector("[data-student-list]");
+  if (!students.some((student) => student.id === selectedStudentId)) {
+    selectedStudentId = "";
+  }
+  const query = normalizeSearch(studentSearchQuery);
+  const visibleStudents = query
+    ? students.filter((student) => normalizeSearch([student.name, student.email, student.goal, student.status].join(" ")).includes(query))
+    : students;
+  setText("[data-student-count]", query
+    ? `${visibleStudents.length} de ${students.length}`
+    : `${students.length} ${students.length === 1 ? "cadastrado" : "cadastrados"}`);
   if (!target) {
     renderStudentOptions();
     renderWorkoutPreview();
@@ -1082,14 +1189,22 @@ const renderStudents = () => {
     return;
   }
   if (!students.length) {
-    target.innerHTML = `<article class="empty-state card"><strong>Nenhum aluno cadastrado.</strong><small>Use o formulário acima para criar o primeiro aluno real.</small></article>`;
+    target.innerHTML = `<article class="empty-state card"><strong>Nenhum aluno cadastrado.</strong><small>Toque em Novo aluno para começar.</small></article>`;
     renderStudentOptions();
     renderWorkoutPreview();
     renderStudentSessionPanel();
     return;
   }
 
-  target.innerHTML = students.map((student) => {
+  if (!visibleStudents.length) {
+    target.innerHTML = `<article class="empty-state card"><strong>Nenhum aluno encontrado.</strong><small>Tente outro nome, email ou objetivo.</small></article>`;
+    renderStudentOptions();
+    renderWorkoutPreview();
+    renderStudentSessionPanel();
+    return;
+  }
+
+  target.innerHTML = visibleStudents.map((student) => {
     const publishedWorkout = getPublishedWorkoutForStudent(student);
     const actionLabel = publishedWorkout ? "Editar treino publicado" : "Criar primeiro treino";
     const workoutLabel = publishedWorkout
@@ -1099,27 +1214,36 @@ const renderStudents = () => {
     const latestSession = studentSessions[0] || null;
     const followupLabel = latestSession
       ? `Último: ${formatUpdatedAt(latestSession.finishedAt)}`
-      : `${student.adherence}% aderência`;
-    const accessLabel = student.email ? `Acesso: ${student.email}` : "Sem email de acesso";
+      : "Nenhum treino concluído";
+    const accessState = student.inviteStatus === "accepted"
+      ? "active"
+      : isInviteExpired(student) ? "expired" : "pending";
+    const accessLabel = accessState === "active" ? "Acesso ativo" : accessState === "expired" ? "Convite expirado" : "Convite pendente";
+    const accessEmail = student.email || "Sem email de acesso";
+    const isSelected = selectedStudentId === student.id;
+    const followupButtonClass = publishedWorkout ? "button" : "button button--quiet";
+    const workoutButtonClass = publishedWorkout ? "button button--quiet" : "button";
     return `
-      <article class="student-card card">
+      <article class="student-card card${isSelected ? " is-selected" : ""}" data-student-card="${escapeHtml(student.id)}">
         <span class="avatar">${escapeHtml(student.initials)}</span>
         <div class="student-card__main">
           <div>
             <h2>${escapeHtml(student.name)}</h2>
-            <p>${escapeHtml(student.goal)} - ${escapeHtml(student.plan)}</p>
-            <small class="student-card__access">${escapeHtml(accessLabel)}</small>
+            <p>${escapeHtml(student.goal)}</p>
+            <small class="student-card__access">${escapeHtml(accessEmail)}</small>
           </div>
-          <span class="chip">${escapeHtml(student.status)}</span>
+          <div class="student-card__states">
+            <span class="chip">${escapeHtml(student.status)}</span>
+            <span class="student-card__access-state" data-access-state="${accessState}">${escapeHtml(accessLabel)}</span>
+          </div>
         </div>
         <div class="student-card__meta">
           <span>${escapeHtml(workoutLabel)}</span>
           <span>${escapeHtml(followupLabel)}</span>
         </div>
-        <div class="progress-track" aria-label="${student.adherence} por cento de aderência"><span style="--progress: ${student.adherence}%"></span></div>
         <div class="student-card__actions">
-          <button class="button button--quiet" type="button" data-student-detail="${escapeHtml(student.id)}">Acompanhar</button>
-          <button class="button button--quiet" type="button" data-student-action="${escapeHtml(student.id)}">${escapeHtml(actionLabel)}</button>
+          <button class="${followupButtonClass}" type="button" data-student-detail="${escapeHtml(student.id)}" aria-pressed="${String(isSelected)}">Acompanhar</button>
+          <button class="${workoutButtonClass}" type="button" data-student-action="${escapeHtml(student.id)}">${escapeHtml(actionLabel)}</button>
         </div>
       </article>
     `;
@@ -1182,18 +1306,32 @@ const renderWorkoutPreview = () => {
 
 const renderWorkouts = () => {
   const target = document.querySelector("[data-workout-list]");
-  setText("[data-workout-count]", `${workouts.length} itens`);
+  const query = normalizeSearch(workoutSearchQuery);
+  const visibleWorkouts = query
+    ? workouts.filter((workout) => normalizeSearch([workout.title, workout.owner, workout.focus, getWorkoutStage(workout).label].join(" ")).includes(query))
+    : workouts;
+  setText("[data-workout-count]", query
+    ? `${visibleWorkouts.length} de ${workouts.length}`
+    : `${workouts.length} ${workouts.length === 1 ? "publicado" : "publicados"}`);
   if (!target) return;
   if (!workouts.length) {
-    target.innerHTML = `<article class="empty-state card"><strong>Nenhum treino publicado.</strong><small>Crie um treino para um aluno para iniciar a operação.</small></article>`;
+    target.innerHTML = `<article class="empty-state card"><strong>Nenhum treino publicado.</strong><small>Toque em Novo treino para começar.</small></article>`;
     return;
   }
 
-  target.innerHTML = workouts.map((workout) => {
-    const blocks = getWorkoutBlocks(workout).map(escapeHtml).join(" - ");
+  if (!visibleWorkouts.length) {
+    target.innerHTML = `<article class="empty-state card"><strong>Nenhum treino encontrado.</strong><small>Tente buscar pelo aluno ou nome do treino.</small></article>`;
+    return;
+  }
+
+  target.innerHTML = visibleWorkouts.map((workout) => {
+    const blocks = getWorkoutBlocks(workout);
+    const blockPreview = blocks.slice(0, 3).join(" · ");
+    const extraBlocks = blocks.length > 3 ? ` · +${blocks.length - 3}` : "";
+    const exerciseCount = (workout.exercises || []).length;
+    const totalSets = (workout.exercises || []).reduce((sum, exercise) => sum + parseSets(exercise.prescription), 0);
     const stage = getWorkoutStage(workout);
     const syncLabel = getWorkoutSyncLabel(workout);
-    const syncMessage = workout.syncMessage ? ` - ${workout.syncMessage}` : "";
     return `
       <article class="workout-card card workout-card--published">
         <span class="surface-icon">${svgIcon("dumbbell")}</span>
@@ -1203,9 +1341,14 @@ const renderWorkouts = () => {
             <span class="chip">${escapeHtml(stage.label)}</span>
             <span class="chip">${escapeHtml(syncLabel)}</span>
           </div>
-          <h2>${escapeHtml(workout.title)}</h2>
-          <p>${blocks}</p>
-          <small>${escapeHtml(stage.detail)} - v${escapeHtml(workout.version || 1)} - atualizado: ${escapeHtml(formatUpdatedAt(workout.updatedAt))}${escapeHtml(syncMessage)}</small>
+          <h2>Treino ${escapeHtml(workout.code)} - ${escapeHtml(workout.title)}</h2>
+          <p class="workout-card__exercise-preview">${escapeHtml(blockPreview || "Exercícios não informados")}${escapeHtml(extraBlocks)}</p>
+          <div class="workout-card__stats" aria-label="Resumo do treino">
+            <span><strong>${exerciseCount}</strong> exercícios</span>
+            <span><strong>${totalSets}</strong> séries</span>
+            <span><strong>${escapeHtml(workout.estimatedMinutes || 0)}</strong> min</span>
+          </div>
+          <small class="workout-card__timing">${escapeHtml(stage.detail)}</small>
         </div>
         <div class="workout-card__actions">
           <button class="button button--quiet" type="button" aria-label="Editar ${escapeHtml(workout.title)}" data-workout-action="${escapeHtml(workout.id)}">Editar</button>
@@ -1214,12 +1357,6 @@ const renderWorkouts = () => {
       </article>
     `;
   }).join("");
-};
-
-const renderMessages = () => {
-  const target = document.querySelector("[data-message-list]");
-  if (!target) return;
-  target.innerHTML = `<article class="empty-state card"><strong>Nenhuma mensagem conectada.</strong><small>O módulo de comunicação precisa de autenticação antes de receber conversas reais.</small></article>`;
 };
 
 const applyTheme = (overrides = {}) => {
@@ -1261,7 +1398,6 @@ const renderAll = () => {
   renderCoachProfile();
   renderStudents();
   renderWorkouts();
-  renderMessages();
   renderDashboard();
   applyTheme();
 };
@@ -1273,8 +1409,30 @@ navItems.forEach((item) => item.addEventListener("click", (event) => {
 
 jumpButtons.forEach((button) => button.addEventListener("click", () => {
   navigate(button.dataset.navJump);
+  if (button.hasAttribute("data-open-student-form")) setStudentFormOpen(true);
   if (button.hasAttribute("data-focus-workout-form")) focusWorkoutForm();
 }));
+
+document.querySelector("[data-toggle-student-form]")?.addEventListener("click", () => setStudentFormOpen(true));
+document.querySelector("[data-close-student-form]")?.addEventListener("click", () => setStudentFormOpen(false, { focus: false }));
+document.querySelector("[data-open-workout-form]")?.addEventListener("click", () => {
+  resetWorkoutFormMode({ resetForm: true });
+  focusWorkoutForm();
+});
+document.querySelector("[data-close-workout-form]")?.addEventListener("click", () => {
+  resetWorkoutFormMode({ resetForm: true });
+  setWorkoutBuilderOpen(false, { focus: false });
+});
+
+studentSearchInput?.addEventListener("input", () => {
+  studentSearchQuery = studentSearchInput.value;
+  renderStudents();
+});
+
+workoutSearchInput?.addEventListener("input", () => {
+  workoutSearchQuery = workoutSearchInput.value;
+  renderWorkouts();
+});
 
 document.querySelector("[data-scroll-workout-form]")?.addEventListener("click", (event) => {
   event.preventDefault();
@@ -1293,10 +1451,10 @@ document.querySelector("[data-student-form]")?.addEventListener("submit", async 
   const student = mergeStudentDraftWithExisting(draft);
   const savedStudent = studentRepository.saveStudent({ ...student, coachId: authContext.coachId });
   applyStudents([savedStudent, ...students.filter((item) => item.id !== savedStudent.id)]);
-  setStudentSyncStatus(existingStudent ? "Aluno já existia neste personal. Atualizando cadastro..." : "Aluno criado. Sincronizando...", "");
+  setStudentSyncStatus(existingStudent ? "Atualizando aluno..." : "Salvando aluno...", "");
   showToast(existingStudent ? "Aluno atualizado." : "Aluno criado.");
   if (getActiveStudentCount() > ACCOUNT_PLAN.activeStudentLimit) {
-    setStudentSyncStatus("Aluno salvo, mas o limite do plano piloto foi excedido.", "warning");
+    setStudentSyncStatus(`Aluno salvo, mas o limite do ${ACCOUNT_PLAN.name.toLowerCase()} foi excedido.`, "warning");
   }
 
   const result = await studentRepository.syncStudent(savedStudent);
@@ -1307,17 +1465,18 @@ document.querySelector("[data-student-form]")?.addEventListener("submit", async 
   setStudentSyncStatus(
     result.synced
       ? limitExceeded
-        ? "Aluno sincronizado, mas o limite do plano piloto foi excedido."
+        ? `Aluno salvo, mas o limite do ${ACCOUNT_PLAN.name.toLowerCase()} foi excedido.`
         : existingStudent
           ? "Aluno atualizado neste personal. Outros personais com o mesmo aluno não foram alterados."
           : draft.email
-            ? "Aluno sincronizado. Ele já pode entrar diretamente com Google ou link mágico usando esse email."
-            : "Aluno sincronizado sem email. Envie o convite pessoal para liberar o primeiro acesso."
-      : "Aluno salvo neste aparelho.",
+            ? "Aluno cadastrado. O acesso já pode ser ativado com este email."
+            : "Aluno cadastrado sem email. Envie o convite para liberar o acesso."
+      : "Aluno salvo como rascunho neste aparelho.",
     result.synced && !limitExceeded ? "synced" : "warning"
   );
-  if (result.synced) showToast("Aluno sincronizado.");
+  if (result.synced) showToast(existingStudent ? "Aluno atualizado." : "Aluno cadastrado.");
   event.currentTarget.reset();
+  setStudentFormOpen(false, { focus: false });
 });
 
 inviteStudentOptions?.addEventListener("change", renderInviteTools);
@@ -1328,7 +1487,7 @@ copyInviteButton?.addEventListener("click", async () => {
     setInviteStatus("Gerando um novo convite pessoal...", "");
     const renewal = await studentRepository.renewInvite(selected);
     if (!renewal.renewed) {
-      setInviteStatus("Não foi possível renovar o convite. Confirme o SQL e tente novamente.", "warning");
+      setInviteStatus("Não foi possível renovar o convite. Tente novamente.", "warning");
       return;
     }
     selected = renewal.student;
@@ -1401,7 +1560,7 @@ studentImportForm?.addEventListener("submit", async (event) => {
     ...savedStudents,
     ...students.filter((student) => !savedStudents.some((saved) => saved.id === student.id))
   ]);
-  setStudentImportStatus(`${savedStudents.length} aluno(s) processado(s), ${updatedExistingCount} atualizado(s). Sincronizando...`, "");
+  setStudentImportStatus(`Salvando ${savedStudents.length} aluno(s)...`, "");
   showToast("Importação concluída.");
 
   const syncResults = await Promise.allSettled(savedStudents.map((student) => studentRepository.syncStudent(student)));
@@ -1410,9 +1569,9 @@ studentImportForm?.addEventListener("submit", async (event) => {
   setStudentImportStatus(
     syncedCount === savedStudents.length
       ? limitExceeded
-        ? `${syncedCount} aluno(s) sincronizado(s). Limite do plano piloto excedido.`
-        : `${syncedCount} aluno(s) sincronizado(s). ${updatedExistingCount} já existiam neste personal.`
-      : `${savedStudents.length} aluno(s) salvos; ${syncedCount} sincronizado(s).`,
+        ? `${syncedCount} aluno(s) importado(s). Limite do ${ACCOUNT_PLAN.name.toLowerCase()} excedido.`
+        : `${syncedCount} aluno(s) importado(s). ${updatedExistingCount} já existiam neste personal.`
+      : `${syncedCount} de ${savedStudents.length} aluno(s) importado(s).`,
     syncedCount === savedStudents.length && !limitExceeded ? "synced" : "warning"
   );
 
@@ -1462,7 +1621,7 @@ workoutForm?.addEventListener("submit", async (event) => {
   }
 
   applyPublishedWorkouts([savedWorkout, ...workouts.filter((item) => item.id !== savedWorkout.id)]);
-  setWorkoutSyncStatus(editingWorkout ? "Confirmando atualização completa no Supabase..." : "Confirmando plano e exercícios no Supabase...", "");
+  setWorkoutSyncStatus(editingWorkout ? "Salvando atualização do treino..." : "Publicando treino...", "");
 
   const result = await workoutRepository.syncPublishedWorkout(savedWorkout, linkedStudent);
   setWorkoutSyncStatus(
@@ -1473,6 +1632,7 @@ workoutForm?.addEventListener("submit", async (event) => {
   if (result.synced) {
     showToast(editingWorkout ? "Treino republicado e confirmado." : "Treino publicado e confirmado.");
     resetWorkoutFormMode({ resetForm: true });
+    setWorkoutBuilderOpen(false, { focus: false });
   } else {
     showToast("Publicação não concluída. Revise o aviso e tente novamente.");
   }
@@ -1542,7 +1702,7 @@ document.querySelector("[data-clear-brand-assets]")?.addEventListener("click", (
   if (photoInput) photoInput.value = "";
   renderLocalBrandAssets();
   setThemeStatus("Logo e foto locais removidos deste navegador.", "warning");
-  showToast("Assets locais removidos.");
+  showToast("Logo e foto removidos.");
 });
 saveThemeButton?.addEventListener("click", () => {
   if (!updateContrastStatus()) {
@@ -1562,8 +1722,8 @@ document.querySelector("[data-reset-theme]")?.addEventListener("click", async ()
   const result = await saveThemeNow({ silent: true });
   setThemeStatus(
     result.synced && !result.partial
-      ? "Tema restaurado para o padrão FlowFit validado e sincronizado."
-      : "Tema restaurado neste aparelho.",
+      ? "Padrão FlowFit restaurado e publicado."
+      : "Padrão FlowFit restaurado neste aparelho.",
     result.synced && !result.partial ? "synced" : "warning"
   );
   showToast("Tema padrão restaurado.");
@@ -1591,8 +1751,8 @@ coachProfileForm?.addEventListener("submit", async (event) => {
   });
 
   if (!result.synced || !result.profile) {
-    setCoachProfileStatus(result.error?.message || "Não foi possível sincronizar o perfil.", "warning");
-    showToast("Perfil não sincronizado.");
+    setCoachProfileStatus(result.error?.message || "Não foi possível salvar o perfil.", "warning");
+    showToast("Perfil não salvo.");
     return;
   }
 
@@ -1613,13 +1773,58 @@ coachProfileForm?.addEventListener("submit", async (event) => {
   renderCoachProfile();
   renderInviteTools();
   setCoachProfileStatus(
-    result.partial ? "Perfil salvo parcialmente. Recarregue e tente salvar novamente." : "Perfil profissional sincronizado.",
+    result.partial ? "Perfil salvo parcialmente. Recarregue e tente novamente." : "Perfil profissional atualizado.",
     result.partial ? "warning" : "synced"
   );
   showToast("Perfil atualizado.");
 });
 
 document.addEventListener("click", async (event) => {
+  const taskButton = event.target.closest("[data-task-go]");
+  if (taskButton) {
+    const action = taskButton.dataset.taskAction;
+    const student = students.find((item) => item.id === taskButton.dataset.taskStudent);
+    navigate(taskButton.dataset.taskGo);
+
+    if (action === "new-student") {
+      setStudentFormOpen(true);
+      return;
+    }
+
+    if (action === "new-workout") {
+      resetWorkoutFormMode({ resetForm: true });
+      const studentSelect = document.querySelector("[data-student-options]");
+      if (studentSelect && student) studentSelect.value = student.id;
+      renderWorkoutPreview();
+      focusWorkoutForm();
+      return;
+    }
+
+    if (action === "invite-student" && student) {
+      selectedStudentId = student.id;
+      renderStudents();
+      const tools = document.querySelector(".management-disclosure");
+      if (tools) tools.open = true;
+      if (inviteStudentOptions) inviteStudentOptions.value = student.id;
+      renderInviteTools();
+      tools?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    if (student) {
+      selectedStudentId = student.id;
+      renderStudents();
+      revealStudentSession();
+    }
+    return;
+  }
+
+  const studentSessionClose = event.target.closest("[data-student-session-close]");
+  if (studentSessionClose) {
+    setStudentSessionOpen(false, { focus: false });
+    return;
+  }
+
   const refreshSessionsButton = event.target.closest("[data-refresh-sessions]");
   if (refreshSessionsButton) {
     refreshWorkoutSessions();
@@ -1631,7 +1836,7 @@ document.addEventListener("click", async (event) => {
     selectedStudentId = studentDetail.dataset.studentDetail;
     navigate("students");
     renderStudents();
-    document.querySelector("[data-student-session-panel]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    revealStudentSession();
     return;
   }
 
@@ -1678,9 +1883,22 @@ document.addEventListener("click", async (event) => {
   }
 });
 
+studentSessionBackdrop?.addEventListener("click", () => setStudentSessionOpen(false, { focus: false }));
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && studentSessionOpen) setStudentSessionOpen(false, { focus: false });
+});
+
+if (compactProfessorQuery.addEventListener) {
+  compactProfessorQuery.addEventListener("change", syncStudentSessionPresentation);
+} else {
+  compactProfessorQuery.addListener?.(syncStudentSessionPresentation);
+}
+
 cancelWorkoutEditButton?.addEventListener("click", () => {
   resetWorkoutFormMode({ resetForm: true });
   setWorkoutSyncStatus("Edição cancelada. Pronto para publicar novo treino.", "");
+  setWorkoutBuilderOpen(false, { focus: false });
 });
 
 window.addEventListener("hashchange", () => navigate(location.hash.slice(1), false));
@@ -1761,6 +1979,7 @@ const signOutProfessor = async () => {
 };
 
 document.querySelector("[data-sign-out]")?.addEventListener("click", signOutProfessor);
+document.querySelector("[data-profile-sign-out]")?.addEventListener("click", signOutProfessor);
 authGateSignOut?.addEventListener("click", signOutProfessor);
 
 const startAuthenticatedPanel = async () => {
@@ -1825,12 +2044,12 @@ const startAuthenticatedPanel = async () => {
   if (!remote) {
     fillThemeInputs(DEFAULT_BRAND_THEME);
     applyTheme(DEFAULT_BRAND_THEME);
-    setThemeStatus("Sem tema publicado ainda. Use Salvar e aplicar para criar o primeiro.", "");
+    setThemeStatus("Nenhuma aparência publicada. Ajuste as opções e publique.", "");
     return;
   }
   fillThemeInputs(remote);
   applyTheme({ mode: remote.mode });
-  setThemeStatus("Tema publicado carregado para edição.", "synced");
+  setThemeStatus("Aparência publicada carregada.", "synced");
 };
 
 const boot = async () => {

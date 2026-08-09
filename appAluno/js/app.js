@@ -1,13 +1,13 @@
-import { Platform } from "./core/platform.js";
-import { Store } from "./core/store.js";
-import { Theme } from "./core/theme.js";
-import { svgIcon } from "./core/icons.js";
-import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js";
-import { authRepository } from "./data/repositories/auth-repository.js";
-import { studentRepository } from "./data/repositories/student-repository.js";
-import { themeRepository } from "./data/repositories/theme-repository.js";
-import { PUBLISHED_WORKOUTS_KEY, workoutRepository } from "./data/repositories/workout-repository.js";
-import { sessionRepository } from "./data/repositories/session-repository.js";
+import { Platform } from "./core/platform.js?v=build-20260809-6";
+import { Store } from "./core/store.js?v=build-20260809-6";
+import { Theme } from "./core/theme.js?v=build-20260809-6";
+import { svgIcon } from "./core/icons.js?v=build-20260809-6";
+import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260809-6";
+import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260809-6";
+import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260809-6";
+import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260809-6";
+import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260809-6";
+import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260809-6";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -22,6 +22,17 @@ const authSubmit = document.querySelector("[data-auth-submit]");
 const authSecondary = document.querySelector("[data-auth-secondary]");
 const oauthLabel = document.querySelector("[data-oauth-label]");
 const toast = document.querySelector("[data-toast]");
+const headerNotificationButton = document.querySelector(".notification-button");
+const homeWorkoutAction = document.querySelector("[data-home-workout-action]");
+const homeWorkoutLabel = document.querySelector("[data-home-workout-label]");
+const sessionDock = document.querySelector("[data-session-dock]");
+const sessionDockTitle = document.querySelector("[data-session-dock-title]");
+const sessionDockCopy = document.querySelector("[data-session-dock-copy]");
+const sessionCta = document.querySelector("[data-session-cta]");
+const finishDisclosure = document.querySelector("[data-finish-disclosure]");
+const finishReadiness = document.querySelector("[data-finish-readiness]");
+const progressDisclosure = document.querySelector("[data-progress-disclosure]");
+const scheduleDisclosure = document.querySelector("[data-schedule-disclosure]");
 const accentInput = document.querySelector("[data-accent]");
 const brandInput = document.querySelector("[data-brand-input]");
 const taglineInput = document.querySelector("[data-tagline-input]");
@@ -31,11 +42,14 @@ let restTimerId;
 let restRemaining = 0;
 const SET_CLICK_DEBOUNCE_MS = 2000;
 const setClickLocks = new Set();
+const compactWorkoutQuery = window.matchMedia("(max-width: 767px)");
+let focusedExerciseId = "";
 const emptyStudent = {
   id: "student-empty",
   name: "Aluno",
   initials: "AL",
   goal: "Sem objetivo cadastrado",
+  status: "Sem vínculo ativo",
   plan: "Sem plano",
   since: "hoje",
   coach: "Personal",
@@ -56,6 +70,7 @@ let currentStudent = emptyStudent;
 let currentWorkout = emptyWorkout;
 let studentAccesses = [];
 let availableWorkouts = [];
+let upcomingWorkouts = [];
 let currentSessionStartedAt = new Date().toISOString();
 const PENDING_INVITE_KEY = "flowfit.pending-student-invite";
 const ACTIVE_STUDENT_KEY = "flowfit.active-student";
@@ -134,6 +149,20 @@ const formatDateTime = (date) => {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(parsed);
 };
 
+const formatWorkoutAvailability = (value) => {
+  const dateKey = workoutDateInputValue(value);
+  if (!dateKey) return "em breve";
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(date);
+};
+
+const formatScheduleTime = (value) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value || "Sem horário");
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(parsed);
+};
+
 const formatMonthYear = (date) => new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(date));
 
 const formatDelta = (current, previous, unit) => {
@@ -170,6 +199,12 @@ const notificationIconByType = {
   Evolucao: "chart",
   Lembrete: "bell",
   Mensagem: "message"
+};
+
+const effortLabelByValue = {
+  easy: "Leve",
+  ok: "Na medida",
+  hard: "Pesado"
 };
 
 const pageExists = (name) => pages.some((page) => page.dataset.page === name);
@@ -216,8 +251,8 @@ const syncAuthMode = (_mode = "access", { preserveStatus = false } = {}) => {
   if (onboardingForm) onboardingForm.dataset.authMode = "access";
   if (authTitle) authTitle.textContent = pendingInviteToken ? "Ativar acesso do aluno" : "Acessar meus treinos";
   if (authCopy) authCopy.textContent = pendingInviteToken
-    ? "Confirme sua identidade. O convite será vinculado ao email verificado."
-    : "Use o email cadastrado pelo personal. Funciona no primeiro acesso e nos próximos.";
+    ? "Confirme o email do convite para ativar seu acesso."
+    : "Use o mesmo email cadastrado pelo seu personal.";
   if (authSubmit) authSubmit.textContent = "Enviar link de acesso";
   if (authSecondary) authSecondary.textContent = "";
   if (oauthLabel) oauthLabel.textContent = "Continuar com Google";
@@ -226,11 +261,14 @@ const syncAuthMode = (_mode = "access", { preserveStatus = false } = {}) => {
   if (passwordInput) passwordInput.disabled = true;
   if (nameInput) nameInput.disabled = true;
   if (!preserveStatus) {
-    setAuthStatus(
-      pendingInviteToken ? "Convite detectado. Continue com Google ou receba um link por email." : "Entre com Google ou receba um link no email informado ao personal.",
-      ""
-    );
+    setAuthStatus(pendingInviteToken ? "Convite detectado. Confirme sua identidade para ativar o acesso." : "", "");
   }
+};
+
+const scheduleLabelByType = {
+  Treino: "Treino",
+  Mensagem: "Mensagem",
+  Avaliacao: "Avaliação"
 };
 
 const getProviderLabel = () => "Google";
@@ -301,6 +339,7 @@ const refreshPublishedWorkout = async ({ silent = false } = {}) => {
   const previousWorkoutId = currentWorkout.id;
   const result = await workoutRepository.fetchWorkoutsForCurrentStudent(currentStudent);
   availableWorkouts = result.workouts || [];
+  upcomingWorkouts = result.upcomingWorkouts || [];
   const preferredWorkoutId = Platform.storage.get(`${ACTIVE_WORKOUT_KEY}:${currentStudent.id}`, "");
   currentWorkout = availableWorkouts.find((workout) => workout.id === previousWorkoutId)
     || availableWorkouts.find((workout) => workout.id === preferredWorkoutId)
@@ -312,6 +351,7 @@ const refreshPublishedWorkout = async ({ silent = false } = {}) => {
 
   const changed = currentWorkout.id !== previousWorkoutId;
   if (changed) {
+    focusedExerciseId = "";
     setClickLocks.clear();
     stopRestTimer();
     currentSessionStartedAt = new Date().toISOString();
@@ -324,6 +364,26 @@ const refreshPublishedWorkout = async ({ silent = false } = {}) => {
 const syncOnboarding = () => {
   document.body.classList.toggle("has-onboarding", !Store.state.onboarded);
   onboarding?.classList.toggle("is-hidden", Store.state.onboarded);
+};
+
+const resetScopedDisclosureState = () => {
+  if (progressDisclosure) delete progressDisclosure.dataset.initialized;
+};
+
+const activateStudentStore = () => {
+  Store.useScope(currentStudent.id);
+  resetScopedDisclosureState();
+  Store.completeOnboarding({
+    name: currentStudent.name,
+    goal: currentStudent.goal,
+    frequency: currentStudent.frequency
+  });
+};
+
+const activateAnonymousStore = () => {
+  Store.useScope("anonymous");
+  Store.resetOnboarding();
+  resetScopedDisclosureState();
 };
 
 const markRuntimeReady = () => {
@@ -356,10 +416,10 @@ const renderStudent = () => {
   document.querySelectorAll("[data-student-name]").forEach((item) => { item.textContent = student.name; });
   document.querySelectorAll("[data-student-initials]").forEach((item) => { item.textContent = student.initials; });
   document.querySelector("[data-student-since]").textContent = `Aluno desde ${String(student.since || "hoje").toLowerCase()}`;
-  document.querySelector("[data-student-plan]").textContent = `Plano ${student.plan}`;
+  document.querySelector("[data-student-plan]").textContent = student.plan || "Sem plano";
   document.querySelector("[data-coach-name]").textContent = student.coach;
-  document.querySelector("[data-profile-goal]").textContent = student.goal || "Hipertrofia";
-  document.querySelector("[data-profile-frequency]").textContent = student.frequency || "Sem frequência cadastrada";
+  document.querySelector("[data-profile-goal]").textContent = student.goal || "Não informado";
+  document.querySelector("[data-profile-status]").textContent = student.status || "Não informado";
 };
 
 const renderAccessSelectors = () => {
@@ -391,39 +451,79 @@ const renderAccessSelectors = () => {
 };
 
 const renderHome = () => {
-  document.querySelector("[data-home-workout]").textContent = `Treino ${currentWorkout.code}`;
+  const upcomingWorkout = upcomingWorkouts[0] || null;
+  const hasWorkout = currentWorkout.id !== emptyWorkout.id;
+  const availabilityLabel = upcomingWorkout ? formatWorkoutAvailability(upcomingWorkout.startsAt) : "";
+  document.querySelector("[data-home-workout]").textContent = hasWorkout
+    ? `Treino ${currentWorkout.code}`
+    : upcomingWorkout ? `Agendado para ${availabilityLabel}` : "Sem treino ativo";
+  document.querySelector("[data-home-title]").textContent = hasWorkout
+    ? "Seu próximo treino está aqui."
+    : upcomingWorkout ? "Próximo treino agendado." : "Aguardando seu primeiro treino.";
   document.querySelector("[data-home-summary]").textContent =
-    currentWorkout.id === emptyWorkout.id
-      ? "Seu personal ainda não publicou um treino para este email."
+    !hasWorkout
+      ? upcomingWorkout
+        ? `Treino ${upcomingWorkout.code} - ${upcomingWorkout.title} será liberado em ${availabilityLabel}.`
+        : "Seu personal ainda não publicou um treino para você."
       : `${currentWorkout.title} - ${getCurrentExercises().length} exercícios - cerca de ${currentWorkout.estimatedMinutes} minutos.`;
   const sessions = Store.state.sessions || [];
-  const doneWorkouts = sessions.length;
-  const targetWorkouts = 4;
-  const volumeKg = sessions.reduce((sum, session) => sum + Number(session.volume || 0), 0);
-  const progressPercent = Math.min(100, Math.round((doneWorkouts / targetWorkouts) * 100));
-  document.querySelector("[data-stat-done]").textContent = `${doneWorkouts}/${targetWorkouts}`;
+  const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+  const recentSessions = sessions.filter((session) => {
+    const finishedAt = new Date(session.finishedAt || session.date || 0).getTime();
+    return Number.isFinite(finishedAt) && finishedAt >= sevenDaysAgo;
+  });
+  const doneWorkouts = recentSessions.length;
+  const volumeKg = recentSessions.reduce((sum, session) => sum + Number(session.volumeKg || session.volume || 0), 0);
+  const completedSets = recentSessions.reduce((sum, session) => sum + Number(session.completedSets || session.sets || 0), 0);
+  document.querySelector("[data-stat-done]").textContent = doneWorkouts;
   document.querySelector("[data-stat-volume]").textContent = formatVolume(volumeKg);
-  document.querySelector("[data-stat-streak]").textContent = `${doneWorkouts} treinos`;
-  document.querySelector("[data-week-percent]").textContent = `${progressPercent}%`;
-  document.querySelector("[data-week-progress]").style.setProperty("--progress", `${progressPercent}%`);
-  document.querySelector("[data-week-message]").textContent = doneWorkouts ? "Continue registrando seus treinos" : "Comece pelo treino publicado";
-  document.querySelector("[data-week-delta]").textContent = `${progressPercent}%`;
-  document.querySelector("[data-workout-title]").textContent = currentWorkout.title;
-  document.querySelector("[data-workout-focus]").textContent = currentWorkout.focus;
+  document.querySelector("[data-stat-sets]").textContent = completedSets;
+  const currentCompletedSets = getCurrentExercises().reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
+  if (homeWorkoutAction) {
+    homeWorkoutAction.disabled = !hasWorkout;
+  }
+  if (homeWorkoutLabel) {
+    homeWorkoutLabel.textContent = hasWorkout
+      ? currentCompletedSets > 0 ? "Continuar treino" : "Começar treino"
+      : upcomingWorkout ? `Disponível em ${availabilityLabel}` : "Aguardando treino";
+  }
+  document.querySelector("[data-workout-title]").textContent = hasWorkout
+    ? currentWorkout.title
+    : upcomingWorkout ? `Treino ${upcomingWorkout.code} - ${upcomingWorkout.title}` : currentWorkout.title;
+  document.querySelector("[data-workout-focus]").textContent = hasWorkout
+    ? currentWorkout.focus
+    : upcomingWorkout ? `Disponível em ${availabilityLabel}` : currentWorkout.focus;
   document.querySelector("[data-workout-plan-title]").textContent = currentWorkout.id === emptyWorkout.id ? "Sem treino ativo" : `Treino ${currentWorkout.code} - ${currentWorkout.title}`;
   document.querySelector("[data-workout-last]").textContent = currentWorkout.lastDoneLabel === "novo" ? "Ainda não executado" : `Última execução ${currentWorkout.lastDoneLabel}`;
   document.querySelector("[data-workout-minutes]").textContent = `${currentWorkout.estimatedMinutes} min`;
   document.querySelector("[data-workout-exercise-count]").textContent = `${getCurrentExercises().length} exercícios`;
   document.querySelector("[data-workout-set-count]").textContent = `${getTotalSets()} séries`;
+  document.querySelectorAll("[data-active-workout-only]").forEach((element) => {
+    element.hidden = !hasWorkout;
+  });
 };
 
 const renderWorkoutProgress = () => {
+  const exercises = getCurrentExercises();
   const totalSets = getTotalSets();
-  const done = getCurrentExercises().reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
+  const done = exercises.reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
   const percent = totalSets > 0 ? Math.round((done / totalSets) * 100) : 0;
   document.querySelector("[data-session-count]").textContent = `${done}/${totalSets} séries`;
   document.querySelector("[data-session-progress]").style.setProperty("--progress", `${percent}%`);
   document.querySelector("[data-finish]").disabled = totalSets === 0 || done < totalSets;
+  const isReady = totalSets > 0 && done >= totalSets;
+  const nextExercise = exercises.find((exercise) => Store.getExerciseDone(exercise.id) < parseTotalSets(exercise));
+  const nextDone = nextExercise ? Store.getExerciseDone(nextExercise.id) : 0;
+  const nextTotal = nextExercise ? parseTotalSets(nextExercise) : 0;
+  if (sessionDock) sessionDock.hidden = totalSets === 0;
+  if (sessionDockTitle) sessionDockTitle.textContent = isReady ? "Treino completo" : nextExercise?.name || "Próxima série";
+  if (sessionDockCopy) sessionDockCopy.textContent = isReady
+    ? `${done} séries concluídas`
+    : `Série ${nextDone + 1} de ${nextTotal} · ${done}/${totalSets} no treino`;
+  if (sessionCta) sessionCta.textContent = isReady ? "Finalizar" : "Continuar";
+  if (finishReadiness) finishReadiness.textContent = isReady ? "Pronto" : `${Math.max(0, totalSets - done)} restantes`;
+  if (finishDisclosure) finishDisclosure.classList.toggle("is-ready", isReady);
+  if (!isReady && finishDisclosure?.open) finishDisclosure.open = false;
 };
 
 const getWorkoutVolume = () => getCurrentExercises().reduce((sum, exercise) => {
@@ -510,8 +610,9 @@ const buildWorkoutSessionPayload = () => {
 const renderRestTimer = () => {
   const timer = document.querySelector("[data-rest-timer]");
   const label = document.querySelector("[data-rest-label]");
+  timer.hidden = restRemaining <= 0;
   timer.classList.toggle("is-active", restRemaining > 0);
-  label.textContent = restRemaining > 0 ? `${restRemaining}s restantes` : "Pronto para iniciar";
+  label.textContent = restRemaining > 0 ? `${restRemaining}s restantes` : "Descanso concluído";
 };
 
 const stopRestTimer = () => {
@@ -538,14 +639,22 @@ const startRestTimer = (seconds) => {
 
 const lockSetButton = (exerciseId, button) => {
   setClickLocks.add(exerciseId);
+  document.querySelectorAll(`[data-set="${exerciseId}"], [data-undo-set="${exerciseId}"]`).forEach((currentButton) => {
+    currentButton.disabled = true;
+    currentButton.classList.add("is-locked");
+  });
   button.disabled = true;
-  button.classList.add("is-locked");
 
   window.setTimeout(() => {
     setClickLocks.delete(exerciseId);
-    const currentButton = document.querySelector(`[data-set="${exerciseId}"]`);
-    currentButton?.removeAttribute("disabled");
-    currentButton?.classList.remove("is-locked");
+    const setButton = document.querySelector(`[data-set="${exerciseId}"]`);
+    const undoButton = document.querySelector(`[data-undo-set="${exerciseId}"]`);
+    setButton?.removeAttribute("disabled");
+    setButton?.classList.remove("is-locked");
+    if (undoButton) {
+      undoButton.disabled = Store.getExerciseDone(exerciseId) <= 0;
+      undoButton.classList.remove("is-locked");
+    }
   }, SET_CLICK_DEBOUNCE_MS);
 };
 
@@ -571,21 +680,36 @@ const renderExercises = () => {
     renderWorkoutProgress();
     return;
   }
+  const nextExerciseId = exercises.find((exercise) => Store.getExerciseDone(exercise.id) < parseTotalSets(exercise))?.id;
+  const fallbackFocusedId = exercises.some((exercise) => exercise.id === focusedExerciseId)
+    ? focusedExerciseId
+    : nextExerciseId;
   list.innerHTML = exercises.map((exercise, index) => {
     const total = parseTotalSets(exercise);
     const done = Store.getExerciseDone(exercise.id);
+    const isComplete = done >= total;
+    const isNext = exercise.id === nextExerciseId;
     const log = Store.getExerciseLog(exercise.id, {
       load: parseLoadKg(exercise.load),
       reps: parseReps(exercise)
     });
-    const label = done >= total ? "Feito" : `${done}/${total}`;
+    const label = isComplete ? "Concluído" : `Registrar ${done + 1}/${total}`;
     const locked = setClickLocks.has(exercise.id);
+    const isExpanded = !compactWorkoutQuery.matches || exercise.id === fallbackFocusedId;
     return `
-      <article class="exercise card">
-        <span class="exercise__number">${String(index + 1).padStart(2, "0")}</span>
-        <div>
-          <h3>${escapeHtml(exercise.name)}</h3>
-          <p>${escapeHtml(exercise.prescription)} - ${escapeHtml(exercise.load)} - descanso ${escapeHtml(exercise.rest)}</p>
+      <article class="exercise card ${isComplete ? "is-complete" : ""} ${isNext ? "is-next" : ""} ${isExpanded ? "is-expanded" : ""}" data-exercise-id="${escapeHtml(exercise.id)}" ${isNext ? 'aria-current="step"' : ""}>
+        <button class="exercise__summary" type="button" data-focus-exercise="${escapeHtml(exercise.id)}" aria-expanded="${String(isExpanded)}" tabindex="${compactWorkoutQuery.matches ? "0" : "-1"}">
+          <span class="exercise__number">${String(index + 1).padStart(2, "0")}</span>
+          <span class="exercise__heading">
+            <strong>${escapeHtml(exercise.name)}</strong>
+            <small>${escapeHtml(exercise.prescription)} · descanso ${escapeHtml(exercise.rest)}</small>
+          </span>
+          <span class="exercise__summary-state">
+            <span class="chip" data-exercise-progress="${escapeHtml(exercise.id)}">${done}/${total}</span>
+            <span class="exercise__chevron">${svgIcon("chevron-down")}</span>
+          </span>
+        </button>
+        <div class="exercise__details" ${isExpanded ? "" : "hidden"}>
           <div class="exercise__meta">
             <span>${escapeHtml(exercise.target)}</span>
             <span>RIR ${escapeHtml(exercise.rir)}</span>
@@ -595,11 +719,14 @@ const renderExercises = () => {
             <label>Carga <input type="number" inputmode="decimal" min="0" step="0.5" value="${escapeHtml(log.load)}" data-log-load="${escapeHtml(exercise.id)}" aria-label="Carga usada em ${escapeHtml(exercise.name)}" /></label>
             <label>Reps <input type="number" inputmode="numeric" min="1" step="1" value="${escapeHtml(log.reps)}" data-log-reps="${escapeHtml(exercise.id)}" aria-label="Repetições por série em ${escapeHtml(exercise.name)}" /></label>
           </div>
-          <small>${escapeHtml(exercise.notes)}</small>
+          ${exercise.notes ? `<small>${escapeHtml(exercise.notes)}</small>` : ""}
         </div>
-        <button class="set-button ${done >= total ? "is-done" : ""} ${locked ? "is-locked" : ""}" type="button" data-set="${escapeHtml(exercise.id)}" data-total="${total}" aria-label="Registrar série de ${escapeHtml(exercise.name)}" ${locked ? "disabled" : ""}>
-          ${label}
-        </button>
+        <div class="exercise__actions" ${isExpanded ? "" : "hidden"}>
+          <button class="set-button ${isComplete ? "is-done" : ""} ${locked ? "is-locked" : ""}" type="button" data-set="${escapeHtml(exercise.id)}" data-total="${total}" aria-label="Registrar série de ${escapeHtml(exercise.name)}" ${locked ? "disabled" : ""}>
+            ${label}
+          </button>
+          <button class="exercise__undo" type="button" data-undo-set="${escapeHtml(exercise.id)}" aria-label="Corrigir última série de ${escapeHtml(exercise.name)}" ${done === 0 || locked ? "disabled" : ""}>Corrigir</button>
+        </div>
       </article>
     `;
   }).join("");
@@ -608,25 +735,42 @@ const renderExercises = () => {
 
 const renderProgress = () => {
   const entries = Store.getProgressEntries([]);
+  const historySection = document.querySelector("[data-progress-history]");
+  if (progressDisclosure && progressDisclosure.dataset.initialized !== "true") {
+    progressDisclosure.open = entries.length === 0;
+    progressDisclosure.dataset.initialized = "true";
+  }
+  if (historySection) historySection.hidden = entries.length === 0;
   if (!entries.length) {
-    document.querySelector("[data-chart]").innerHTML = `<article class="empty-state"><strong>Nenhum check-in salvo.</strong><small>Registre peso e medidas para criar seu histórico real.</small></article>`;
-    document.querySelector("[data-measurements-date]").textContent = "Sem registros";
-    document.querySelector("[data-metric-list]").innerHTML = `<article class="empty-state card"><strong>Sem medidas ainda.</strong><small>Use o formulário de check-in acima.</small></article>`;
-    document.querySelector("[data-measurement-history]").innerHTML = `<article class="empty-state card"><strong>Linha do tempo vazia.</strong><small>Os próximos check-ins aparecem aqui.</small></article>`;
+    document.querySelector("[data-chart]").replaceChildren();
+    document.querySelector("[data-metric-list]").replaceChildren();
+    document.querySelector("[data-measurement-history]").replaceChildren();
     return;
   }
   const recentEntries = entries.slice(-7);
   const latest = entries.at(-1);
-  const previous = entries.at(-2) || latest;
   const weights = recentEntries.map((entry) => entry.weight);
   const minWeight = Math.min(...weights);
   const maxWeight = Math.max(...weights);
   const span = Math.max(maxWeight - minWeight, 1);
-  const metrics = [
-    { icon: "scale", label: "Peso", helper: "Meta: 78 kg", value: `${formatDecimal(latest.weight)} kg`, delta: formatDelta(latest.weight, previous.weight, "kg"), tone: deltaTone(latest.weight, previous.weight) },
-    { icon: "ruler", label: "Cintura", helper: "Medida atual", value: `${formatDecimal(latest.waist)} cm`, delta: formatDelta(latest.waist, previous.waist, "cm"), tone: deltaTone(latest.waist, previous.waist) },
-    { icon: "weight", label: "Braço", helper: "Medida atual", value: `${formatDecimal(latest.arm)} cm`, delta: formatDelta(latest.arm, previous.arm, "cm"), tone: deltaTone(latest.arm, previous.arm) }
+  const metricDefinitions = [
+    { field: "weight", icon: "scale", label: "Peso", unit: "kg" },
+    { field: "waist", icon: "ruler", label: "Cintura", unit: "cm" },
+    { field: "arm", icon: "weight", label: "Braço", unit: "cm" }
   ];
+  const metrics = metricDefinitions
+    .filter(({ field }) => Number(latest[field]) > 0)
+    .map((metric) => {
+      const previousEntry = [...entries].slice(0, -1).reverse().find((entry) => Number(entry[metric.field]) > 0);
+      const previousValue = previousEntry?.[metric.field];
+      return {
+        ...metric,
+        helper: "Registro atual",
+        value: `${formatDecimal(latest[metric.field])} ${metric.unit}`,
+        delta: previousValue === undefined ? "Primeiro registro" : formatDelta(latest[metric.field], previousValue, metric.unit),
+        tone: previousValue === undefined ? "neutral" : deltaTone(latest[metric.field], previousValue)
+      };
+    });
 
   document.querySelector("[data-chart]").innerHTML = recentEntries.map((entry) => {
     const height = 28 + Math.round(((entry.weight - minWeight) / span) * 63);
@@ -640,44 +784,63 @@ const renderProgress = () => {
       <div class="metric__value" data-delta-tone="${metric.tone}"><strong>${metric.value}</strong><small>${metric.delta}</small></div>
     </article>
   `).join("");
-  document.querySelector("[data-measurement-history]").innerHTML = [...entries].reverse().slice(0, 6).map((entry) => `
-    <article class="measurement-row card">
-      <span class="surface-icon">${svgIcon("ruler")}</span>
-      <div><strong>${formatShortDate(entry.date)}</strong><small>Peso ${formatDecimal(entry.weight)} kg</small></div>
-      <span>Cintura ${formatDecimal(entry.waist)} cm</span>
-      <span>Braço ${formatDecimal(entry.arm)} cm</span>
-    </article>
-  `).join("");
+  document.querySelector("[data-measurement-history]").innerHTML = [...entries].reverse().slice(0, 6).map((entry) => {
+    const complementaryMeasures = [
+      Number(entry.waist) > 0 ? `Cintura ${formatDecimal(entry.waist)} cm` : "",
+      Number(entry.arm) > 0 ? `Braço ${formatDecimal(entry.arm)} cm` : ""
+    ].filter(Boolean);
+    return `
+      <article class="measurement-row card">
+        <span class="surface-icon">${svgIcon("ruler")}</span>
+        <div><strong>${formatShortDate(entry.date)}</strong><small>Peso ${formatDecimal(entry.weight)} kg</small></div>
+        ${complementaryMeasures.map((measure) => `<span>${measure}</span>`).join("")}
+      </article>
+    `;
+  }).join("");
 };
 
 const renderSchedule = () => {
   const filter = Store.state.scheduleFilter || "Todos";
-  const items = Store.getScheduleItems(scheduleItems);
+  const workoutItems = upcomingWorkouts.map((workout) => ({
+    id: `published-${workout.id}`,
+    type: "Treino",
+    title: `Treino ${workout.code} - ${workout.title}`,
+    detail: workout.focus,
+    time: workout.startsAt,
+    source: "personal"
+  }));
+  const items = [...workoutItems, ...Store.getScheduleItems(scheduleItems)]
+    .sort((a, b) => new Date(a.time || 0) - new Date(b.time || 0));
   const visibleItems = filter === "Todos" ? items : items.filter((item) => item.type === filter);
-  const pendingCount = items.filter((item) => !Store.isReminderDone(item.id)).length;
-  document.querySelector("[data-schedule-count]").textContent = `${pendingCount} pendentes`;
+  const pendingCount = items.filter((item) => item.source === "personal" || !Store.isReminderDone(item.id)).length;
+  document.querySelector("[data-schedule-count]").textContent = `${pendingCount} ${pendingCount === 1 ? "próximo" : "próximos"}`;
   document.querySelectorAll("[data-schedule-filter]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.scheduleFilter === filter);
   });
   if (!visibleItems.length) {
     document.querySelector("[data-schedule-list]").innerHTML =
-      `<article class="empty-state card"><strong>Nenhum item neste filtro.</strong><small>Crie um lembrete local ou altere o filtro.</small></article>`;
+      items.length
+        ? `<article class="empty-state card"><strong>Nenhum item neste filtro.</strong><small>Escolha outra categoria para continuar.</small></article>`
+        : `<article class="empty-state card"><strong>Agenda livre.</strong><small>Adicione um lembrete quando precisar.</small></article>`;
     return;
   }
   document.querySelector("[data-schedule-list]").innerHTML = visibleItems.map((item) => {
-    const done = Store.isReminderDone(item.id);
+    const fromPersonal = item.source === "personal";
+    const done = !fromPersonal && Store.isReminderDone(item.id);
     return `
       <article class="schedule-item card ${done ? "is-muted" : ""}">
         <span class="surface-icon">${svgIcon(scheduleIconByType[item.type] || "calendar")}</span>
         <div>
-          <span class="chip">${item.type}</span>
-          <h3>${item.title}</h3>
-          <p>${item.detail}</p>
-          <small>${item.time}</small>
+          <span class="chip">${escapeHtml(scheduleLabelByType[item.type] || item.type)}</span>
+          <h3>${escapeHtml(item.title)}</h3>
+          <p>${escapeHtml(item.detail)}</p>
+          <small>${fromPersonal ? `Disponível em ${escapeHtml(formatWorkoutAvailability(item.time))}` : escapeHtml(formatScheduleTime(item.time))}</small>
         </div>
-        <button class="icon-button" type="button" data-reminder="${item.id}" aria-label="${done ? "Reativar" : "Dispensar"} lembrete">
-          ${done ? svgIcon("refresh") : svgIcon("check")}
-        </button>
+        ${fromPersonal
+          ? `<span class="chip">Agendado</span>`
+          : `<button class="icon-button" type="button" data-reminder="${escapeHtml(item.id)}" aria-label="${done ? "Reativar" : "Dispensar"} lembrete">
+              ${done ? svgIcon("refresh") : svgIcon("check")}
+            </button>`}
       </article>
     `;
   }).join("");
@@ -685,11 +848,12 @@ const renderSchedule = () => {
 
 const renderNotifications = () => {
   const unreadCount = notificationItems.filter((item) => !Store.isNotificationRead(item.id)).length;
+  if (headerNotificationButton) headerNotificationButton.hidden = notificationItems.length === 0;
   document.querySelector("[data-notification-count]").textContent = unreadCount;
   document.querySelector("[data-notification-count]").classList.toggle("is-hidden", unreadCount === 0);
   if (!notificationItems.length) {
     document.querySelector("[data-notification-list]").innerHTML =
-      `<article class="empty-state card"><strong>Nenhum aviso recebido.</strong><small>As mensagens do personal aparecerão aqui quando o módulo de comunicação for ativado.</small></article>`;
+      `<article class="empty-state card"><strong>Nenhum aviso por enquanto.</strong><small>Quando houver algo novo, aparecerá aqui.</small></article>`;
     return;
   }
   document.querySelector("[data-notification-list]").innerHTML = notificationItems.map((item) => {
@@ -721,14 +885,14 @@ const renderHistory = () => {
     return;
   }
   target.innerHTML = sessions.map((session) => `
-    <article class="history-row card">
+    <article class="history-row card ${session.syncStatus === "synced" ? "is-synced" : "is-pending"}">
       <span class="surface-icon">${svgIcon("trophy")}</span>
       <div>
         <strong>${escapeHtml(session.workoutTitle || session.title)}</strong>
-        <small>${escapeHtml(formatDateTime(session.finishedAt))} - ${escapeHtml(session.feedback?.effort || "ok")}</small>
+        <small>${escapeHtml(formatDateTime(session.finishedAt))} · ${escapeHtml(effortLabelByValue[session.feedback?.effort] || "Sem avaliação")}</small>
       </div>
-      <span class="chip">${session.completedSets || session.sets}/${session.totalSets} séries</span>
-      <small>${formatVolume(session.volumeKg || session.volume || 0)} de volume - ${session.syncStatus === "synced" ? "enviado ao professor" : "pendente de envio"}</small>
+      <span class="chip">${session.completedSets || session.sets || 0}/${session.totalSets || session.sets || 0} séries</span>
+      <small class="history-row__sync">${formatVolume(session.volumeKg || session.volume || 0)} de volume · ${session.syncStatus === "synced" ? "Enviado ao professor" : "Envio pendente"}</small>
     </article>
   `).join("");
 };
@@ -744,10 +908,24 @@ const renderAll = () => {
   renderHistory();
 };
 
+const retryPendingSessions = async () => {
+  if (!currentStudent?.id || !currentStudent?.coachId) return 0;
+  try {
+    const result = await sessionRepository.syncPendingSessions({
+      studentId: currentStudent.id,
+      coachId: currentStudent.coachId
+    });
+    result.sessions.forEach((session) => Store.addSession(session));
+    return result.syncedCount;
+  } catch {
+    return 0;
+  }
+};
+
 const startAuthenticatedApp = async () => {
   const session = await authRepository.getSession();
   if (!session?.user) {
-    Store.resetOnboarding();
+    activateAnonymousStore();
     currentStudent = emptyStudent;
     currentWorkout = emptyWorkout;
     renderAll();
@@ -759,7 +937,7 @@ const startAuthenticatedApp = async () => {
   const authContextBeforeClaim = await authRepository.getAuthContext();
   if (authContextBeforeClaim?.role && !authRepository.canAccessStudent(authContextBeforeClaim)) {
     await authRepository.signOut();
-    Store.resetOnboarding();
+    activateAnonymousStore();
     currentStudent = emptyStudent;
     currentWorkout = emptyWorkout;
     renderAll();
@@ -777,11 +955,12 @@ const startAuthenticatedApp = async () => {
       pendingInviteToken = "";
       Platform.storage.remove(PENDING_INVITE_KEY);
     }
-    Store.resetOnboarding();
+    activateAnonymousStore();
     currentStudent = emptyStudent;
     currentWorkout = emptyWorkout;
     studentAccesses = [];
     availableWorkouts = [];
+    upcomingWorkouts = [];
     renderAll();
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
@@ -802,7 +981,7 @@ const startAuthenticatedApp = async () => {
     linkedStudentResult = await studentRepository.fetchCurrentStudent({ preferredStudentId: claimedStudentId });
     if (!linkedStudentResult.student) {
       await authRepository.signOut();
-      Store.resetOnboarding();
+      activateAnonymousStore();
       currentStudent = emptyStudent;
       currentWorkout = emptyWorkout;
       renderAll();
@@ -829,7 +1008,7 @@ const startAuthenticatedApp = async () => {
   }
   if (!authRepository.canAccessStudent(authContext)) {
     await authRepository.signOut();
-    Store.resetOnboarding();
+    activateAnonymousStore();
     currentStudent = emptyStudent;
     currentWorkout = emptyWorkout;
     renderAll();
@@ -844,7 +1023,7 @@ const startAuthenticatedApp = async () => {
   });
   if (!studentResult.student) {
     await authRepository.signOut();
-    Store.resetOnboarding();
+    activateAnonymousStore();
     currentStudent = emptyStudent;
     currentWorkout = emptyWorkout;
     renderAll();
@@ -862,15 +1041,12 @@ const startAuthenticatedApp = async () => {
     || studentResult.student;
   currentStudent = toRuntimeStudent(selectedStudent, authContext);
   Platform.storage.set(`${ACTIVE_STUDENT_KEY}:${session.user.id}`, currentStudent.id);
-  Store.completeOnboarding({
-    name: currentStudent.name,
-    goal: currentStudent.goal,
-    frequency: currentStudent.frequency
-  });
+  activateStudentStore();
 
   currentWorkout = emptyWorkout;
   await applyPublishedBrandTheme();
   await refreshPublishedWorkout({ silent: true });
+  const retriedSessions = await retryPendingSessions();
   renderAll();
   syncOnboarding();
   navigate(location.hash.slice(1) || "home", false);
@@ -879,6 +1055,9 @@ const startAuthenticatedApp = async () => {
     setAuthStatus("Acesso ativo. Use o seletor no perfil para alternar entre seus personais.", "synced");
   } else {
     setAuthStatus("Acesso ativo. Treino carregado.", "synced");
+  }
+  if (retriedSessions > 0) {
+    Platform.notify(`${retriedSessions} ${retriedSessions === 1 ? "treino pendente enviado" : "treinos pendentes enviados"}.`);
   }
 
   return true;
@@ -890,15 +1069,23 @@ const switchStudentAccess = async (studentId) => {
   const authContext = await authRepository.getAuthContext();
   currentStudent = toRuntimeStudent(student, authContext);
   Platform.storage.set(`${ACTIVE_STUDENT_KEY}:${authContext?.user?.id || "user"}`, currentStudent.id);
+  activateStudentStore();
   availableWorkouts = [];
+  upcomingWorkouts = [];
   currentWorkout = emptyWorkout;
+  focusedExerciseId = "";
   setClickLocks.clear();
   stopRestTimer();
   currentSessionStartedAt = new Date().toISOString();
   await applyPublishedBrandTheme();
   await refreshPublishedWorkout({ silent: true });
+  const retriedSessions = await retryPendingSessions();
   renderAll();
-  Platform.notify(`Personal ativo: ${currentStudent.coach}.`);
+  if (retriedSessions > 0) {
+    Platform.notify(`Personal ativo: ${currentStudent.coach}. ${retriedSessions} ${retriedSessions === 1 ? "treino pendente enviado" : "treinos pendentes enviados"}.`);
+  } else {
+    Platform.notify(`Personal ativo: ${currentStudent.coach}.`);
+  }
 };
 
 const selectWorkout = (workoutId) => {
@@ -906,6 +1093,7 @@ const selectWorkout = (workoutId) => {
   if (!workout || workout.id === currentWorkout.id) return;
   currentWorkout = workout;
   Platform.storage.set(`${ACTIVE_WORKOUT_KEY}:${currentStudent.id}`, workout.id);
+  focusedExerciseId = "";
   setClickLocks.clear();
   stopRestTimer();
   currentSessionStartedAt = new Date().toISOString();
@@ -921,6 +1109,14 @@ navItems.forEach((item) => item.addEventListener("click", (event) => {
 document.querySelectorAll("[data-go]").forEach((item) => item.addEventListener("click", () => navigate(item.dataset.go)));
 
 document.addEventListener("click", (event) => {
+  const exerciseFocusButton = event.target.closest("[data-focus-exercise]");
+  if (exerciseFocusButton && compactWorkoutQuery.matches) {
+    focusedExerciseId = exerciseFocusButton.dataset.focusExercise;
+    renderExercises();
+    window.setTimeout(() => document.querySelector(`[data-exercise-id="${focusedExerciseId}"] [data-log-load]`)?.focus(), 40);
+    return;
+  }
+
   const workoutChoice = event.target.closest("[data-select-workout]");
   if (workoutChoice) {
     selectWorkout(workoutChoice.dataset.selectWorkout);
@@ -933,6 +1129,22 @@ document.addEventListener("click", (event) => {
     renderSchedule();
   }
 
+  const undoSetButton = event.target.closest("[data-undo-set]");
+  if (undoSetButton) {
+    const exerciseId = undoSetButton.dataset.undoSet;
+    if (setClickLocks.has(exerciseId)) return;
+    const current = Store.getExerciseDone(exerciseId);
+    if (current <= 0) return;
+    lockSetButton(exerciseId, undoSetButton);
+    Store.setExerciseDone(exerciseId, current - 1);
+    stopRestTimer();
+    renderExercises();
+    renderHome();
+    Platform.vibrate(18);
+    Platform.notify("Última série removida.");
+    return;
+  }
+
   const setButton = event.target.closest("[data-set]");
   if (setButton) {
     const exerciseId = setButton.dataset.set;
@@ -941,16 +1153,36 @@ document.addEventListener("click", (event) => {
     if (!exercise) return;
     const total = parseTotalSets(exercise);
     const current = Store.getExerciseDone(exercise.id);
-    const next = current >= total ? 0 : current + 1;
+    if (current >= total) {
+      Platform.notify("Exercício concluído. Use Corrigir para alterar.");
+      return;
+    }
+    const next = current + 1;
     lockSetButton(exercise.id, setButton);
     playSetFeedback(setButton);
     Store.setExerciseDone(exercise.id, next);
-    setButton.textContent = next >= total ? "Feito" : `${next}/${total}`;
+    setButton.textContent = next >= total ? "Concluído" : `Registrar ${next + 1}/${total}`;
     setButton.classList.toggle("is-done", next >= total);
+    const exerciseCard = setButton.closest(".exercise");
+    exerciseCard?.classList.toggle("is-complete", next >= total);
+    const exerciseProgress = exerciseCard?.querySelector("[data-exercise-progress]");
+    if (exerciseProgress) exerciseProgress.textContent = `${next}/${total}`;
     renderWorkoutProgress();
+    renderHome();
     Platform.vibrate(25);
-    if (next >= total) Platform.notify("Exercício concluído. Boa!");
-    else if (next > 0) startRestTimer(parseRestSeconds(exercise));
+    const completedWorkoutSets = getCurrentExercises().reduce((sum, item) => sum + Store.getExerciseDone(item.id), 0);
+    if (completedWorkoutSets < getTotalSets()) startRestTimer(parseRestSeconds(exercise));
+    else stopRestTimer();
+    if (next >= total) {
+      Platform.notify("Exercício concluído. Boa!");
+      if (compactWorkoutQuery.matches) {
+        window.setTimeout(() => {
+          if (Store.getExerciseDone(exercise.id) < total) return;
+          focusedExerciseId = "";
+          renderExercises();
+        }, 760);
+      }
+    }
   }
 
   const reminderButton = event.target.closest("[data-reminder]");
@@ -991,11 +1223,13 @@ document.querySelector("[data-progress-form]")?.addEventListener("submit", (even
     id: `measure-${Date.now()}`,
     date: new Date().toISOString().slice(0, 10),
     weight: Number(data.get("weight") || 0),
-    waist: Number(data.get("waist") || 0),
-    arm: Number(data.get("arm") || 0)
+    waist: data.get("waist") ? Number(data.get("waist")) : null,
+    arm: data.get("arm") ? Number(data.get("arm")) : null
   });
+  event.currentTarget.reset();
+  if (progressDisclosure) progressDisclosure.open = false;
   renderProgress();
-  Platform.notify("Check-in de evolução salvo neste aparelho.");
+  Platform.notify("Check-in salvo.");
 });
 
 document.querySelector("[data-schedule-form]")?.addEventListener("submit", (event) => {
@@ -1009,8 +1243,30 @@ document.querySelector("[data-schedule-form]")?.addEventListener("submit", (even
       type: String(data.get("type") || "Treino")
     });
   Store.setScheduleFilter("Todos");
+  event.currentTarget.reset();
+  if (scheduleDisclosure) scheduleDisclosure.open = false;
   renderSchedule();
-  Platform.notify("Lembrete adicionado na agenda local.");
+  Platform.notify("Lembrete adicionado.");
+});
+
+sessionCta?.addEventListener("click", () => {
+  const totalSets = getTotalSets();
+  const done = getCurrentExercises().reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
+  if (totalSets > 0 && done >= totalSets) {
+    if (finishDisclosure) finishDisclosure.open = true;
+    finishDisclosure?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => document.querySelector("[data-feedback-effort]")?.focus(), 320);
+    return;
+  }
+
+  const nextExercise = getCurrentExercises().find((exercise) => Store.getExerciseDone(exercise.id) < parseTotalSets(exercise));
+  if (nextExercise && compactWorkoutQuery.matches) {
+    focusedExerciseId = nextExercise.id;
+    renderExercises();
+  }
+  const nextSet = document.querySelector(".exercise .set-button:not(.is-done)");
+  nextSet?.closest(".exercise")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  window.setTimeout(() => nextSet?.focus(), 320);
 });
 
 document.querySelector("[data-finish]")?.addEventListener("click", async (event) => {
@@ -1025,6 +1281,9 @@ document.querySelector("[data-finish]")?.addEventListener("click", async (event)
   setFinishStatus("Finalizando treino e enviando ao professor...", "");
   const session = buildWorkoutSessionPayload();
   Store.addSession(session);
+  Store.resetWorkout(currentWorkout.id);
+  focusedExerciseId = "";
+  stopRestTimer();
   renderAll();
   const result = await sessionRepository.syncSession(session);
   if (result.session) Store.addSession(result.session);
@@ -1044,7 +1303,10 @@ document.querySelector("[data-finish]")?.addEventListener("click", async (event)
 });
 
 document.querySelector("[data-reset-workout]")?.addEventListener("click", () => {
+  const completedSets = getCurrentExercises().reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
+  if (completedSets > 0 && !window.confirm("Reiniciar este treino e apagar as séries registradas?")) return;
   Store.resetWorkout(currentWorkout.id);
+  focusedExerciseId = "";
   currentSessionStartedAt = new Date().toISOString();
   renderExercises();
   Platform.notify("Registro do treino atual reiniciado.");
@@ -1098,12 +1360,14 @@ onboardingForm?.addEventListener("submit", async (event) => {
 
 const signOut = async () => {
   await authRepository.signOut();
-  Store.resetOnboarding();
+  activateAnonymousStore();
   Theme.reset();
   currentStudent = emptyStudent;
   currentWorkout = emptyWorkout;
   studentAccesses = [];
   availableWorkouts = [];
+  upcomingWorkouts = [];
+  focusedExerciseId = "";
   setClickLocks.clear();
   stopRestTimer();
   renderAll();
@@ -1114,7 +1378,6 @@ const signOut = async () => {
 };
 
 document.querySelector("[data-reset-onboarding]")?.addEventListener("click", signOut);
-document.querySelector("[data-sign-out]")?.addEventListener("click", signOut);
 
 document.querySelector("[data-mark-all-read]")?.addEventListener("click", () => {
   Store.markAllNotificationsRead(notificationItems.map((item) => item.id));
@@ -1126,11 +1389,17 @@ accentInput?.addEventListener("input", () => Theme.apply({ accent: accentInput.v
 brandInput?.addEventListener("input", () => Theme.apply({ brandName: brandInput.value.trim() || "FlowFit" }));
 taglineInput?.addEventListener("input", () => Theme.apply({ tagline: taglineInput.value.trim() || "Seu treino, no seu ritmo" }));
 modeButtons.forEach((button) => button.addEventListener("click", () => Theme.apply({ mode: button.dataset.mode })));
+const handleWorkoutDensityChange = () => {
+  focusedExerciseId = "";
+  renderExercises();
+};
+if (compactWorkoutQuery.addEventListener) compactWorkoutQuery.addEventListener("change", handleWorkoutDensityChange);
+else compactWorkoutQuery.addListener?.(handleWorkoutDensityChange);
 document.querySelector("[data-theme-reset]")?.addEventListener("click", () => {
   Platform.storage.set(LOCAL_BRAND_ASSETS_KEY, {});
   Theme.reset();
   syncThemeControls();
-  Platform.notify("Cache local de tema restaurado.");
+  Platform.notify("Aparência original restaurada.");
 });
 
 window.addEventListener("hashchange", () => navigate(location.hash.slice(1), false));
