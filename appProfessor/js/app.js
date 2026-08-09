@@ -93,6 +93,17 @@ let deferredInstallPrompt = null;
 
 const $ = (selector) => document.querySelector(selector);
 
+const isInstalledRuntime = () => Boolean(
+  Platform.runtime === "pwa"
+  || window.navigator?.standalone
+  || window.matchMedia?.("(display-mode: standalone)")?.matches
+);
+
+const syncInstallButton = () => {
+  if (!installAppButton) return;
+  installAppButton.hidden = isInstalledRuntime() || !deferredInstallPrompt;
+};
+
 const setText = (selector, value) => {
   const target = $(selector);
   if (target) target.textContent = value;
@@ -1835,23 +1846,41 @@ if (Platform.canUseServiceWorker() && "serviceWorker" in navigator) {
 }
 
 window.addEventListener("beforeinstallprompt", (event) => {
+  if (isInstalledRuntime()) {
+    deferredInstallPrompt = null;
+    syncInstallButton();
+    return;
+  }
   event.preventDefault();
   deferredInstallPrompt = event;
-  if (installAppButton) installAppButton.hidden = false;
+  syncInstallButton();
 });
 
 installAppButton?.addEventListener("click", async () => {
-  if (!deferredInstallPrompt) return;
+  if (!deferredInstallPrompt || isInstalledRuntime()) {
+    deferredInstallPrompt = null;
+    syncInstallButton();
+    return;
+  }
   installAppButton.hidden = true;
   deferredInstallPrompt.prompt();
   await deferredInstallPrompt.userChoice.catch(() => null);
   deferredInstallPrompt = null;
+  syncInstallButton();
 });
 
 window.addEventListener("appinstalled", () => {
   deferredInstallPrompt = null;
-  if (installAppButton) installAppButton.hidden = true;
+  syncInstallButton();
 });
+
+const displayModeQuery = window.matchMedia?.("(display-mode: standalone)");
+if (displayModeQuery?.addEventListener) {
+  displayModeQuery.addEventListener("change", syncInstallButton);
+} else {
+  displayModeQuery?.addListener?.(syncInstallButton);
+}
+syncInstallButton();
 
 boot().catch((error) => {
   console.error("Falha ao iniciar appProfessor", error);
