@@ -74,6 +74,9 @@ const iconPaths = {
     '<circle cx="15" cy="10" r=".8" />',
     '<path d="M13 16h1a2 2 0 0 0 0-4h-2a3 3 0 0 0 0 6" />'
   ],
+  play: [
+    '<path d="M8 5v14l11-7Z" />'
+  ],
   profile: [
     '<circle cx="12" cy="8" r="4" />',
     '<path d="M4 21a8 8 0 0 1 16 0" />'

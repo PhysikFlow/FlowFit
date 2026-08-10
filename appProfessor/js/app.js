@@ -4,8 +4,8 @@ import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrast
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260809-6";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260809-6";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260809-7";
-import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260809-6";
-import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260809-6";
+import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260810-8";
+import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260810-8";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -184,6 +184,7 @@ let dataStatus = "Local";
 let authContext = null;
 let authAction = "signin";
 let editingWorkoutId = "";
+let workoutDraftDetails = [];
 let deferredInstallPrompt = null;
 let studentSearchQuery = "";
 let workoutSearchQuery = "";
@@ -1228,6 +1229,7 @@ const loadWorkoutForEditing = (workout) => {
   if (templateInput) templateInput.value = workout.focus || templateInput.value;
   if (startsAtInput) startsAtInput.value = formatDateForInput(workout.startsAt || workout.updatedAt);
   if (blocksInput) blocksInput.value = workoutToEditableBlocks(workout);
+  workoutDraftDetails = (workout.exercises || []).map((exercise) => ({ ...exercise }));
 
   setWorkoutEditingMode(workout);
   setWorkoutSyncStatus("Editando treino publicado. Salve para atualizar o app do aluno.", "");
@@ -1237,8 +1239,27 @@ const loadWorkoutForEditing = (workout) => {
 
 const resetWorkoutFormMode = ({ resetForm = false } = {}) => {
   if (resetForm) workoutForm?.reset();
+  workoutDraftDetails = [];
   setWorkoutEditingMode(null);
   renderWorkoutPreview();
+};
+
+const aggregateSessionLogs = (logs = []) => {
+  const grouped = new Map();
+  logs.forEach((log) => {
+    const key = log.exerciseId || `${log.position}-${log.exerciseName}`;
+    const current = grouped.get(key) || { ...log, completedSets: 0, entries: [] };
+    if (log.setNumber) {
+      current.completedSets += 1;
+      current.loadKg = log.loadKg;
+      current.reps = log.reps;
+    } else {
+      current.completedSets += Number(log.completedSets || 0);
+    }
+    current.entries.push(log);
+    grouped.set(key, current);
+  });
+  return [...grouped.values()].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
 };
 
 const renderStudentSessionPanel = () => {
@@ -1263,20 +1284,26 @@ const renderStudentSessionPanel = () => {
     : 0;
 
   const sessionCards = sessions.slice(0, 5).map((session) => {
-    const setRows = (session.setLogs || []).slice(0, 6).map((log) => `
-      <article class="session-log-row">
-        <div><strong>${escapeHtml(log.exerciseName)}</strong><small>${escapeHtml(log.prescription || "")}</small></div>
-        <span class="chip">${escapeHtml(String(log.completedSets))}x${escapeHtml(String(log.reps))}</span>
-        <span>${escapeHtml(String(log.loadKg))} kg</span>
-      </article>
-    `).join("");
+    const setRows = aggregateSessionLogs(session.setLogs || []).slice(0, 8).map((log) => {
+      const individualSets = log.entries.filter((entry) => entry.setNumber);
+      const detail = individualSets.length
+        ? individualSets.map((entry) => `${entry.loadKg}kg × ${entry.reps}`).join(" · ")
+        : `${log.loadKg}kg × ${log.reps}`;
+      return `
+        <article class="session-log-row">
+          <div><strong>${escapeHtml(log.exerciseName)}</strong><small>${escapeHtml(log.prescription || "")}</small></div>
+          <span class="chip">${escapeHtml(String(log.completedSets))} séries</span>
+          <span>${escapeHtml(detail)}</span>
+        </article>
+      `;
+    }).join("");
     return `
       <details class="session-card">
         <summary class="session-card__summary">
           <div>
             <span class="eyebrow">${escapeHtml(formatUpdatedAt(session.finishedAt))}</span>
             <h3>${escapeHtml(session.workoutTitle)}</h3>
-            <span class="session-card__summary-line">${escapeHtml(session.completedSets)}/${escapeHtml(session.totalSets)} séries · ${escapeHtml(effortLabel(session.feedback?.effort))} · ${escapeHtml(painLabel(session.feedback?.pain))}</span>
+            <span class="session-card__summary-line">${escapeHtml(session.completedSets)}/${escapeHtml(session.totalSets)} séries · ${session.status === "partial" ? "parcial · " : ""}${escapeHtml(effortLabel(session.feedback?.effort))} · ${escapeHtml(painLabel(session.feedback?.pain))}</span>
           </div>
           <span class="session-card__summary-action">
             <span class="chip">${escapeHtml(formatVolume(session.volumeKg))}</span>
@@ -1407,10 +1434,28 @@ const getWorkoutDraft = () => {
     .filter(Boolean)
     .slice(0, 12);
 
-  const exercises = lines.map((line, index) => ({
-    ...parseExerciseLine(line, index, "draft"),
-    parsed: /\d+\s*x\s*.+/i.test(line)
-  }));
+  const exercises = lines.map((line, index) => {
+    const parsedExercise = parseExerciseLine(line, index, "draft");
+    const normalizedName = parsedExercise.name.trim().toLocaleLowerCase("pt-BR");
+    const previous = workoutDraftDetails.find((exercise) => (
+      exercise.name.trim().toLocaleLowerCase("pt-BR") === normalizedName
+    ));
+    return {
+      ...parsedExercise,
+      ...(previous ? {
+        target: previous.target,
+        load: previous.load,
+        rest: previous.rest,
+        tempo: previous.tempo,
+        rir: previous.rir,
+        notes: previous.notes,
+        instructions: previous.instructions,
+        mediaUrl: previous.mediaUrl
+      } : {}),
+      parsed: /\d+\s*x\s*.+/i.test(line)
+    };
+  });
+  workoutDraftDetails = exercises.map((exercise) => ({ ...exercise }));
   const totalSets = exercises.reduce((sum, exercise) => sum + parseSets(exercise.prescription), 0);
 
   return {
@@ -1438,15 +1483,36 @@ const renderWorkoutPreview = () => {
   }
 
   previewList.innerHTML = draft.exercises.map((exercise, index) => `
-    <article class="workout-preview__item">
+    <article class="workout-preview__item workout-preview__item--editable">
       <span>${String(index + 1).padStart(2, "0")}</span>
-      <div>
+      <div class="workout-preview__exercise-main">
         <strong>${escapeHtml(exercise.name)}</strong>
         <small>${escapeHtml(exercise.prescription)} - ${escapeHtml(exercise.rest)} descanso</small>
+        <details class="exercise-detail-editor">
+          <summary>Detalhes para o aluno</summary>
+          <div class="exercise-detail-editor__grid">
+            <label>Descanso<input name="draft-rest-${index}" value="${escapeHtml(exercise.rest)}" data-draft-exercise-field="rest" data-draft-exercise-index="${index}" placeholder="60s" /></label>
+            <label>RIR<input name="draft-rir-${index}" value="${escapeHtml(exercise.rir)}" data-draft-exercise-field="rir" data-draft-exercise-index="${index}" placeholder="2" /></label>
+            <label>Cadência<input name="draft-tempo-${index}" value="${escapeHtml(exercise.tempo)}" data-draft-exercise-field="tempo" data-draft-exercise-index="${index}" placeholder="2-0-2" /></label>
+          </div>
+          <label>Instrução curta<textarea name="draft-instructions-${index}" rows="2" maxlength="240" data-draft-exercise-field="instructions" data-draft-exercise-index="${index}" placeholder="Ex: mantenha as escápulas apoiadas">${escapeHtml(exercise.instructions || "")}</textarea></label>
+          <label>URL da demonstração<input type="url" name="draft-media-${index}" value="${escapeHtml(exercise.mediaUrl || "")}" data-draft-exercise-field="mediaUrl" data-draft-exercise-index="${index}" placeholder="https://..." /></label>
+          <small class="field-help">Aceita HTTPS, incluindo YouTube, imagem, GIF ou vídeo direto.</small>
+        </details>
       </div>
       <em>${exercise.parsed ? "ok" : "estimado"}</em>
     </article>
   `).join("");
+};
+
+const isValidHttpsUrl = (value) => {
+  if (!value) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
 };
 
 const renderWorkouts = () => {
@@ -1743,6 +1809,15 @@ workoutForm?.addEventListener("submit", async (event) => {
     return;
   }
 
+  const workoutDraft = getWorkoutDraft();
+  const invalidMedia = workoutDraft.exercises.find((exercise) => (
+    !isValidHttpsUrl(exercise.mediaUrl)
+  ));
+  if (invalidMedia) {
+    showToast(`Use uma URL HTTPS na demonstração de ${invalidMedia.name}.`);
+    return;
+  }
+
   const selectedStudent = students.find((student) => student.id === data.get("student"));
   const editingWorkout = workouts.find((item) => item.id === editingWorkoutId);
   const workout = createWorkoutFromProfessorForm({
@@ -1751,6 +1826,7 @@ workoutForm?.addEventListener("submit", async (event) => {
     title: data.get("title"),
     template: data.get("template"),
     blocks: data.get("blocks"),
+    exercises: workoutDraft.exercises,
     workoutId: editingWorkout?.id,
     startsAt: data.get("startsAt"),
     version: editingWorkout ? Number(editingWorkout.version || 1) + 1 : 1
@@ -1784,8 +1860,27 @@ workoutForm?.addEventListener("submit", async (event) => {
   }
 });
 
-workoutForm?.addEventListener("input", renderWorkoutPreview);
-workoutForm?.addEventListener("change", renderWorkoutPreview);
+workoutForm?.addEventListener("input", (event) => {
+  const detailInput = event.target.closest("[data-draft-exercise-field]");
+  if (detailInput) {
+    const index = Number(detailInput.dataset.draftExerciseIndex);
+    const field = detailInput.dataset.draftExerciseField;
+    if (workoutDraftDetails[index] && field) workoutDraftDetails[index][field] = detailInput.value.trim();
+    return;
+  }
+  renderWorkoutPreview();
+});
+workoutForm?.addEventListener("change", (event) => {
+  if (!event.target.closest("[data-draft-exercise-field]")) renderWorkoutPreview();
+});
+
+previewList?.addEventListener("input", (event) => {
+  const detailInput = event.target.closest("[data-draft-exercise-field]");
+  if (!detailInput) return;
+  const index = Number(detailInput.dataset.draftExerciseIndex);
+  const field = detailInput.dataset.draftExerciseField;
+  if (workoutDraftDetails[index] && field) workoutDraftDetails[index][field] = detailInput.value.trim();
+});
 
 const handleThemeControlChange = () => {
   applyTheme();

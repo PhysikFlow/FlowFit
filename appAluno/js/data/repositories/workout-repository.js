@@ -36,6 +36,8 @@ const CLOUD_WORKOUT_SELECT = `
     tempo,
     rir,
     notes,
+    instructions,
+    media_url,
     updated_at
   )
 `;
@@ -65,6 +67,8 @@ const LEGACY_CLOUD_WORKOUT_SELECT = `
     tempo,
     rir,
     notes,
+    instructions,
+    media_url,
     updated_at
   )
 `;
@@ -75,7 +79,9 @@ const DEFAULT_EXERCISE = {
   rest: "60s",
   tempo: "2-0-2",
   rir: "2",
-  notes: "Criado no painel do professor."
+  notes: "Criado no painel do professor.",
+  instructions: "",
+  mediaUrl: ""
 };
 
 const normalizeText = (value, fallback = "") => {
@@ -159,7 +165,9 @@ const normalizeExercise = (exercise, index = 0, workoutId = "workout") => ({
   ...exercise,
   id: normalizeText(exercise?.id, `${workoutId}-ex-${String(index + 1).padStart(2, "0")}`),
   name: normalizeText(exercise?.name, `Exercício ${index + 1}`),
-  prescription: normalizeText(exercise?.prescription, "3 x 10")
+  prescription: normalizeText(exercise?.prescription, "3 x 10"),
+  instructions: normalizeText(exercise?.instructions),
+  mediaUrl: normalizeText(exercise?.mediaUrl || exercise?.media_url)
 });
 
 const normalizeWorkout = (workout) => {
@@ -230,7 +238,7 @@ const readPublishedWorkouts = () => {
 
 const writePublishedWorkouts = (items) => Platform.storage.set(PUBLISHED_WORKOUTS_KEY, items);
 
-export const createWorkoutFromProfessorForm = ({ student, studentName, studentId, studentKey, coachId, title, template, blocks, workoutId, startsAt, version = 1 }) => {
+export const createWorkoutFromProfessorForm = ({ student, studentName, studentId, studentKey, coachId, title, template, blocks, exercises: providedExercises, workoutId, startsAt, version = 1 }) => {
   const owner = normalizeText(student?.name || studentName, "Aluno");
   const resolvedStudentKey = normalizeText(student?.studentKey || studentKey, studentKeyFromName(owner));
   const resolvedStudentId = normalizeText(student?.id || studentId, fallbackStudentIdFromKey(resolvedStudentKey));
@@ -243,7 +251,12 @@ export const createWorkoutFromProfessorForm = ({ student, studentName, studentId
   if (!sourceLines.length) sourceLines.push("Exercício livre 3x10");
   const id = normalizeText(workoutId, `published-${Date.now()}`);
   const now = new Date().toISOString();
-  const exercises = sourceLines.map((line, index) => parseExerciseLine(line, index, id));
+  const exercises = Array.isArray(providedExercises) && providedExercises.length
+    ? providedExercises.slice(0, 12).map((exercise, index) => normalizeExercise({
+      ...exercise,
+      id: `${id}-ex-${String(index + 1).padStart(2, "0")}-${slugFromText(exercise.name)}`
+    }, index, id))
+    : sourceLines.map((line, index) => parseExerciseLine(line, index, id));
 
   return {
     id,
@@ -321,6 +334,8 @@ const toExerciseRows = (workout, authContext) => workout.exercises.map((exercise
   tempo: exercise.tempo,
   rir: exercise.rir,
   notes: exercise.notes,
+  instructions: exercise.instructions,
+  media_url: exercise.mediaUrl,
   updated_at: workout.updatedAt
 }));
 
@@ -353,7 +368,9 @@ const toAppWorkout = (row) => normalizeWorkout({
       rest: exercise.rest,
       tempo: exercise.tempo,
       rir: exercise.rir,
-      notes: exercise.notes
+      notes: exercise.notes,
+      instructions: exercise.instructions,
+      mediaUrl: exercise.media_url
     }))
 });
 

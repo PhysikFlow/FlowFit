@@ -1,13 +1,13 @@
 import { Platform } from "./core/platform.js?v=build-20260809-6";
-import { Store } from "./core/store.js?v=build-20260809-6";
+import { Store } from "./core/store.js?v=build-20260810-7";
 import { Theme } from "./core/theme.js?v=build-20260809-7";
-import { svgIcon } from "./core/icons.js?v=build-20260809-6";
+import { svgIcon } from "./core/icons.js?v=build-20260810-7";
 import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260809-7";
 import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260809-6";
 import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260809-6";
 import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260809-7";
-import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260809-6";
-import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260809-6";
+import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260810-8";
+import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260810-8";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -27,12 +27,9 @@ const toast = document.querySelector("[data-toast]");
 const headerNotificationButton = document.querySelector(".notification-button");
 const homeWorkoutAction = document.querySelector("[data-home-workout-action]");
 const homeWorkoutLabel = document.querySelector("[data-home-workout-label]");
-const sessionDock = document.querySelector("[data-session-dock]");
-const sessionDockTitle = document.querySelector("[data-session-dock-title]");
-const sessionDockCopy = document.querySelector("[data-session-dock-copy]");
-const sessionCta = document.querySelector("[data-session-cta]");
-const finishDisclosure = document.querySelector("[data-finish-disclosure]");
-const finishReadiness = document.querySelector("[data-finish-readiness]");
+const workoutRunner = document.querySelector("[data-workout-runner]");
+const exerciseSheet = document.querySelector("[data-exercise-sheet]");
+const infoDialog = document.querySelector("[data-info-dialog]");
 const progressDisclosure = document.querySelector("[data-progress-disclosure]");
 const scheduleDisclosure = document.querySelector("[data-schedule-disclosure]");
 const accentInput = document.querySelector("[data-accent]");
@@ -40,8 +37,8 @@ const brandInput = document.querySelector("[data-brand-input]");
 const taglineInput = document.querySelector("[data-tagline-input]");
 const modeButtons = [...document.querySelectorAll("[data-mode]")];
 let toastTimer;
-let restTimerId;
-let restRemaining = 0;
+let runnerTickId;
+let wakeLockSentinel = null;
 const SET_CLICK_DEBOUNCE_MS = 2000;
 const setClickLocks = new Set();
 const compactWorkoutQuery = window.matchMedia("(max-width: 767px)");
@@ -73,7 +70,7 @@ let currentWorkout = emptyWorkout;
 let studentAccesses = [];
 let availableWorkouts = [];
 let upcomingWorkouts = [];
-let currentSessionStartedAt = new Date().toISOString();
+let previousSessions = [];
 const PENDING_INVITE_KEY = "flowfit.pending-student-invite";
 const ACTIVE_STUDENT_KEY = "flowfit.active-student";
 const ACTIVE_WORKOUT_KEY = "flowfit.active-workout";
@@ -138,6 +135,129 @@ const parseReps = (exercise) => {
 const getCurrentExercises = () => Array.isArray(currentWorkout.exercises) ? currentWorkout.exercises : [];
 
 const getTotalSets = () => getCurrentExercises().reduce((sum, exercise) => sum + parseTotalSets(exercise), 0);
+
+const normalizeExerciseName = (value) => String(value || "")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, " ")
+  .trim();
+
+const getActiveSession = () => {
+  const session = Store.getActiveSession();
+  if (!session || session.studentId !== currentStudent.id) return null;
+  return session;
+};
+
+const getSessionExercises = (session = getActiveSession()) => (
+  Array.isArray(session?.workoutSnapshot?.exercises) ? session.workoutSnapshot.exercises : []
+);
+
+const getSessionEntries = (session = getActiveSession()) => (
+  Array.isArray(session?.setEntries) ? session.setEntries : []
+);
+
+const getExerciseEntries = (exerciseId, session = getActiveSession()) => getSessionEntries(session)
+  .filter((entry) => entry.exerciseId === exerciseId)
+  .sort((a, b) => Number(a.setNumber || 0) - Number(b.setNumber || 0));
+
+const getCompletedSetCount = (exerciseId, session = getActiveSession()) => getExerciseEntries(exerciseId, session).length;
+
+const getCompletedSessionSets = (session = getActiveSession()) => getSessionEntries(session).length;
+
+const getSessionTotalSets = (session = getActiveSession()) => getSessionExercises(session)
+  .reduce((sum, exercise) => sum + parseTotalSets(exercise), 0);
+
+const findSessionExercise = (exerciseId, session = getActiveSession()) => getSessionExercises(session)
+  .find((exercise) => exercise.id === exerciseId) || null;
+
+const getNextIncompleteTarget = (session = getActiveSession(), afterExerciseId = "") => {
+  const exercises = getSessionExercises(session);
+  if (!exercises.length) return null;
+  const startIndex = Math.max(0, exercises.findIndex((exercise) => exercise.id === afterExerciseId));
+  const ordered = [...exercises.slice(startIndex), ...exercises.slice(0, startIndex)];
+  for (const exercise of ordered) {
+    const completedNumbers = new Set(getExerciseEntries(exercise.id, session).map((entry) => Number(entry.setNumber)));
+    const total = parseTotalSets(exercise);
+    for (let setNumber = 1; setNumber <= total; setNumber += 1) {
+      if (!completedNumbers.has(setNumber)) return { exercise, setNumber };
+    }
+  }
+  return null;
+};
+
+const findPreviousSet = (exercise, setNumber) => {
+  for (const session of previousSessions) {
+    if (session.status !== "completed" && session.status !== "partial") continue;
+    const exactLogs = (session.setLogs || []).filter((log) => log.exerciseId === exercise.id);
+    const nameLogs = (session.setLogs || []).filter((log) => (
+      normalizeExerciseName(log.exerciseName) === normalizeExerciseName(exercise.name)
+    ));
+    const logs = exactLogs.length ? exactLogs : nameLogs;
+    const individual = logs.find((log) => Number(log.setNumber) === Number(setNumber));
+    if (individual) return individual;
+    const legacy = logs.find((log) => !log.setNumber && Number(log.completedSets || 0) >= Number(setNumber));
+    if (legacy) return legacy;
+  }
+  return null;
+};
+
+const createSessionSnapshot = (workout) => ({
+  id: workout.id,
+  code: workout.code,
+  title: workout.title,
+  focus: workout.focus,
+  version: workout.version || 1,
+  exercises: (workout.exercises || []).map((exercise) => ({ ...exercise }))
+});
+
+const createActiveSession = (workout) => {
+  const firstExercise = workout.exercises?.[0];
+  const session = {
+    id: `session-${Date.now()}`,
+    coachId: workout.coachId || currentStudent.coachId || "",
+    studentId: currentStudent.id,
+    studentKey: currentStudent.studentKey || workout.studentKey || "",
+    studentEmail: currentStudent.email || "",
+    workoutId: workout.id,
+    workoutVersion: workout.version || 1,
+    workoutSnapshot: createSessionSnapshot(workout),
+    startedAt: new Date().toISOString(),
+    phase: "exercise",
+    currentExerciseId: firstExercise?.id || "",
+    currentSetNumber: 1,
+    restEndsAt: null,
+    setEntries: []
+  };
+
+  const legacyDone = Store.state.activeWorkoutId === workout.id ? Store.state.setLogs || {} : {};
+  Object.entries(legacyDone).forEach(([exerciseId, count]) => {
+    const exercise = workout.exercises.find((item) => item.id === exerciseId);
+    if (!exercise) return;
+    const log = Store.getExerciseLog(exerciseId, {
+      load: parseLoadKg(exercise.load),
+      reps: parseReps(exercise)
+    });
+    for (let setNumber = 1; setNumber <= Math.min(Number(count || 0), parseTotalSets(exercise)); setNumber += 1) {
+      session.setEntries.push({
+        exerciseId,
+        exercisePosition: workout.exercises.indexOf(exercise),
+        exerciseName: exercise.name,
+        setNumber,
+        setKind: "working",
+        loadKg: Number(log.load || 0),
+        reps: Number(log.reps || 0),
+        completedAt: new Date().toISOString()
+      });
+    }
+  });
+  const next = getNextIncompleteTarget(session, firstExercise?.id);
+  if (next) {
+    session.currentExerciseId = next.exercise.id;
+    session.currentSetNumber = next.setNumber;
+  }
+  return Store.startActiveSession(session);
+};
 
 const formatVolume = (value) => `${(value / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}t`;
 
@@ -212,6 +332,24 @@ const effortLabelByValue = {
 const pageExists = (name) => pages.some((page) => page.dataset.page === name);
 
 const navigate = (name, updateHash = true) => {
+  if (name === "workout/session" && getActiveSession()) {
+    document.body.classList.add("has-workout-runner");
+    workoutRunner.hidden = false;
+    workoutRunner.setAttribute("aria-hidden", "false");
+    if (updateHash) history.pushState(null, "", "#workout/session");
+    renderWorkoutRunner();
+    startRunnerTicker();
+    requestRunnerWakeLock();
+    window.scrollTo({ top: 0 });
+    return;
+  }
+  if (!workoutRunner.hidden) {
+    document.body.classList.remove("has-workout-runner");
+    workoutRunner.hidden = true;
+    workoutRunner.setAttribute("aria-hidden", "true");
+    stopRunnerTicker();
+    releaseRunnerWakeLock();
+  }
   const destination = pageExists(name) ? name : "home";
   pages.forEach((page) => page.classList.toggle("is-active", page.dataset.page === destination));
   navItems.forEach((item) => {
@@ -361,8 +499,6 @@ const refreshPublishedWorkout = async ({ silent = false } = {}) => {
   if (changed) {
     focusedExerciseId = "";
     setClickLocks.clear();
-    stopRestTimer();
-    currentSessionStartedAt = new Date().toISOString();
     if (!silent && currentWorkout.id !== emptyWorkout.id) Platform.notify("Seu personal publicou um novo treino.");
   }
   if (changed || result.synced) renderAll();
@@ -486,7 +622,8 @@ const renderHome = () => {
   document.querySelector("[data-stat-done]").textContent = doneWorkouts;
   document.querySelector("[data-stat-volume]").textContent = formatVolume(volumeKg);
   document.querySelector("[data-stat-sets]").textContent = completedSets;
-  const currentCompletedSets = getCurrentExercises().reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
+  const activeSession = getActiveSession();
+  const currentCompletedSets = activeSession?.workoutId === currentWorkout.id ? getCompletedSessionSets(activeSession) : 0;
   if (homeWorkoutAction) {
     homeWorkoutAction.disabled = !hasWorkout;
   }
@@ -512,36 +649,23 @@ const renderHome = () => {
 };
 
 const renderWorkoutProgress = () => {
-  const exercises = getCurrentExercises();
-  const totalSets = getTotalSets();
-  const done = exercises.reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
+  const activeSession = getActiveSession();
+  const belongsToCurrentWorkout = activeSession?.workoutId === currentWorkout.id;
+  const totalSets = belongsToCurrentWorkout ? getSessionTotalSets(activeSession) : getTotalSets();
+  const done = belongsToCurrentWorkout ? getCompletedSessionSets(activeSession) : 0;
   const percent = totalSets > 0 ? Math.round((done / totalSets) * 100) : 0;
   document.querySelector("[data-session-count]").textContent = `${done}/${totalSets} séries`;
   document.querySelector("[data-session-progress]").style.setProperty("--progress", `${percent}%`);
-  document.querySelector("[data-finish]").disabled = totalSets === 0 || done < totalSets;
-  const isReady = totalSets > 0 && done >= totalSets;
-  const nextExercise = exercises.find((exercise) => Store.getExerciseDone(exercise.id) < parseTotalSets(exercise));
-  const nextDone = nextExercise ? Store.getExerciseDone(nextExercise.id) : 0;
-  const nextTotal = nextExercise ? parseTotalSets(nextExercise) : 0;
-  if (sessionDock) sessionDock.hidden = totalSets === 0;
-  if (sessionDockTitle) sessionDockTitle.textContent = isReady ? "Treino completo" : nextExercise?.name || "Próxima série";
-  if (sessionDockCopy) sessionDockCopy.textContent = isReady
-    ? `${done} séries concluídas`
-    : `${done}/${totalSets} séries · próxima ${nextDone + 1}/${nextTotal}`;
-  if (sessionCta) sessionCta.textContent = isReady ? "Finalizar" : "Continuar";
-  if (finishReadiness) finishReadiness.textContent = isReady ? "Pronto" : `${Math.max(0, totalSets - done)} restantes`;
-  if (finishDisclosure) finishDisclosure.classList.toggle("is-ready", isReady);
-  if (!isReady && finishDisclosure?.open) finishDisclosure.open = false;
+  document.querySelector("[data-session-progress-track]")?.setAttribute("aria-valuenow", String(percent));
+  const startButton = document.querySelector("[data-start-workout]");
+  if (startButton) {
+    startButton.disabled = totalSets === 0;
+    startButton.textContent = belongsToCurrentWorkout ? "Continuar treino" : "Começar treino";
+  }
 };
 
-const getWorkoutVolume = () => getCurrentExercises().reduce((sum, exercise) => {
-  const done = Store.getExerciseDone(exercise.id);
-  const log = Store.getExerciseLog(exercise.id, {
-    load: parseLoadKg(exercise.load),
-    reps: parseReps(exercise)
-  });
-  return sum + (done * Number(log.load || 0) * Number(log.reps || 0));
-}, 0);
+const getWorkoutVolume = (session = getActiveSession()) => getSessionEntries(session)
+  .reduce((sum, entry) => sum + (Number(entry.loadKg || 0) * Number(entry.reps || 0)), 0);
 
 const getFinishFeedback = () => {
   const form = document.querySelector("[data-finish-feedback]");
@@ -554,51 +678,57 @@ const getFinishFeedback = () => {
 };
 
 const buildWorkoutSessionPayload = () => {
-  const sessionId = `session-${Date.now()}`;
+  const activeSession = getActiveSession();
+  if (!activeSession) return null;
+  const sessionId = activeSession.id;
   const finishedAt = new Date().toISOString();
-  const startedAt = currentSessionStartedAt || finishedAt;
-  const setLogs = getCurrentExercises().map((exercise, index) => {
-    const completedSets = Store.getExerciseDone(exercise.id);
-    const log = Store.getExerciseLog(exercise.id, {
-      load: parseLoadKg(exercise.load),
-      reps: parseReps(exercise)
-    });
-    const loadKg = Number(log.load || 0);
-    const reps = Number(log.reps || 0);
+  const startedAt = activeSession.startedAt || finishedAt;
+  const exercises = getSessionExercises(activeSession);
+  const setLogs = getSessionEntries(activeSession).map((entry) => {
+    const exercise = exercises.find((item) => item.id === entry.exerciseId) || {};
+    const index = Math.max(0, exercises.findIndex((item) => item.id === entry.exerciseId));
+    const loadKg = Number(entry.loadKg || 0);
+    const reps = Number(entry.reps || 0);
     return {
-      id: `${sessionId}-set-${String(index + 1).padStart(2, "0")}`,
+      id: `${sessionId}-ex-${String(index + 1).padStart(2, "0")}-set-${String(entry.setNumber).padStart(2, "0")}`,
       sessionId,
-      coachId: currentWorkout.coachId || currentStudent.coachId || "",
-      workoutId: currentWorkout.id,
-      exerciseId: exercise.id,
+      coachId: activeSession.coachId,
+      workoutId: activeSession.workoutId,
+      exerciseId: entry.exerciseId,
       position: index,
-      exerciseName: exercise.name,
-      target: exercise.target,
-      prescription: exercise.prescription,
+      exerciseName: exercise.name || entry.exerciseName,
+      target: exercise.target || "Personalizado",
+      prescription: exercise.prescription || "",
       plannedSets: parseTotalSets(exercise),
-      completedSets,
+      completedSets: 1,
       loadKg,
       reps,
-      volumeKg: completedSets * loadKg * reps,
+      volumeKg: loadKg * reps,
       rir: exercise.rir,
-      notes: exercise.notes
+      notes: exercise.notes,
+      setNumber: Number(entry.setNumber),
+      setKind: entry.setKind || "working",
+      completedAt: entry.completedAt || finishedAt
     };
   });
-  const completedSets = setLogs.reduce((sum, log) => sum + log.completedSets, 0);
+  const completedSets = setLogs.length;
   const volumeKg = setLogs.reduce((sum, log) => sum + log.volumeKg, 0);
   const feedback = getFinishFeedback();
+  const totalSets = getSessionTotalSets(activeSession);
+  const snapshot = activeSession.workoutSnapshot || {};
 
   return {
     id: sessionId,
-    coachId: currentWorkout.coachId || currentStudent.coachId || "",
+    coachId: activeSession.coachId,
     studentId: currentStudent.id,
-    studentKey: currentStudent.studentKey || currentWorkout.studentKey || "",
+    studentKey: activeSession.studentKey,
     studentEmail: currentStudent.email || "",
-    workoutId: currentWorkout.id,
-    workoutCode: currentWorkout.code,
-    workoutTitle: currentWorkout.title,
-    workoutVersion: currentWorkout.version || 1,
-    totalSets: getTotalSets(),
+    workoutId: activeSession.workoutId,
+    workoutCode: snapshot.code || "A",
+    workoutTitle: snapshot.title || "Treino",
+    workoutVersion: snapshot.version || activeSession.workoutVersion || 1,
+    status: completedSets >= totalSets ? "completed" : "partial",
+    totalSets,
     completedSets,
     volumeKg: Math.round(volumeKg),
     durationSeconds: Math.max(0, Math.round((new Date(finishedAt) - new Date(startedAt)) / 1000)),
@@ -607,63 +737,12 @@ const buildWorkoutSessionPayload = () => {
     feedback: {
       id: `${sessionId}-feedback`,
       sessionId,
-      coachId: currentWorkout.coachId || currentStudent.coachId || "",
+      coachId: activeSession.coachId,
       studentId: currentStudent.id,
       ...feedback
     },
     setLogs
   };
-};
-
-const renderRestTimer = () => {
-  const timer = document.querySelector("[data-rest-timer]");
-  const label = document.querySelector("[data-rest-label]");
-  timer.hidden = restRemaining <= 0;
-  timer.classList.toggle("is-active", restRemaining > 0);
-  label.textContent = restRemaining > 0 ? `${restRemaining}s restantes` : "Descanso concluído";
-};
-
-const stopRestTimer = () => {
-  clearInterval(restTimerId);
-  restTimerId = null;
-  restRemaining = 0;
-  renderRestTimer();
-};
-
-const startRestTimer = (seconds) => {
-  clearInterval(restTimerId);
-  restRemaining = seconds;
-  renderRestTimer();
-  restTimerId = setInterval(() => {
-    restRemaining -= 1;
-    if (restRemaining <= 0) {
-      stopRestTimer();
-      Platform.notify("Descanso finalizado. Próxima série liberada.");
-      return;
-    }
-    renderRestTimer();
-  }, 1000);
-};
-
-const lockSetButton = (exerciseId, button) => {
-  setClickLocks.add(exerciseId);
-  document.querySelectorAll(`[data-set="${exerciseId}"], [data-undo-set="${exerciseId}"]`).forEach((currentButton) => {
-    currentButton.disabled = true;
-    currentButton.classList.add("is-locked");
-  });
-  button.disabled = true;
-
-  window.setTimeout(() => {
-    setClickLocks.delete(exerciseId);
-    const setButton = document.querySelector(`[data-set="${exerciseId}"]`);
-    const undoButton = document.querySelector(`[data-undo-set="${exerciseId}"]`);
-    setButton?.removeAttribute("disabled");
-    setButton?.classList.remove("is-locked");
-    if (undoButton) {
-      undoButton.disabled = Store.getExerciseDone(exerciseId) <= 0;
-      undoButton.classList.remove("is-locked");
-    }
-  }, SET_CLICK_DEBOUNCE_MS);
 };
 
 const playSetFeedback = (button) => {
@@ -680,7 +759,7 @@ const playSetFeedback = (button) => {
   }, 720);
 };
 
-const renderExercises = () => {
+const renderLegacyExercises = () => {
   const list = document.querySelector("[data-exercise-list]");
   const exercises = getCurrentExercises();
   if (!exercises.length) {
@@ -739,6 +818,302 @@ const renderExercises = () => {
     `;
   }).join("");
   renderWorkoutProgress();
+};
+
+const renderExercises = () => {
+  const list = document.querySelector("[data-exercise-list]");
+  const exercises = getCurrentExercises();
+  if (!exercises.length) {
+    list.innerHTML = `<article class="empty-state card"><strong>Nenhum exercício publicado.</strong><small>Peça ao personal para revisar este treino.</small></article>`;
+    renderWorkoutProgress();
+    return;
+  }
+  const activeSession = getActiveSession();
+  const belongsToCurrentWorkout = activeSession?.workoutId === currentWorkout.id;
+  list.innerHTML = exercises.map((exercise, index) => {
+    const done = belongsToCurrentWorkout ? getCompletedSetCount(exercise.id, activeSession) : 0;
+    const total = parseTotalSets(exercise);
+    return `
+      <article class="exercise-overview card ${done >= total ? "is-complete" : ""}">
+        <span class="exercise__number">${String(index + 1).padStart(2, "0")}</span>
+        <div>
+          <strong>${escapeHtml(exercise.name)}</strong>
+          <small>${escapeHtml(exercise.prescription)} · ${escapeHtml(exercise.rest)} de descanso</small>
+          ${exercise.instructions ? `<p>${escapeHtml(exercise.instructions)}</p>` : ""}
+        </div>
+        <span class="exercise-overview__state">${exercise.mediaUrl ? svgIcon("play") : ""}<b>${done}/${total}</b></span>
+      </article>
+    `;
+  }).join("");
+  renderWorkoutProgress();
+};
+
+const formatClock = (seconds) => {
+  const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+  const minutes = Math.floor(safe / 60);
+  return `${String(minutes).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+};
+
+const getYouTubeVideoId = (value) => {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") return "";
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    if (host === "youtu.be") return url.pathname.split("/").filter(Boolean)[0] || "";
+    if (host === "youtube.com" || host === "m.youtube.com" || host === "youtube-nocookie.com") {
+      if (url.pathname === "/watch") return url.searchParams.get("v") || "";
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (["embed", "shorts"].includes(parts[0])) return parts[1] || "";
+    }
+  } catch {
+    return "";
+  }
+  return "";
+};
+
+const renderRunnerMedia = (exercise) => {
+  const target = document.querySelector("[data-runner-media]");
+  const source = String(exercise.mediaUrl || "").trim();
+  target.replaceChildren();
+  target.hidden = !source;
+  if (!source) return;
+  let url;
+  try {
+    url = new URL(source);
+  } catch {
+    target.hidden = true;
+    return;
+  }
+  if (url.protocol !== "https:") {
+    target.hidden = true;
+    return;
+  }
+
+  const youtubeId = getYouTubeVideoId(source);
+  if (youtubeId && /^[a-zA-Z0-9_-]{6,20}$/.test(youtubeId)) {
+    const iframe = document.createElement("iframe");
+    iframe.src = `https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0&playsinline=1&modestbranding=1`;
+    iframe.title = `Demonstração de ${exercise.name}`;
+    iframe.loading = "lazy";
+    iframe.allow = "accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture";
+    iframe.referrerPolicy = "strict-origin-when-cross-origin";
+    iframe.allowFullscreen = true;
+    target.append(iframe);
+    return;
+  }
+
+  const extension = url.pathname.split(".").pop()?.toLowerCase() || "";
+  if (["png", "jpg", "jpeg", "gif", "webp", "avif"].includes(extension)) {
+    const image = document.createElement("img");
+    image.src = source;
+    image.alt = `Demonstração de ${exercise.name}`;
+    image.loading = "eager";
+    target.append(image);
+    return;
+  }
+  if (["mp4", "webm", "ogv"].includes(extension)) {
+    const video = document.createElement("video");
+    video.src = source;
+    video.muted = true;
+    video.loop = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.controls = true;
+    target.append(video);
+    return;
+  }
+
+  const link = document.createElement("a");
+  link.className = "button button--quiet";
+  link.href = source;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = "Abrir demonstração";
+  target.append(link);
+};
+
+const getProgressionExerciseIds = (session = getActiveSession()) => {
+  const progressed = new Set();
+  getSessionEntries(session).forEach((entry) => {
+    const exercise = findSessionExercise(entry.exerciseId, session);
+    if (!exercise) return;
+    const previous = findPreviousSet(exercise, entry.setNumber);
+    if (!previous) return;
+    const load = Number(entry.loadKg || 0);
+    const reps = Number(entry.reps || 0);
+    const previousLoad = Number(previous.loadKg || 0);
+    const previousReps = Number(previous.reps || 0);
+    if ((load > previousLoad && reps >= previousReps) || (load >= previousLoad && reps > previousReps)) {
+      progressed.add(entry.exerciseId);
+    }
+  });
+  return progressed;
+};
+
+const renderRunnerExerciseSheet = (session) => {
+  const target = document.querySelector("[data-runner-exercise-list]");
+  target.innerHTML = getSessionExercises(session).map((exercise, index) => {
+    const entries = getExerciseEntries(exercise.id, session);
+    const total = parseTotalSets(exercise);
+    const active = exercise.id === session.currentExerciseId;
+    return `
+      <article class="runner-sheet__exercise ${active ? "is-active" : ""} ${entries.length >= total ? "is-complete" : ""}">
+        <button type="button" data-runner-jump="${escapeHtml(exercise.id)}">
+          <span>${String(index + 1).padStart(2, "0")}</span>
+          <div><strong>${escapeHtml(exercise.name)}</strong><small>${escapeHtml(exercise.prescription)} · ${entries.length}/${total} séries</small></div>
+          <b>${entries.length >= total ? "✓" : `${entries.length}/${total}`}</b>
+        </button>
+        ${entries.length ? `<div class="runner-sheet__sets">${entries.map((entry) => `<button type="button" data-edit-completed-set="${escapeHtml(exercise.id)}" data-edit-set-number="${entry.setNumber}">S${entry.setNumber} · ${entry.loadKg}kg × ${entry.reps}</button>`).join("")}</div>` : ""}
+      </article>
+    `;
+  }).join("");
+};
+
+const renderRunnerReview = (session) => {
+  const done = getCompletedSessionSets(session);
+  const total = getSessionTotalSets(session);
+  const duration = Math.max(0, Math.round((Date.now() - new Date(session.startedAt).getTime()) / 1000));
+  document.querySelector("[data-review-duration]").textContent = duration < 60 ? "<1 min" : `${Math.round(duration / 60)} min`;
+  document.querySelector("[data-review-sets]").textContent = `${done}/${total}`;
+  document.querySelector("[data-review-volume]").textContent = `${Math.round(getWorkoutVolume(session)).toLocaleString("pt-BR")} kg`;
+  const progressionIds = getProgressionExerciseIds(session);
+  const progressionNames = getSessionExercises(session)
+    .filter((exercise) => progressionIds.has(exercise.id))
+    .map((exercise) => exercise.name);
+  document.querySelector("[data-review-progressions]").textContent = progressionIds.size;
+  const progressionList = document.querySelector("[data-review-progression-list]");
+  progressionList.hidden = progressionNames.length === 0;
+  progressionList.textContent = progressionNames.length
+    ? `Progressão em ${progressionNames.join(", ")}.`
+    : "";
+  document.querySelector("[data-review-status-copy]").textContent = done >= total
+    ? "Todas as séries foram concluídas."
+    : `Treino parcial: ${total - done} série(s) não realizada(s).`;
+};
+
+const renderWorkoutRunner = () => {
+  const session = getActiveSession();
+  if (!session) return;
+  const total = getSessionTotalSets(session);
+  const done = getCompletedSessionSets(session);
+  const percent = total ? Math.round((done / total) * 100) : 0;
+  document.querySelector("[data-runner-workout-title]").textContent = `Treino ${session.workoutSnapshot?.code || ""}`.trim();
+  document.querySelector("[data-runner-progress-title]").textContent = session.workoutSnapshot?.title || "Treino";
+  document.querySelector("[data-runner-progress-copy]").textContent = `${done}/${total} séries`;
+  document.querySelector("[data-runner-progress]").style.setProperty("--progress", `${percent}%`);
+  document.querySelector("[data-runner-progress-track]")?.setAttribute("aria-valuenow", String(percent));
+  document.querySelectorAll("[data-runner-phase]").forEach((phase) => {
+    phase.hidden = phase.dataset.runnerPhase !== session.phase;
+  });
+  if (workoutRunner.dataset.renderedPhase !== session.phase) {
+    workoutRunner.dataset.renderedPhase = session.phase;
+    window.setTimeout(() => {
+      workoutRunner.querySelector(`[data-runner-phase="${session.phase}"] [data-runner-phase-focus]`)
+        ?.focus({ preventScroll: true });
+    }, 0);
+  }
+  renderRunnerExerciseSheet(session);
+
+  if (session.phase === "review") {
+    renderRunnerReview(session);
+    return;
+  }
+  if (session.phase === "success") {
+    document.querySelector("[data-runner-success-copy]").textContent = session.syncStatus === "synced"
+      ? "Seu personal recebeu as séries e o feedback."
+      : "O treino ficou salvo e será enviado quando a conexão voltar.";
+    return;
+  }
+  if (session.phase === "rest") {
+    const next = getNextIncompleteTarget(session, session.currentExerciseId);
+    document.querySelector("[data-runner-rest-next]").textContent = next
+      ? `${next.exercise.name} · série ${next.setNumber}`
+      : "Resumo do treino";
+    syncRunnerClock();
+    return;
+  }
+
+  let exercise = findSessionExercise(session.currentExerciseId, session);
+  let setNumber = Number(session.currentSetNumber || 1);
+  if (!exercise || getExerciseEntries(exercise.id, session).some((entry) => Number(entry.setNumber) === setNumber)) {
+    const next = getNextIncompleteTarget(session, exercise?.id);
+    if (!next) {
+      Store.updateActiveSession({ phase: "review", restEndsAt: null });
+      renderWorkoutRunner();
+      return;
+    }
+    exercise = next.exercise;
+    setNumber = next.setNumber;
+    Store.updateActiveSession({ currentExerciseId: exercise.id, currentSetNumber: setNumber });
+  }
+
+  const exercises = getSessionExercises(session);
+  const previous = findPreviousSet(exercise, setNumber);
+  const exerciseIndex = exercises.findIndex((item) => item.id === exercise.id);
+  document.querySelector("[data-runner-exercise-position]").textContent = `Exercício ${exerciseIndex + 1} de ${exercises.length}`;
+  document.querySelector("[data-runner-exercise-name]").textContent = exercise.name;
+  document.querySelector("[data-runner-set-number]").textContent = `Série ${setNumber} de ${parseTotalSets(exercise)}`;
+  document.querySelector("[data-runner-prescription]").textContent = exercise.prescription;
+  document.querySelector("[data-runner-rir]").textContent = `RIR ${exercise.rir}`;
+  document.querySelector("[data-runner-tempo]").textContent = `Cadência ${exercise.tempo}`;
+  const instructions = document.querySelector("[data-runner-instructions]");
+  instructions.hidden = !exercise.instructions;
+  instructions.textContent = exercise.instructions || "";
+  document.querySelector("[data-previous-set-value]").textContent = previous
+    ? `${previous.loadKg} kg × ${previous.reps} reps`
+    : "Sem registro comparável";
+  const loadInput = document.querySelector("[data-runner-load]");
+  const repsInput = document.querySelector("[data-runner-reps]");
+  loadInput.value = session.currentLoad ?? previous?.loadKg ?? parseLoadKg(exercise.load);
+  repsInput.value = session.currentReps ?? previous?.reps ?? parseReps(exercise);
+  document.querySelector("[data-correct-last-set]").hidden = getExerciseEntries(exercise.id, session).length === 0;
+  renderRunnerMedia(exercise);
+  syncRunnerClock();
+};
+
+const syncRunnerClock = () => {
+  const session = getActiveSession();
+  if (!session) return;
+  const elapsed = Math.max(0, Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000));
+  document.querySelector("[data-runner-elapsed]").textContent = formatClock(elapsed);
+  if (session.phase !== "rest") return;
+  const remaining = Math.max(0, Math.ceil((new Date(session.restEndsAt).getTime() - Date.now()) / 1000));
+  document.querySelector("[data-runner-rest-clock]").textContent = formatClock(remaining);
+  if (remaining <= 0) {
+    Store.updateActiveSession({ phase: getNextIncompleteTarget(session, session.currentExerciseId) ? "exercise" : "review", restEndsAt: null });
+    Platform.notify("Descanso finalizado.");
+    renderWorkoutRunner();
+  }
+};
+
+const startRunnerTicker = () => {
+  clearInterval(runnerTickId);
+  syncRunnerClock();
+  runnerTickId = window.setInterval(syncRunnerClock, 1000);
+};
+
+const stopRunnerTicker = () => {
+  clearInterval(runnerTickId);
+  runnerTickId = null;
+};
+
+const requestRunnerWakeLock = async () => {
+  if (!navigator.wakeLock || document.visibilityState !== "visible" || workoutRunner.hidden) return;
+  try {
+    wakeLockSentinel = await navigator.wakeLock.request("screen");
+    wakeLockSentinel.addEventListener("release", () => { wakeLockSentinel = null; }, { once: true });
+  } catch {
+    wakeLockSentinel = null;
+  }
+};
+
+const releaseRunnerWakeLock = async () => {
+  try {
+    await wakeLockSentinel?.release();
+  } catch {
+    // O navegador pode liberar automaticamente ao trocar de aba.
+  }
+  wakeLockSentinel = null;
 };
 
 const renderProgress = () => {
@@ -930,10 +1305,36 @@ const retryPendingSessions = async () => {
       coachId: currentStudent.coachId
     });
     result.sessions.forEach((session) => Store.addSession(session));
+    previousSessions = [
+      ...result.sessions,
+      ...previousSessions.filter((session) => !result.sessions.some((synced) => synced.id === session.id))
+    ].sort((a, b) => new Date(b.finishedAt || 0) - new Date(a.finishedAt || 0));
+    const activeSession = getActiveSession();
+    const syncedActiveSession = activeSession
+      ? result.sessions.find((session) => session.id === activeSession.id && session.syncStatus === "synced")
+      : null;
+    if (syncedActiveSession) {
+      Store.updateActiveSession({ phase: "success", syncStatus: "synced" });
+    }
     return result.syncedCount;
   } catch {
     return 0;
   }
+};
+
+const refreshStudentSessionHistory = async () => {
+  if (!currentStudent?.id || !currentStudent?.coachId) {
+    previousSessions = Store.state.sessions || [];
+    return { synced: false, sessions: previousSessions };
+  }
+  const result = await sessionRepository.fetchStudentSessions({
+    studentId: currentStudent.id,
+    coachId: currentStudent.coachId,
+    limit: 30
+  });
+  previousSessions = result.sessions || [];
+  Store.setSessions(previousSessions);
+  return result;
 };
 
 const startAuthenticatedApp = async () => {
@@ -1067,6 +1468,7 @@ const startAuthenticatedApp = async () => {
   currentWorkout = emptyWorkout;
   await applyPublishedBrandTheme();
   await refreshPublishedWorkout({ silent: true });
+  await refreshStudentSessionHistory();
   const retriedSessions = await retryPendingSessions();
   renderAll();
   syncOnboarding();
@@ -1097,10 +1499,9 @@ const switchStudentAccess = async (studentId) => {
   currentWorkout = emptyWorkout;
   focusedExerciseId = "";
   setClickLocks.clear();
-  stopRestTimer();
-  currentSessionStartedAt = new Date().toISOString();
   await applyPublishedBrandTheme();
   await refreshPublishedWorkout({ silent: true });
+  await refreshStudentSessionHistory();
   const retriedSessions = await retryPendingSessions();
   renderAll();
   if (retriedSessions > 0) {
@@ -1117,8 +1518,6 @@ const selectWorkout = (workoutId) => {
   Platform.storage.set(`${ACTIVE_WORKOUT_KEY}:${currentStudent.id}`, workout.id);
   focusedExerciseId = "";
   setClickLocks.clear();
-  stopRestTimer();
-  currentSessionStartedAt = new Date().toISOString();
   renderAll();
   Platform.notify(`Treino ${workout.code} selecionado.`);
 };
@@ -1131,14 +1530,6 @@ navItems.forEach((item) => item.addEventListener("click", (event) => {
 document.querySelectorAll("[data-go]").forEach((item) => item.addEventListener("click", () => navigate(item.dataset.go)));
 
 document.addEventListener("click", (event) => {
-  const exerciseFocusButton = event.target.closest("[data-focus-exercise]");
-  if (exerciseFocusButton && compactWorkoutQuery.matches) {
-    focusedExerciseId = exerciseFocusButton.dataset.focusExercise;
-    renderExercises();
-    window.setTimeout(() => document.querySelector(`[data-exercise-id="${focusedExerciseId}"] [data-log-load]`)?.focus(), 40);
-    return;
-  }
-
   const workoutChoice = event.target.closest("[data-select-workout]");
   if (workoutChoice) {
     selectWorkout(workoutChoice.dataset.selectWorkout);
@@ -1149,62 +1540,6 @@ document.addEventListener("click", (event) => {
   if (filterButton) {
     Store.setScheduleFilter(filterButton.dataset.scheduleFilter);
     renderSchedule();
-  }
-
-  const undoSetButton = event.target.closest("[data-undo-set]");
-  if (undoSetButton) {
-    const exerciseId = undoSetButton.dataset.undoSet;
-    if (setClickLocks.has(exerciseId)) return;
-    const current = Store.getExerciseDone(exerciseId);
-    if (current <= 0) return;
-    lockSetButton(exerciseId, undoSetButton);
-    Store.setExerciseDone(exerciseId, current - 1);
-    stopRestTimer();
-    renderExercises();
-    renderHome();
-    Platform.vibrate(18);
-    Platform.notify("Última série removida.");
-    return;
-  }
-
-  const setButton = event.target.closest("[data-set]");
-  if (setButton) {
-    const exerciseId = setButton.dataset.set;
-    if (setClickLocks.has(exerciseId)) return;
-    const exercise = getCurrentExercises().find((item) => item.id === exerciseId);
-    if (!exercise) return;
-    const total = parseTotalSets(exercise);
-    const current = Store.getExerciseDone(exercise.id);
-    if (current >= total) {
-      Platform.notify("Exercício concluído. Use Corrigir para alterar.");
-      return;
-    }
-    const next = current + 1;
-    lockSetButton(exercise.id, setButton);
-    playSetFeedback(setButton);
-    Store.setExerciseDone(exercise.id, next);
-    setButton.textContent = next >= total ? "Concluído" : `Registrar ${next + 1}/${total}`;
-    setButton.classList.toggle("is-done", next >= total);
-    const exerciseCard = setButton.closest(".exercise");
-    exerciseCard?.classList.toggle("is-complete", next >= total);
-    const exerciseProgress = exerciseCard?.querySelector("[data-exercise-progress]");
-    if (exerciseProgress) exerciseProgress.textContent = `${next}/${total}`;
-    renderWorkoutProgress();
-    renderHome();
-    Platform.vibrate(25);
-    const completedWorkoutSets = getCurrentExercises().reduce((sum, item) => sum + Store.getExerciseDone(item.id), 0);
-    if (completedWorkoutSets < getTotalSets()) startRestTimer(parseRestSeconds(exercise));
-    else stopRestTimer();
-    if (next >= total) {
-      Platform.notify("Exercício concluído. Boa!");
-      if (compactWorkoutQuery.matches) {
-        window.setTimeout(() => {
-          if (Store.getExerciseDone(exercise.id) < total) return;
-          focusedExerciseId = "";
-          renderExercises();
-        }, 760);
-      }
-    }
   }
 
   const reminderButton = event.target.closest("[data-reminder]");
@@ -1223,15 +1558,8 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("input", (event) => {
-  const loadInput = event.target.closest("[data-log-load]");
-  if (loadInput) {
-    Store.setExerciseLog(loadInput.dataset.logLoad, { load: Number(loadInput.value || 0) });
-  }
-
-  const repsInput = event.target.closest("[data-log-reps]");
-  if (repsInput) {
-    Store.setExerciseLog(repsInput.dataset.logReps, { reps: Number(repsInput.value || 0) });
-  }
+  if (event.target.matches("[data-runner-load]")) Store.updateActiveSession({ currentLoad: Number(event.target.value || 0) });
+  if (event.target.matches("[data-runner-reps]")) Store.updateActiveSession({ currentReps: Number(event.target.value || 0) });
 });
 
 document.querySelector("[data-coach-selector]")?.addEventListener("change", (event) => {
@@ -1271,47 +1599,19 @@ document.querySelector("[data-schedule-form]")?.addEventListener("submit", (even
   Platform.notify("Lembrete adicionado.");
 });
 
-sessionCta?.addEventListener("click", () => {
-  const totalSets = getTotalSets();
-  const done = getCurrentExercises().reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
-  if (totalSets > 0 && done >= totalSets) {
-    if (finishDisclosure) finishDisclosure.open = true;
-    finishDisclosure?.scrollIntoView({ behavior: "smooth", block: "center" });
-    window.setTimeout(() => document.querySelector("[data-feedback-effort]")?.focus(), 320);
-    return;
-  }
-
-  const nextExercise = getCurrentExercises().find((exercise) => Store.getExerciseDone(exercise.id) < parseTotalSets(exercise));
-  if (nextExercise && compactWorkoutQuery.matches) {
-    focusedExerciseId = nextExercise.id;
-    renderExercises();
-  }
-  const nextSet = document.querySelector(".exercise .set-button:not(.is-done)");
-  nextSet?.closest(".exercise")?.scrollIntoView({ behavior: "smooth", block: "center" });
-  window.setTimeout(() => nextSet?.focus(), 320);
-});
-
 document.querySelector("[data-finish]")?.addEventListener("click", async (event) => {
-  const totalSets = getTotalSets();
-  const done = getCurrentExercises().reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
-  if (done < totalSets) {
-    Platform.notify("Registre todas as séries antes de finalizar.");
-    return;
-  }
+  const activeSession = getActiveSession();
+  if (!activeSession || getCompletedSessionSets(activeSession) === 0) return;
   const finishButton = event.currentTarget;
   finishButton.disabled = true;
   setFinishStatus("Finalizando treino e enviando ao professor...", "");
   const session = buildWorkoutSessionPayload();
   Store.addSession(session);
-  Store.resetWorkout(currentWorkout.id);
-  focusedExerciseId = "";
-  stopRestTimer();
-  renderAll();
   const result = await sessionRepository.syncSession(session);
   if (result.session) Store.addSession(result.session);
+  previousSessions = [result.session || session, ...previousSessions.filter((item) => item.id !== session.id)];
+  Store.updateActiveSession({ phase: "success", syncStatus: result.synced ? "synced" : "pending" });
   renderAll();
-  currentSessionStartedAt = new Date().toISOString();
-  document.querySelector("[data-finish-feedback]")?.reset();
   setFinishStatus(
     result.synced
       ? "Treino enviado ao professor com cargas, reps e feedback."
@@ -1321,22 +1621,232 @@ document.querySelector("[data-finish]")?.addEventListener("click", async (event)
   finishButton.disabled = false;
   Platform.vibrate([40, 40, 80]);
   Platform.notify(result.synced ? "Treino concluído e enviado ao professor!" : "Treino concluído. Envio pendente.");
-  navigate("progress");
+  document.querySelector("[data-runner-success-copy]").textContent = result.synced
+    ? "Seu personal recebeu as séries e o feedback."
+    : "O treino ficou salvo e será enviado quando a conexão voltar.";
+  renderWorkoutRunner();
 });
 
-document.querySelector("[data-reset-workout]")?.addEventListener("click", () => {
-  const completedSets = getCurrentExercises().reduce((sum, exercise) => sum + Store.getExerciseDone(exercise.id), 0);
-  if (completedSets > 0 && !window.confirm("Reiniciar este treino e apagar as séries registradas?")) return;
-  Store.resetWorkout(currentWorkout.id);
-  focusedExerciseId = "";
-  currentSessionStartedAt = new Date().toISOString();
-  renderExercises();
-  Platform.notify("Registro do treino atual reiniciado.");
-});
+const startCurrentWorkoutSession = () => {
+  if (currentWorkout.id === emptyWorkout.id || !getCurrentExercises().length) return;
+  let activeSession = getActiveSession();
+  if (activeSession && activeSession.workoutId !== currentWorkout.id) {
+    const discard = window.confirm("Existe outro treino em andamento. Descartar esse registro e iniciar o treino selecionado?");
+    if (!discard) {
+      const activeWorkout = availableWorkouts.find((workout) => workout.id === activeSession.workoutId);
+      if (activeWorkout) currentWorkout = activeWorkout;
+      renderAll();
+      navigate("workout/session");
+      return;
+    }
+    Store.clearActiveSession();
+    activeSession = null;
+  }
+  if (!activeSession) activeSession = createActiveSession(currentWorkout);
+  navigate("workout/session");
+};
 
-document.querySelector("[data-skip-rest]")?.addEventListener("click", () => {
-  stopRestTimer();
-  Platform.notify("Descanso encerrado.");
+document.querySelector("[data-start-workout]")?.addEventListener("click", startCurrentWorkoutSession);
+
+workoutRunner?.addEventListener("click", (event) => {
+  const session = getActiveSession();
+  if (!session) return;
+
+  if (event.target.closest("[data-pause-session]")) {
+    navigate("workout");
+    return;
+  }
+
+  if (event.target.closest("[data-open-exercise-sheet]")) {
+    renderRunnerExerciseSheet(session);
+    if (exerciseSheet && !exerciseSheet.open) exerciseSheet.showModal();
+    return;
+  }
+
+  if (event.target.closest("[data-close-exercise-sheet]")) {
+    exerciseSheet.close?.();
+    return;
+  }
+
+  const jumpButton = event.target.closest("[data-runner-jump]");
+  if (jumpButton) {
+    const exercise = findSessionExercise(jumpButton.dataset.runnerJump, session);
+    if (!exercise) return;
+    const completed = getExerciseEntries(exercise?.id, session);
+    const completedNumbers = new Set(completed.map((entry) => Number(entry.setNumber)));
+    let setNumber = 1;
+    while (setNumber <= parseTotalSets(exercise) && completedNumbers.has(setNumber)) setNumber += 1;
+    if (setNumber > parseTotalSets(exercise)) {
+      Platform.notify("Este exercício já foi concluído. Toque em uma série abaixo para corrigir.");
+      return;
+    }
+    Store.updateActiveSession({
+      phase: "exercise",
+      currentExerciseId: exercise.id,
+      currentSetNumber: setNumber,
+      currentLoad: null,
+      currentReps: null,
+      restEndsAt: null
+    });
+    exerciseSheet.close?.();
+    renderWorkoutRunner();
+    return;
+  }
+
+  const editSetButton = event.target.closest("[data-edit-completed-set]");
+  if (editSetButton) {
+    const removed = Store.removeActiveSetEntry(editSetButton.dataset.editCompletedSet, Number(editSetButton.dataset.editSetNumber));
+    if (removed) Store.updateActiveSession({ currentLoad: removed.loadKg, currentReps: removed.reps });
+    exerciseSheet.close?.();
+    renderAll();
+    renderWorkoutRunner();
+    return;
+  }
+
+  const explainButton = event.target.closest("[data-explain]");
+  if (explainButton) {
+    const isRir = explainButton.dataset.explain === "rir";
+    document.querySelector("[data-info-title]").textContent = isRir ? "O que significa RIR?" : "Como ler a cadência?";
+    document.querySelector("[data-info-copy]").textContent = isRir
+      ? "RIR indica quantas repetições você ainda conseguiria fazer ao terminar a série. RIR 2 significa parar sentindo que conseguiria aproximadamente mais duas."
+      : "A cadência mostra o tempo de cada fase do movimento. Em 2-0-2, faça dois segundos na descida, sem pausa e dois segundos na subida.";
+    if (infoDialog && !infoDialog.open) infoDialog.showModal();
+    return;
+  }
+
+  if (event.target.closest("[data-close-info]")) {
+    infoDialog.close?.();
+    return;
+  }
+
+  const completeButton = event.target.closest("[data-complete-runner-set]");
+  if (completeButton) {
+    const exercise = findSessionExercise(session.currentExerciseId, session);
+    const setNumber = Number(session.currentSetNumber || 1);
+    const lockKey = `${exercise?.id}:${setNumber}`;
+    if (!exercise || setClickLocks.has(lockKey)) return;
+    const loadKg = Number(document.querySelector("[data-runner-load]").value || 0);
+    const reps = Number(document.querySelector("[data-runner-reps]").value || 0);
+    if (loadKg < 0 || reps < 1) {
+      Platform.notify("Informe uma carga válida e pelo menos uma repetição.");
+      return;
+    }
+    setClickLocks.add(lockKey);
+    completeButton.disabled = true;
+    completeButton.textContent = "Série registrada";
+    playSetFeedback(completeButton);
+    Store.addActiveSetEntry({
+      exerciseId: exercise.id,
+      exercisePosition: getSessionExercises(session).findIndex((item) => item.id === exercise.id),
+      exerciseName: exercise.name,
+      setNumber,
+      setKind: "working",
+      loadKg,
+      reps,
+      completedAt: new Date().toISOString()
+    });
+    Platform.vibrate(25);
+    renderHome();
+    renderExercises();
+
+    window.setTimeout(() => {
+      const updated = getActiveSession();
+      if (!updated) return;
+      const next = getNextIncompleteTarget(updated, exercise.id);
+      Store.updateActiveSession(next ? {
+        phase: "rest",
+        currentExerciseId: next.exercise.id,
+        currentSetNumber: next.setNumber,
+        currentLoad: null,
+        currentReps: null,
+        restEndsAt: new Date(Date.now() + (parseRestSeconds(exercise) * 1000)).toISOString()
+      } : {
+        phase: "review",
+        currentLoad: null,
+        currentReps: null,
+        restEndsAt: null
+      });
+      renderWorkoutRunner();
+    }, 680);
+    window.setTimeout(() => setClickLocks.delete(lockKey), SET_CLICK_DEBOUNCE_MS);
+    return;
+  }
+
+  if (event.target.closest("[data-correct-last-set]")) {
+    const entries = getExerciseEntries(session.currentExerciseId, session);
+    const last = entries.at(-1);
+    if (!last) return;
+    const removed = Store.removeActiveSetEntry(last.exerciseId, last.setNumber);
+    if (removed) Store.updateActiveSession({ currentLoad: removed.loadKg, currentReps: removed.reps });
+    renderAll();
+    renderWorkoutRunner();
+    Platform.notify("Série aberta para correção.");
+    return;
+  }
+
+  if (event.target.closest("[data-skip-runner-rest]")) {
+    const next = getNextIncompleteTarget(session, session.currentExerciseId);
+    Store.updateActiveSession({ phase: next ? "exercise" : "review", restEndsAt: null });
+    renderWorkoutRunner();
+    return;
+  }
+
+  if (event.target.closest("[data-add-runner-rest]")) {
+    const base = Math.max(Date.now(), new Date(session.restEndsAt || 0).getTime());
+    Store.updateActiveSession({ restEndsAt: new Date(base + 30000).toISOString() });
+    syncRunnerClock();
+    return;
+  }
+
+  if (event.target.closest("[data-request-finish]")) {
+    const done = getCompletedSessionSets(session);
+    const total = getSessionTotalSets(session);
+    if (!done) {
+      if (!window.confirm("Nenhuma série foi registrada. Descartar este treino?")) return;
+      Store.clearActiveSession();
+      renderAll();
+      navigate("workout");
+      return;
+    }
+    if (done < total && !window.confirm(`Encerrar como treino parcial? ${total - done} série(s) ficarão pendentes.`)) return;
+    Store.updateActiveSession({ phase: "review", restEndsAt: null });
+    renderWorkoutRunner();
+    return;
+  }
+
+  if (event.target.closest("[data-return-to-session]")) {
+    const next = getNextIncompleteTarget(session, session.currentExerciseId);
+    if (!next) {
+      renderRunnerExerciseSheet(session);
+      if (exerciseSheet && !exerciseSheet.open) exerciseSheet.showModal();
+      return;
+    }
+    Store.updateActiveSession({
+      phase: "exercise",
+      currentExerciseId: next.exercise.id,
+      currentSetNumber: next.setNumber,
+      currentLoad: null,
+      currentReps: null
+    });
+    renderWorkoutRunner();
+    return;
+  }
+
+  if (event.target.closest("[data-discard-session]")) {
+    if (!window.confirm("Descartar todas as séries registradas neste treino?")) return;
+    exerciseSheet.close?.();
+    Store.clearActiveSession();
+    renderAll();
+    navigate("workout");
+    return;
+  }
+
+  if (event.target.closest("[data-close-success]")) {
+    Store.clearActiveSession();
+    document.querySelector("[data-finish-feedback]")?.reset();
+    renderAll();
+    navigate("progress");
+  }
 });
 
 onboardingForm?.addEventListener("click", async (event) => {
@@ -1391,7 +1901,6 @@ const signOut = async () => {
   upcomingWorkouts = [];
   focusedExerciseId = "";
   setClickLocks.clear();
-  stopRestTimer();
   renderAll();
   syncOnboarding();
   syncAuthMode("signin");
@@ -1442,19 +1951,28 @@ const refreshOnForeground = async () => {
   foregroundRefreshAt = Date.now();
   await applyPublishedBrandTheme();
   await refreshPublishedWorkout({ silent: true });
+  await refreshStudentSessionHistory();
+  const retriedSessions = await retryPendingSessions();
+  if (retriedSessions > 0) {
+    renderAll();
+    if (!workoutRunner.hidden) renderWorkoutRunner();
+    Platform.notify(`${retriedSessions} ${retriedSessions === 1 ? "treino pendente enviado" : "treinos pendentes enviados"}.`);
+  }
 };
 
 window.addEventListener("pageshow", refreshOnForeground);
 window.addEventListener("focus", refreshOnForeground);
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") refreshOnForeground();
+  if (document.visibilityState === "visible") {
+    refreshOnForeground();
+    if (!workoutRunner.hidden) requestRunnerWakeLock();
+  }
 });
 
 syncAuthMode(getInviteToken() ? "signup" : "signin");
 Theme.reset();
 syncThemeControls();
 renderAll();
-renderRestTimer();
 navigate(location.hash.slice(1) || "home", false);
 
 if (Platform.canUseServiceWorker() && "serviceWorker" in navigator) {

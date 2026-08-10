@@ -6,6 +6,7 @@ const createDefaultState = () => ({
   onboarded: false,
   localProfile: {},
   activeWorkoutId: null,
+  activeSession: null,
   setLogs: {},
   exerciseLogs: {},
   progressEntries: [],
@@ -68,8 +69,68 @@ export const Store = {
     };
     this.save();
   },
+  getActiveSession() {
+    return this.state.activeSession && typeof this.state.activeSession === "object"
+      ? this.state.activeSession
+      : null;
+  },
+  startActiveSession(session) {
+    this.state.activeWorkoutId = session.workoutId || null;
+    this.state.activeSession = {
+      ...session,
+      setEntries: Array.isArray(session.setEntries) ? session.setEntries : []
+    };
+    this.save();
+    return this.state.activeSession;
+  },
+  updateActiveSession(patch = {}) {
+    const current = this.getActiveSession();
+    if (!current) return null;
+    this.state.activeSession = { ...current, ...patch };
+    this.save();
+    return this.state.activeSession;
+  },
+  addActiveSetEntry(entry) {
+    const current = this.getActiveSession();
+    if (!current) return null;
+    const entries = Array.isArray(current.setEntries) ? current.setEntries : [];
+    this.state.activeSession = {
+      ...current,
+      setEntries: [...entries.filter((item) => !(
+        item.exerciseId === entry.exerciseId && Number(item.setNumber) === Number(entry.setNumber)
+      )), entry].sort((a, b) => Number(a.exercisePosition || 0) - Number(b.exercisePosition || 0)
+        || Number(a.setNumber || 0) - Number(b.setNumber || 0))
+    };
+    this.save();
+    return entry;
+  },
+  removeActiveSetEntry(exerciseId, setNumber) {
+    const current = this.getActiveSession();
+    if (!current) return null;
+    const entries = Array.isArray(current.setEntries) ? current.setEntries : [];
+    const target = entries.find((item) => item.exerciseId === exerciseId && Number(item.setNumber) === Number(setNumber));
+    if (!target) return null;
+    this.state.activeSession = {
+      ...current,
+      setEntries: entries.filter((item) => item !== target),
+      phase: "exercise",
+      currentExerciseId: exerciseId,
+      currentSetNumber: Number(setNumber),
+      restEndsAt: null
+    };
+    this.save();
+    return target;
+  },
+  clearActiveSession() {
+    this.state.activeSession = null;
+    this.state.activeWorkoutId = null;
+    this.state.setLogs = {};
+    this.state.exerciseLogs = {};
+    this.save();
+  },
   resetWorkout(workoutId) {
     this.state.activeWorkoutId = workoutId;
+    this.state.activeSession = null;
     this.state.setLogs = {};
     this.state.exerciseLogs = {};
     this.save();
@@ -81,6 +142,15 @@ export const Store = {
     ].slice(0, 12);
     this.state.setLogs = {};
     this.state.exerciseLogs = {};
+    this.save();
+  },
+  setSessions(sessions = []) {
+    const merged = new Map([...(this.state.sessions || []), ...sessions]
+      .filter(Boolean)
+      .map((session) => [session.id, session]));
+    this.state.sessions = [...merged.values()]
+      .sort((a, b) => new Date(b.finishedAt || 0) - new Date(a.finishedAt || 0))
+      .slice(0, 20);
     this.save();
   },
   getProgressEntries(defaultEntries = []) {

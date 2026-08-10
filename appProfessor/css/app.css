@@ -1145,7 +1145,7 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
 .workout-preview__list {
   display: grid;
   gap: var(--space-2);
-  max-height: 15rem;
+  max-height: 32rem;
   overflow: auto;
   padding-right: var(--space-1);
 }
@@ -1200,6 +1200,63 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   font-style: normal;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.workout-preview__item--editable {
+  align-items: start;
+}
+
+.workout-preview__exercise-main {
+  min-width: 0;
+}
+
+.exercise-detail-editor {
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--color-line);
+  padding-top: var(--space-2);
+}
+
+.exercise-detail-editor > summary {
+  color: var(--color-accent);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: 850;
+  list-style-position: inside;
+}
+
+.exercise-detail-editor[open] > summary {
+  margin-bottom: var(--space-2);
+}
+
+.exercise-detail-editor label {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 800;
+}
+
+.exercise-detail-editor input,
+.exercise-detail-editor textarea {
+  width: 100%;
+  color: var(--color-text);
+}
+
+.exercise-detail-editor textarea {
+  min-height: 4.4rem;
+  resize: vertical;
+}
+
+.exercise-detail-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.exercise-detail-editor .field-help {
+  display: block;
+  margin-top: var(--space-1);
 }
 
 .workout-card {
@@ -1886,6 +1943,10 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
 }
 
 @media (max-width: 760px) {
+  .exercise-detail-editor__grid {
+    grid-template-columns: 1fr;
+  }
+
   :root {
     --admin-page-padding: clamp(0.72rem, 3.2vw, 0.95rem);
     --admin-control-height: 2.65rem;

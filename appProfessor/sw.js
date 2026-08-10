@@ -1,10 +1,10 @@
-const CACHE_NAME = "flowfit-professor-v24";
+const CACHE_NAME = "flowfit-professor-v26";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./css/app.css?v=build-20260809-11",
-  "./js/app.js?v=build-20260809-12",
+  "./css/app.css?v=build-20260810-12",
+  "./js/app.js?v=build-20260810-14",
   "../appAluno/assets/icons/app-icon.svg",
   "../appAluno/css/tokens.css?v=build-20260809-7",
   "../appAluno/css/components.css?v=build-20260809-8",
@@ -16,8 +16,8 @@ const APP_SHELL = [
   "../appAluno/js/data/repositories/auth-repository.js?v=build-20260809-6",
   "../appAluno/js/data/repositories/student-repository.js?v=build-20260809-6",
   "../appAluno/js/data/repositories/theme-repository.js?v=build-20260809-7",
-  "../appAluno/js/data/repositories/workout-repository.js?v=build-20260809-6",
-  "../appAluno/js/data/repositories/session-repository.js?v=build-20260809-6"
+  "../appAluno/js/data/repositories/workout-repository.js?v=build-20260810-8",
+  "../appAluno/js/data/repositories/session-repository.js?v=build-20260810-8"
 ];
 
 self.addEventListener("install", (event) => {

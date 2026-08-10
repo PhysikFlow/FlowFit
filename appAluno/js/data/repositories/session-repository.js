@@ -31,7 +31,11 @@ const readCachedSessions = () => {
 const writeCachedSessions = (sessions) => Platform.storage.set(WORKOUT_SESSIONS_KEY, sessions);
 
 const normalizeSetLog = (log = {}, index = 0, sessionId = "session") => {
-  const completedSets = normalizeNumber(log.completedSets);
+  const rawSetNumber = log.setNumber ?? log.set_number;
+  const setNumber = rawSetNumber === null || rawSetNumber === undefined || rawSetNumber === ""
+    ? null
+    : Math.max(1, normalizeNumber(rawSetNumber, 1));
+  const completedSets = normalizeNumber(log.completedSets, setNumber ? 1 : 0);
   const loadKg = normalizeNumber(log.loadKg);
   const reps = normalizeNumber(log.reps);
 
@@ -51,19 +55,27 @@ const normalizeSetLog = (log = {}, index = 0, sessionId = "session") => {
     reps,
     volumeKg: normalizeNumber(log.volumeKg, completedSets * loadKg * reps),
     rir: normalizeText(log.rir),
-    notes: normalizeText(log.notes)
+    notes: normalizeText(log.notes),
+    setNumber,
+    setKind: normalizeText(log.setKind || log.set_kind, "working"),
+    completedAt: log.completedAt || log.completed_at
+      ? normalizeDate(log.completedAt || log.completed_at)
+      : null
   };
 };
 
-const normalizeFeedback = (feedback = {}, sessionId = "session") => ({
-  id: normalizeText(feedback.id, `${sessionId}-feedback`),
-  sessionId: normalizeText(feedback.sessionId, sessionId),
-  coachId: normalizeText(feedback.coachId),
-  studentId: normalizeText(feedback.studentId),
-  effort: normalizeText(feedback.effort, "ok"),
-  pain: normalizeText(feedback.pain, "none"),
-  note: normalizeText(feedback.note)
-});
+const normalizeFeedback = (feedback = {}, sessionId = "session") => {
+  const value = feedback && typeof feedback === "object" ? feedback : {};
+  return {
+    id: normalizeText(value.id, `${sessionId}-feedback`),
+    sessionId: normalizeText(value.sessionId, sessionId),
+    coachId: normalizeText(value.coachId),
+    studentId: normalizeText(value.studentId),
+    effort: normalizeText(value.effort, "ok"),
+    pain: normalizeText(value.pain, "none"),
+    note: normalizeText(value.note)
+  };
+};
 
 export const normalizeWorkoutSession = (session = {}) => {
   const id = normalizeText(session.id, `session-${Date.now()}`);
@@ -133,7 +145,10 @@ const toSetLogRow = (log, session) => ({
   reps: log.reps,
   volume_kg: log.volumeKg,
   rir: log.rir,
-  notes: log.notes
+  notes: log.notes,
+  set_number: log.setNumber,
+  set_kind: log.setKind,
+  completed_at: log.completedAt
 });
 
 const toFeedbackRow = (feedback, session) => ({
@@ -189,7 +204,10 @@ const fromRows = (row, setLogs = [], feedback = null) => normalizeWorkoutSession
     reps: log.reps,
     volumeKg: log.volume_kg,
     rir: log.rir,
-    notes: log.notes
+    notes: log.notes,
+    setNumber: log.set_number,
+    setKind: log.set_kind,
+    completedAt: log.completed_at
   }))
 });
 
@@ -292,6 +310,73 @@ export const sessionRepository = {
       failedCount: Math.max(0, pending.length - syncedCount),
       sessions
     };
+  },
+
+  async fetchStudentSessions({ studentId = "", coachId = "", workoutId = "", limit = 20 } = {}) {
+    const resolvedStudentId = normalizeText(studentId);
+    const resolvedCoachId = normalizeText(coachId);
+    const resolvedWorkoutId = normalizeText(workoutId);
+    const localSessions = this.listCachedSessions().filter((session) => (
+      (!resolvedStudentId || session.studentId === resolvedStudentId)
+      && (!resolvedCoachId || session.coachId === resolvedCoachId)
+      && (!resolvedWorkoutId || session.workoutId === resolvedWorkoutId)
+    ));
+    const client = await getSupabase();
+    const authContext = await authRepository.getAuthContext();
+    if (!client || !authContext?.user || !authRepository.canAccessStudent(authContext)) {
+      return { synced: false, reason: "not-authenticated-as-student", sessions: localSessions };
+    }
+    if (!resolvedStudentId || !resolvedCoachId) {
+      return { synced: false, reason: "student-scope-required", sessions: localSessions };
+    }
+
+    try {
+      let query = client
+        .from(SESSIONS_TABLE)
+        .select("*")
+        .eq("student_id", resolvedStudentId)
+        .eq("coach_id", resolvedCoachId)
+        .order("finished_at", { ascending: false })
+        .limit(Math.max(1, Math.min(80, Number(limit) || 20)));
+      if (resolvedWorkoutId) query = query.eq("workout_id", resolvedWorkoutId);
+
+      const { data: sessionsData, error: sessionsError } = await query;
+      if (sessionsError) throw sessionsError;
+      const ids = (sessionsData || []).map((session) => session.id);
+      if (!ids.length) return { synced: true, sessions: localSessions };
+
+      const [{ data: logsData, error: logsError }, { data: feedbackData, error: feedbackError }] = await Promise.all([
+        client.from(SET_LOGS_TABLE).select("*").in("session_id", ids).order("position", { ascending: true }),
+        client.from(FEEDBACK_TABLE).select("*").in("session_id", ids)
+      ]);
+      if (logsError) throw logsError;
+      if (feedbackError) throw feedbackError;
+
+      const logsBySession = new Map();
+      (logsData || [])
+        .sort((a, b) => Number(a.position || 0) - Number(b.position || 0)
+          || Number(a.set_number || 0) - Number(b.set_number || 0))
+        .forEach((log) => {
+          const items = logsBySession.get(log.session_id) || [];
+          items.push(log);
+          logsBySession.set(log.session_id, items);
+        });
+      const feedbackBySession = new Map((feedbackData || []).map((feedback) => [feedback.session_id, feedback]));
+      const cloudSessions = (sessionsData || []).map((session) => fromRows(
+        session,
+        logsBySession.get(session.id) || [],
+        feedbackBySession.get(session.id) || null
+      ));
+      const merged = new Map([...localSessions, ...cloudSessions].map((session) => [session.id, session]));
+      return {
+        synced: true,
+        sessions: [...merged.values()]
+          .sort((a, b) => new Date(b.finishedAt || 0) - new Date(a.finishedAt || 0))
+          .slice(0, Math.max(1, Math.min(80, Number(limit) || 20)))
+      };
+    } catch (error) {
+      return { synced: false, error, sessions: localSessions };
+    }
   },
 
   async fetchCoachSessions({ studentId = "", limit = 80 } = {}) {

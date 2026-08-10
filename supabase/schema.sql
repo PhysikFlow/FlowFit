@@ -107,6 +107,8 @@ create table if not exists public.workout_exercises (
   tempo        text not null default '2-0-2',
   rir          text not null default '2',
   notes        text not null default 'Criado no painel do professor.',
+  instructions text not null default '',
+  media_url    text not null default '' check (media_url = '' or media_url ~* '^https://'),
   updated_at   timestamptz not null default now()
 );
 
@@ -148,6 +150,9 @@ create table if not exists public.workout_set_logs (
   volume_kg      numeric not null default 0 check (volume_kg >= 0),
   rir            text not null default '',
   notes          text not null default '',
+  set_number     integer check (set_number is null or set_number > 0),
+  set_kind       text not null default 'working',
+  completed_at   timestamptz,
   created_at     timestamptz not null default now()
 );
 
@@ -227,6 +232,39 @@ alter table public.workout_sessions alter column coach_id drop default;
 alter table public.workout_set_logs alter column coach_id drop default;
 alter table public.workout_feedback alter column coach_id drop default;
 
+alter table public.workout_exercises
+  add column if not exists instructions text not null default '',
+  add column if not exists media_url text not null default '';
+
+alter table public.workout_set_logs
+  add column if not exists set_number integer,
+  add column if not exists set_kind text not null default 'working',
+  add column if not exists completed_at timestamptz;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'workout_exercises_media_url_https_check'
+      and conrelid = 'public.workout_exercises'::regclass
+  ) then
+    alter table public.workout_exercises
+      add constraint workout_exercises_media_url_https_check
+      check (media_url = '' or media_url ~* '^https://');
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'workout_set_logs_set_number_check'
+      and conrelid = 'public.workout_set_logs'::regclass
+  ) then
+    alter table public.workout_set_logs
+      add constraint workout_set_logs_set_number_check
+      check (set_number is null or set_number > 0);
+  end if;
+end
+$$;
+
 alter table public.students
   drop constraint if exists students_coach_id_student_key_key;
 
@@ -276,6 +314,10 @@ create index if not exists workout_sessions_workout_finished_idx
 
 create index if not exists workout_set_logs_session_position_idx
   on public.workout_set_logs (session_id, position);
+
+create unique index if not exists workout_set_logs_session_exercise_set_idx
+  on public.workout_set_logs (session_id, exercise_id, set_number)
+  where set_number is not null and exercise_id is not null;
 
 create index if not exists workout_feedback_session_idx
   on public.workout_feedback (session_id);
@@ -595,7 +637,7 @@ begin
   loop
     insert into public.workout_exercises (
       id, workout_id, coach_id, position, name, target, prescription,
-      load, rest, tempo, rir, notes, updated_at
+      load, rest, tempo, rir, notes, instructions, media_url, updated_at
     ) values (
       trim(coalesce(v_exercise ->> 'id', v_workout_id || '-ex-' || v_count::text)),
       v_workout_id,
@@ -609,6 +651,8 @@ begin
       trim(coalesce(v_exercise ->> 'tempo', '2-0-2')),
       trim(coalesce(v_exercise ->> 'rir', '2')),
       trim(coalesce(v_exercise ->> 'notes', 'Criado no painel do professor.')),
+      trim(coalesce(v_exercise ->> 'instructions', '')),
+      trim(coalesce(v_exercise ->> 'media_url', '')),
       now()
     );
     v_count := v_count + 1;

@@ -2,6 +2,24 @@
 -- leitura do personal vinculado. Nao apaga nem recria dados existentes.
 -- Rode este arquivo inteiro no SQL Editor do mesmo projeto usado pelo app.
 
+alter table public.workout_exercises
+  add column if not exists instructions text not null default '',
+  add column if not exists media_url text not null default '';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'workout_exercises_media_url_https_check'
+      and conrelid = 'public.workout_exercises'::regclass
+  ) then
+    alter table public.workout_exercises
+      add constraint workout_exercises_media_url_https_check
+      check (media_url = '' or media_url ~* '^https://');
+  end if;
+end
+$$;
+
 drop index if exists public.students_coach_email_unique_idx;
 create unique index students_coach_email_unique_idx
   on public.students (coach_id, lower(trim(email)))
@@ -236,7 +254,7 @@ begin
   for v_exercise in select value from jsonb_array_elements(p_exercises)
   loop
     insert into public.workout_exercises (
-      id, workout_id, coach_id, position, name, target, prescription, load, rest, tempo, rir, notes, updated_at
+      id, workout_id, coach_id, position, name, target, prescription, load, rest, tempo, rir, notes, instructions, media_url, updated_at
     ) values (
       trim(coalesce(v_exercise ->> 'id', v_workout_id || '-ex-' || v_count::text)),
       v_workout_id, v_coach_id, v_count,
@@ -247,7 +265,9 @@ begin
       trim(coalesce(v_exercise ->> 'rest', '60s')),
       trim(coalesce(v_exercise ->> 'tempo', '2-0-2')),
       trim(coalesce(v_exercise ->> 'rir', '2')),
-      trim(coalesce(v_exercise ->> 'notes', 'Criado no painel do professor.')), now()
+      trim(coalesce(v_exercise ->> 'notes', 'Criado no painel do professor.')),
+      trim(coalesce(v_exercise ->> 'instructions', '')),
+      trim(coalesce(v_exercise ->> 'media_url', '')), now()
     );
     v_count := v_count + 1;
   end loop;
