@@ -120,6 +120,14 @@ O app do aluno carrega:
 3. personal selecionado e seus treinos A/B/C ativos;
 4. estado vazio real se nada foi publicado.
 
+## Modo de treino focado
+
+Em bancos existentes, execute `supabase/focused-workout-mode.sql` depois das migrations anteriores. O arquivo é incremental: preserva treinos e sessões antigas, adiciona tipo de mídia, identificação da ocorrência do exercício, desconforto por exercício e a RPC transacional `sync_workout_session`.
+
+O fluxo do aluno agora separa visão geral, execução, descanso e resumo. A sessão usa estados explícitos (`active`, `resting`, `paused`, `awaiting_summary`, `pending_sync`, `completed` e `discarded`), guarda um snapshot da prescrição e pode ser retomada no mesmo aparelho enquanto os dados da origem permanecerem disponíveis. O rascunho é espelhado em IndexedDB e o app solicita armazenamento persistente quando o navegador oferece esse recurso.
+
+Ao finalizar, sessão, séries e feedback são confirmados na mesma transação. Os IDs são estáveis para permitir reenvio após timeout sem duplicar treino ou volume. Séries novas são a fonte da verdade; os registros agregados antigos continuam legíveis.
+
 ## Roteiro manual curto
 
 1. Cadastre um aluno com email, publique A, B e C e confirme que os três aparecem no app do aluno.

@@ -4,8 +4,8 @@ import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrast
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260809-6";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260809-6";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260809-7";
-import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260810-8";
-import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260810-8";
+import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260811-1";
+import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260811-1";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -1247,7 +1247,7 @@ const resetWorkoutFormMode = ({ resetForm = false } = {}) => {
 const aggregateSessionLogs = (logs = []) => {
   const grouped = new Map();
   logs.forEach((log) => {
-    const key = log.exerciseId || `${log.position}-${log.exerciseName}`;
+    const key = log.workoutExerciseId || log.exerciseId || `${log.position}-${log.exerciseName}`;
     const current = grouped.get(key) || { ...log, completedSets: 0, entries: [] };
     if (log.setNumber) {
       current.completedSets += 1;
@@ -1287,7 +1287,7 @@ const renderStudentSessionPanel = () => {
     const setRows = aggregateSessionLogs(session.setLogs || []).slice(0, 8).map((log) => {
       const individualSets = log.entries.filter((entry) => entry.setNumber);
       const detail = individualSets.length
-        ? individualSets.map((entry) => `${entry.loadKg}kg × ${entry.reps}`).join(" · ")
+        ? individualSets.map((entry) => `${entry.loadKg}kg × ${entry.reps}${entry.discomfort && entry.discomfort !== "none" ? " · ⚠ desconforto" : ""}`).join(" · ")
         : `${log.loadKg}kg × ${log.reps}`;
       return `
         <article class="session-log-row">
@@ -1450,7 +1450,8 @@ const getWorkoutDraft = () => {
         rir: previous.rir,
         notes: previous.notes,
         instructions: previous.instructions,
-        mediaUrl: previous.mediaUrl
+        mediaUrl: previous.mediaUrl,
+        mediaType: previous.mediaType
       } : {}),
       parsed: /\d+\s*x\s*.+/i.test(line)
     };
@@ -1496,6 +1497,15 @@ const renderWorkoutPreview = () => {
             <label>Cadência<input name="draft-tempo-${index}" value="${escapeHtml(exercise.tempo)}" data-draft-exercise-field="tempo" data-draft-exercise-index="${index}" placeholder="2-0-2" /></label>
           </div>
           <label>Instrução curta<textarea name="draft-instructions-${index}" rows="2" maxlength="240" data-draft-exercise-field="instructions" data-draft-exercise-index="${index}" placeholder="Ex: mantenha as escápulas apoiadas">${escapeHtml(exercise.instructions || "")}</textarea></label>
+          <label>Tipo da demonstração
+            <select name="draft-media-type-${index}" data-draft-exercise-field="mediaType" data-draft-exercise-index="${index}">
+              <option value="none" ${!exercise.mediaType || exercise.mediaType === "none" ? "selected" : ""}>Sem mídia</option>
+              <option value="image" ${exercise.mediaType === "image" ? "selected" : ""}>Imagem ou GIF</option>
+              <option value="video" ${exercise.mediaType === "video" ? "selected" : ""}>Vídeo direto</option>
+              <option value="youtube" ${exercise.mediaType === "youtube" ? "selected" : ""}>YouTube</option>
+              <option value="external" ${exercise.mediaType === "external" ? "selected" : ""}>Link externo</option>
+            </select>
+          </label>
           <label>URL da demonstração<input type="url" name="draft-media-${index}" value="${escapeHtml(exercise.mediaUrl || "")}" data-draft-exercise-field="mediaUrl" data-draft-exercise-index="${index}" placeholder="https://..." /></label>
           <small class="field-help">Aceita HTTPS, incluindo YouTube, imagem, GIF ou vídeo direto.</small>
         </details>

@@ -38,6 +38,7 @@ const CLOUD_WORKOUT_SELECT = `
     notes,
     instructions,
     media_url,
+    media_type,
     updated_at
   )
 `;
@@ -69,6 +70,7 @@ const LEGACY_CLOUD_WORKOUT_SELECT = `
     notes,
     instructions,
     media_url,
+    media_type,
     updated_at
   )
 `;
@@ -81,7 +83,8 @@ const DEFAULT_EXERCISE = {
   rir: "2",
   notes: "Criado no painel do professor.",
   instructions: "",
-  mediaUrl: ""
+  mediaUrl: "",
+  mediaType: "none"
 };
 
 const normalizeText = (value, fallback = "") => {
@@ -160,6 +163,13 @@ const initialsFromName = (name) => normalizeText(name, "Aluno")
 
 const fallbackStudentIdFromKey = (studentKey) => `student-${studentKey}`;
 
+const VALID_MEDIA_TYPES = new Set(["none", "image", "video", "youtube", "external"]);
+const normalizeMediaType = (value, mediaUrl = "") => {
+  const normalized = normalizeText(value).toLowerCase();
+  if (VALID_MEDIA_TYPES.has(normalized)) return normalized;
+  return mediaUrl ? "external" : "none";
+};
+
 const normalizeExercise = (exercise, index = 0, workoutId = "workout") => ({
   ...DEFAULT_EXERCISE,
   ...exercise,
@@ -167,7 +177,8 @@ const normalizeExercise = (exercise, index = 0, workoutId = "workout") => ({
   name: normalizeText(exercise?.name, `Exercício ${index + 1}`),
   prescription: normalizeText(exercise?.prescription, "3 x 10"),
   instructions: normalizeText(exercise?.instructions),
-  mediaUrl: normalizeText(exercise?.mediaUrl || exercise?.media_url)
+  mediaUrl: normalizeText(exercise?.mediaUrl || exercise?.media_url),
+  mediaType: normalizeMediaType(exercise?.mediaType || exercise?.media_type, exercise?.mediaUrl || exercise?.media_url)
 });
 
 const normalizeWorkout = (workout) => {
@@ -336,6 +347,7 @@ const toExerciseRows = (workout, authContext) => workout.exercises.map((exercise
   notes: exercise.notes,
   instructions: exercise.instructions,
   media_url: exercise.mediaUrl,
+  media_type: exercise.mediaType,
   updated_at: workout.updatedAt
 }));
 
@@ -370,7 +382,8 @@ const toAppWorkout = (row) => normalizeWorkout({
       rir: exercise.rir,
       notes: exercise.notes,
       instructions: exercise.instructions,
-      mediaUrl: exercise.media_url
+      mediaUrl: exercise.media_url,
+      mediaType: exercise.media_type
     }))
 });
 

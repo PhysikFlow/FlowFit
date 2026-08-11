@@ -1497,6 +1497,23 @@ body.has-workout-runner > .toast { visibility: hidden; }
   color: var(--color-danger);
 }
 
+.runner-secondary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.runner-discomfort-dialog form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.runner-discomfort-dialog h2 {
+  margin: 0;
+}
+
 .theme-controls {
   display: grid;
   gap: var(--space-3);

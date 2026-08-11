@@ -10,8 +10,8 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="css/tokens.css?v=build-20260809-7" />
     <link rel="stylesheet" href="css/components.css?v=build-20260809-8" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260810-9" />
-    <script type="module" src="js/app.js?v=build-20260810-11"></script>
+    <link rel="stylesheet" href="css/app.css?v=build-20260811-1" />
+    <script type="module" src="js/app.js?v=build-20260811-1"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title" aria-busy="true">
@@ -299,7 +299,10 @@
           </div>
 
           <button class="set-button runner-complete-set" type="button" data-complete-runner-set>Concluir série</button>
-          <button class="text-button runner-correct" type="button" data-correct-last-set hidden>Corrigir última série</button>
+          <div class="runner-secondary-actions">
+            <button class="text-button runner-correct" type="button" data-correct-last-set hidden>Corrigir última série</button>
+            <button class="text-button" type="button" data-report-discomfort>Senti desconforto</button>
+          </div>
         </section>
 
         <section class="runner-phase runner-rest" data-runner-phase="rest" hidden aria-live="polite">
@@ -325,7 +328,7 @@
             <span><strong data-review-duration>0 min</strong><small>duração</small></span>
             <span><strong data-review-sets>0/0</strong><small>séries</small></span>
             <span><strong data-review-volume>0 kg</strong><small>volume</small></span>
-            <span><strong data-review-progressions>0</strong><small>progressões</small></span>
+            <span><strong data-review-progressions>0</strong><small>melhores desempenhos</small></span>
           </section>
           <p class="runner-review__progressions" data-review-progression-list hidden></p>
           <form class="finish-feedback runner-feedback" data-finish-feedback>
@@ -373,6 +376,26 @@
         <h2 id="runner-info-title" data-info-title>Como interpretar</h2>
         <p data-info-copy></p>
         <button class="button button--block" type="button" data-close-info>Entendi</button>
+      </dialog>
+
+      <dialog class="runner-info-dialog runner-discomfort-dialog" data-discomfort-dialog aria-labelledby="discomfort-title">
+        <form method="dialog" data-discomfort-form>
+          <h2 id="discomfort-title">Registrar desconforto</h2>
+          <label>Intensidade
+            <select name="severity">
+              <option value="mild">Leve desconforto</option>
+              <option value="pain">Dor</option>
+              <option value="none">Remover registro</option>
+            </select>
+          </label>
+          <label>Onde ou como sentiu?
+            <textarea name="note" rows="3" maxlength="300" placeholder="Ex.: incômodo no ombro direito"></textarea>
+          </label>
+          <div class="button-group button-group--inline">
+            <button class="button button--quiet" value="cancel">Cancelar</button>
+            <button class="button" value="save" data-save-discomfort>Salvar</button>
+          </div>
+        </form>
       </dialog>
     </section>
 

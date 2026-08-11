@@ -45,6 +45,7 @@ const normalizeSetLog = (log = {}, index = 0, sessionId = "session") => {
     coachId: normalizeText(log.coachId),
     workoutId: normalizeText(log.workoutId),
     exerciseId: normalizeText(log.exerciseId),
+    workoutExerciseId: normalizeText(log.workoutExerciseId || log.workout_exercise_id || log.exerciseId),
     position: normalizeNumber(log.position, index),
     exerciseName: normalizeText(log.exerciseName, `Exercício ${index + 1}`),
     target: normalizeText(log.target, "Personalizado"),
@@ -60,7 +61,9 @@ const normalizeSetLog = (log = {}, index = 0, sessionId = "session") => {
     setKind: normalizeText(log.setKind || log.set_kind, "working"),
     completedAt: log.completedAt || log.completed_at
       ? normalizeDate(log.completedAt || log.completed_at)
-      : null
+      : null,
+    discomfort: normalizeText(log.discomfort, "none"),
+    discomfortNote: normalizeText(log.discomfortNote || log.discomfort_note)
   };
 };
 
@@ -135,6 +138,7 @@ const toSetLogRow = (log, session) => ({
   coach_id: session.coachId,
   workout_id: session.workoutId || null,
   exercise_id: log.exerciseId || null,
+  workout_exercise_id: log.workoutExerciseId || log.exerciseId || null,
   position: log.position,
   exercise_name: log.exerciseName,
   target: log.target,
@@ -148,7 +152,9 @@ const toSetLogRow = (log, session) => ({
   notes: log.notes,
   set_number: log.setNumber,
   set_kind: log.setKind,
-  completed_at: log.completedAt
+  completed_at: log.completedAt,
+  discomfort: log.discomfort,
+  discomfort_note: log.discomfortNote
 });
 
 const toFeedbackRow = (feedback, session) => ({
@@ -194,6 +200,7 @@ const fromRows = (row, setLogs = [], feedback = null) => normalizeWorkoutSession
     coachId: log.coach_id,
     workoutId: log.workout_id,
     exerciseId: log.exercise_id,
+    workoutExerciseId: log.workout_exercise_id || log.exercise_id,
     position: log.position,
     exerciseName: log.exercise_name,
     target: log.target,
@@ -207,7 +214,9 @@ const fromRows = (row, setLogs = [], feedback = null) => normalizeWorkoutSession
     notes: log.notes,
     setNumber: log.set_number,
     setKind: log.set_kind,
-    completedAt: log.completed_at
+    completedAt: log.completed_at,
+    discomfort: log.discomfort,
+    discomfortNote: log.discomfort_note
   }))
 });
 
@@ -250,23 +259,13 @@ export const sessionRepository = {
     }
 
     try {
-      const { error: sessionError } = await client
-        .from(SESSIONS_TABLE)
-        .upsert(toSessionRow(normalized), { onConflict: "id" });
-      if (sessionError) throw sessionError;
-
       const rows = normalized.setLogs.map((log) => toSetLogRow(log, normalized));
-      if (rows.length) {
-        const { error: setError } = await client
-          .from(SET_LOGS_TABLE)
-          .upsert(rows, { onConflict: "id" });
-        if (setError) throw setError;
-      }
-
-      const { error: feedbackError } = await client
-        .from(FEEDBACK_TABLE)
-        .upsert(toFeedbackRow(normalized.feedback, normalized), { onConflict: "id" });
-      if (feedbackError) throw feedbackError;
+      const { error } = await client.rpc("sync_workout_session", {
+        p_session: toSessionRow(normalized),
+        p_set_logs: rows,
+        p_feedback: toFeedbackRow(normalized.feedback, normalized)
+      });
+      if (error) throw error;
 
       const synced = upsertLocalSession({
         ...normalized,
@@ -277,7 +276,7 @@ export const sessionRepository = {
     } catch (error) {
       const failed = upsertLocalSession({
         ...normalized,
-        syncStatus: "failed",
+        syncStatus: "pending",
         syncMessage: error?.message || "Não foi possível enviar o treino ao professor."
       });
       return { synced: false, error, session: failed };
