@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260809-7" />
     <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260809-8" />
     <link rel="stylesheet" href="css/app.css?v=build-20260811-1" />
-    <script type="module" src="js/app.js?v=build-20260811-1"></script>
+    <script type="module" src="js/app.js?v=build-20260811-2"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title" aria-busy="true">
@@ -497,35 +497,13 @@
         window.addEventListener("error", (event) => rememberError(`${event.message} @ ${event.filename}:${event.lineno}:${event.colno}`));
         window.addEventListener("unhandledrejection", (event) => rememberError(event.reason));
 
-        const pageTitles = {
-          dashboard: "Dashboard",
-          students: "Alunos",
-          workouts: "Treinos",
-          appearance: "Aparência",
-          profile: "Perfil"
-        };
-
-        const navigate = (name, updateHash = true) => {
-          const pages = [...document.querySelectorAll("[data-page]")];
-          const destination = pages.some((page) => page.dataset.page === name) ? name : "dashboard";
-          pages.forEach((page) => page.classList.toggle("is-active", page.dataset.page === destination));
-          document.querySelectorAll("[data-nav]").forEach((item) => {
-            const active = item.dataset.nav === destination;
-            item.classList.toggle("is-active", active);
-            if (active) item.setAttribute("aria-current", "page");
-            else item.removeAttribute("aria-current");
-          });
-          const title = document.querySelector("[data-page-title]");
-          if (title) title.textContent = pageTitles[destination] || "Painel";
-          if (updateHash) history.replaceState(null, "", `#${destination}`);
-        };
-
         const showFallbackNotice = () => {
-          const message = "Não foi possível carregar o painel. Verifique sua conexão e recarregue a página.";
-          document.querySelectorAll(".form-status").forEach((status) => {
-            status.textContent = message;
-            status.classList.add("is-warning");
-          });
+          const message = "Não foi possível carregar os recursos de autenticação. Verifique sua conexão e recarregue a página.";
+          const authStatus = document.querySelector("[data-auth-status]");
+          if (authStatus) {
+            authStatus.textContent = message;
+            authStatus.classList.add("is-warning");
+          }
           const toast = document.querySelector("[data-toast]");
           if (!toast) return;
           toast.textContent = message;
@@ -536,26 +514,18 @@
         const installFallback = () => {
           if (window.FlowFitProfessorReady) return;
           document.body.dataset.professorFallback = "true";
-          document.querySelectorAll("[data-nav]").forEach((item) => item.addEventListener("click", (event) => {
-            event.preventDefault();
-            navigate(item.dataset.nav);
-          }));
-          document.querySelectorAll("[data-nav-jump]").forEach((button) => button.addEventListener("click", () => {
-            navigate(button.dataset.navJump);
-            if (button.hasAttribute("data-focus-workout-form")) {
-              window.setTimeout(() => document.querySelector("[data-workout-form]")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
-            }
-          }));
-          document.querySelector("[data-scroll-workout-form]")?.addEventListener("click", (event) => {
-            event.preventDefault();
-            document.querySelector("[data-workout-form]")?.scrollIntoView({ behavior: "smooth", block: "start" });
-          });
-          navigate(location.hash.slice(1) || "dashboard", false);
+          document.body.classList.add("is-auth-locked");
+          document.querySelector("[data-auth-gate]")?.classList.remove("is-hidden");
+          const sessionCheck = document.querySelector("[data-auth-session-check]");
+          const authForm = document.querySelector("[data-auth-form]");
+          if (sessionCheck) sessionCheck.hidden = true;
+          if (authForm) authForm.hidden = false;
+          document.querySelector("[data-auth-gate]")?.setAttribute("aria-busy", "false");
           showFallbackNotice();
         };
 
         document.addEventListener("DOMContentLoaded", () => {
-          window.setTimeout(installFallback, 900);
+          window.setTimeout(installFallback, 8000);
         });
       })();
     </script>

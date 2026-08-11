@@ -2,6 +2,10 @@ const DB_NAME = "flowfit-session-drafts";
 const DB_VERSION = 1;
 const STORE_NAME = "drafts";
 
+const warnStorageFailure = (operation, error) => {
+  console.warn(`[FlowFit][aluno][armazenamento opcional] Falha ao ${operation}.`, error);
+};
+
 const openDatabase = () => new Promise((resolve, reject) => {
   if (!globalThis.indexedDB) {
     resolve(null);
@@ -31,9 +35,11 @@ const transact = async (mode, operation) => {
 export const SessionDraftStorage = {
   async requestPersistence() {
     try {
-      if (!navigator.storage?.persist) return false;
-      return await navigator.storage.persist();
-    } catch {
+      const storage = globalThis.navigator?.storage;
+      if (typeof storage?.persist !== "function") return false;
+      return await storage.persist();
+    } catch (error) {
+      warnStorageFailure("solicitar persistência", error);
       return false;
     }
   },
@@ -41,7 +47,8 @@ export const SessionDraftStorage = {
     try {
       const row = await transact("readonly", (store) => store.get(String(scopeId)));
       return row?.session && typeof row.session === "object" ? row.session : null;
-    } catch {
+    } catch (error) {
+      warnStorageFailure("carregar rascunho", error);
       return null;
     }
   },
@@ -50,7 +57,8 @@ export const SessionDraftStorage = {
       if (!session) return this.remove(scopeId);
       await transact("readwrite", (store) => store.put({ scopeId: String(scopeId), session, updatedAt: new Date().toISOString() }));
       return true;
-    } catch {
+    } catch (error) {
+      warnStorageFailure("salvar rascunho", error);
       return false;
     }
   },
@@ -58,7 +66,8 @@ export const SessionDraftStorage = {
     try {
       await transact("readwrite", (store) => store.delete(String(scopeId)));
       return true;
-    } catch {
+    } catch (error) {
+      warnStorageFailure("remover rascunho", error);
       return false;
     }
   }

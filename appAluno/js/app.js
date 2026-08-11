@@ -1,13 +1,13 @@
 import { Platform } from "./core/platform.js?v=build-20260809-6";
-import { SESSION_PHASE, Store } from "./core/store.js?v=build-20260811-1";
+import { SESSION_PHASE, Store } from "./core/store.js?v=build-20260811-2";
 import { Theme } from "./core/theme.js?v=build-20260809-7";
 import { svgIcon } from "./core/icons.js?v=build-20260810-7";
 import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260809-7";
-import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260809-6";
-import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260809-6";
-import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260809-7";
-import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260811-1";
-import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260811-1";
+import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260811-2";
+import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260811-2";
+import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260811-2";
+import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260811-2";
+import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260811-2";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -2064,7 +2064,9 @@ renderAll();
 navigate(location.hash.slice(1) || "home", false);
 
 if (Platform.canUseServiceWorker() && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch((error) => {
+    console.warn("[FlowFit][aluno][opcional] Service worker indisponível.", error);
+  }));
 }
 
 startAuthenticatedApp()

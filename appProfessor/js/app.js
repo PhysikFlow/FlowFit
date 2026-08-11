@@ -1,11 +1,11 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260809-6";
 import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260809-7";
-import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260809-6";
-import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260809-6";
-import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260809-7";
-import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260811-1";
-import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260811-1";
+import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260811-2";
+import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260811-2";
+import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260811-2";
+import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260811-2";
+import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260811-2";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -183,6 +183,7 @@ let selectedStudentId = "";
 let dataStatus = "Local";
 let authContext = null;
 let authAction = "signin";
+let authenticatedSessionDetected = false;
 let editingWorkoutId = "";
 let workoutDraftDetails = [];
 let deferredInstallPrompt = null;
@@ -260,6 +261,18 @@ const setAuthStatus = (message, state = "") => setStatus(authStatus, message, st
 const setCoachProfileStatus = (message, state = "") => setStatus(coachProfileStatus, message, state);
 const setInviteStatus = (message, state = "") => setStatus(inviteStatus, message, state);
 const setStudentImportStatus = (message, state = "") => setStatus(studentImportStatus, message, state);
+
+const rememberProfessorFailure = (stage, error) => {
+  const message = String(error?.message || error || "Erro desconhecido");
+  console.error(`[FlowFit][professor] Falha na etapa ${stage}.`, error);
+  window.FlowFitProfessorErrors = window.FlowFitProfessorErrors || [];
+  window.FlowFitProfessorErrors.push(`${stage}: ${message}`.slice(0, 180));
+  document.body?.setAttribute("data-professor-error", `${stage}: ${message}`.slice(0, 180));
+};
+
+const warnOptionalFeature = (feature, error) => {
+  console.warn(`[FlowFit][professor][opcional] ${feature} indisponível.`, error);
+};
 
 const setAuthGateSignOutVisible = (visible) => {
   if (authGateSignOut) authGateSignOut.hidden = !visible;
@@ -415,11 +428,16 @@ const handlePasswordReset = async () => {
   }
 
   setAuthStatus("Enviando email de recuperação...", "");
-  const result = await authRepository.resetPassword({ email, redirectTo: getAuthRedirectUrl() });
-  setAuthStatus(
-    result.ok ? "Enviamos o link de recuperação para seu email." : result.message || "Não foi possível enviar a recuperação.",
-    result.ok ? "synced" : "warning"
-  );
+  try {
+    const result = await authRepository.resetPassword({ email, redirectTo: getAuthRedirectUrl() });
+    setAuthStatus(
+      result.ok ? "Enviamos o link de recuperação para seu email." : result.message || "Não foi possível enviar a recuperação.",
+      result.ok ? "synced" : "warning"
+    );
+  } catch (error) {
+    rememberProfessorFailure("password-reset", error);
+    setAuthStatus("Não foi possível enviar a recuperação. Tente novamente.", "warning");
+  }
 };
 
 const getActiveStudentCount = () => students.filter((student) => student.status === "Ativo").length;
@@ -541,13 +559,18 @@ const parseStudentCsv = (text) => {
 const handleOAuthSignIn = async (provider) => {
   const label = getProviderLabel(provider);
   setAuthStatus(`Abrindo login com ${label}...`, "");
-  const result = await authRepository.signInWithOAuth({
-    provider,
-    redirectTo: getAuthRedirectUrl()
-  });
+  try {
+    const result = await authRepository.signInWithOAuth({
+      provider,
+      redirectTo: getAuthRedirectUrl()
+    });
 
-  if (!result.ok) {
-    setAuthStatus(result.message || `Não foi possível abrir login com ${label}.`, "warning");
+    if (!result.ok) {
+      setAuthStatus(result.message || `Não foi possível abrir login com ${label}.`, "warning");
+    }
+  } catch (error) {
+    rememberProfessorFailure("oauth-start", error);
+    setAuthStatus(`Não foi possível abrir login com ${label}. Tente novamente.`, "warning");
   }
 };
 
@@ -2200,28 +2223,54 @@ authForm?.addEventListener("click", async (event) => {
 authForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(event.currentTarget));
-  setAuthStatus(authAction === "signup" ? "Criando conta de professor..." : "Entrando...", "");
+  const action = authAction;
+  let stage = action === "signup" ? "auth-sign-up" : "auth-sign-in";
+  let authenticated = false;
+  setAuthStatus(action === "signup" ? "Criando conta de professor..." : "Entrando...", "");
 
-  const result = authAction === "signup"
-    ? await authRepository.signUp({ ...data, role: "coach", redirectTo: getAuthRedirectUrl(), coachStatus: authRepository.coachStatus.PENDING })
-    : await authRepository.signIn({ ...data, role: "coach" });
+  try {
+    const result = action === "signup"
+      ? await authRepository.signUp({ ...data, role: "coach", redirectTo: getAuthRedirectUrl(), coachStatus: authRepository.coachStatus.PENDING })
+      : await authRepository.signIn({ ...data, role: "coach" });
+    authenticated = Boolean(result.authenticated || result.session);
 
-  if (!result.ok) {
-    setAuthStatus(result.message || "Não foi possível autenticar.", "warning");
-    return;
+    if (!result.ok) {
+      setAuthStatus(result.message || "Não foi possível autenticar.", "warning");
+      return;
+    }
+
+    if (result.pendingEmailConfirmation) {
+      setAuthStatus(result.message, "warning");
+      return;
+    }
+
+    if (result.profileIncomplete) {
+      console.warn("[FlowFit][professor] Autenticação concluída; o perfil será reparado no bootstrap.", result.profileError);
+      setAuthStatus("Conta autenticada. Concluindo o perfil de professor...", "");
+    } else {
+      setAuthStatus("Conta autenticada.", "synced");
+    }
+
+    stage = "authenticated-panel";
+    await startAuthenticatedPanel();
+  } catch (error) {
+    rememberProfessorFailure(stage, error);
+    setAuthLocked(true);
+    setAuthChecking(false);
+    authenticated = authenticated || authenticatedSessionDetected;
+    setAuthGateSignOutVisible(authenticated);
+    const message = authenticated
+      ? "Sua conta foi autenticada, mas o painel não terminou de carregar. Sua sessão foi preservada; recarregue a página."
+      : action === "signup"
+        ? "Não foi possível concluir a criação. Antes de repetir, tente entrar com o mesmo email."
+        : "Não foi possível concluir o login. Tente novamente.";
+    setAuthStatus(message, "warning");
   }
-
-  if (result.pendingEmailConfirmation) {
-    setAuthStatus(result.message, "warning");
-    return;
-  }
-
-  setAuthStatus("Conta autenticada.", "synced");
-  await startAuthenticatedPanel();
 });
 
 const signOutProfessor = async () => {
   await authRepository.signOut();
+  authenticatedSessionDetected = false;
   authContext = null;
   students = [];
   workouts = [];
@@ -2245,12 +2294,14 @@ const startAuthenticatedPanel = async () => {
   setAuthChecking(true);
   const session = await authRepository.getSession();
   if (!session?.user) {
+    authenticatedSessionDetected = false;
     setAuthLocked(true);
     setAuthChecking(false);
     syncAuthMode("signin");
     setAuthGateSignOutVisible(false);
     return;
   }
+  authenticatedSessionDetected = true;
 
   const profileResult = await authRepository.ensureProfile({
     role: "coach",
@@ -2259,6 +2310,7 @@ const startAuthenticatedPanel = async () => {
   });
   if (profileResult.roleMismatch) {
     await authRepository.signOut();
+    authenticatedSessionDetected = false;
     authContext = null;
     setAuthLocked(true);
     setAuthChecking(false);
@@ -2269,12 +2321,14 @@ const startAuthenticatedPanel = async () => {
     return;
   }
   if (!profileResult.synced && !profileResult.profile) {
+    console.error("[FlowFit][professor] Sessão válida, mas o perfil não pôde ser carregado ou reparado.", profileResult.error);
     setAuthLocked(true);
     setAuthChecking(false);
     setAuthGateSignOutVisible(true);
-    setAuthStatus("Conta autenticada, mas o perfil não carregou. Recarregue a página.", "warning");
+    setAuthStatus("Sua conta está autenticada, mas o perfil de professor não pôde ser concluído. Recarregue a página; se persistir, informe o suporte.", "warning");
     return;
   }
+
   authContext = await authRepository.getAuthContext();
 
   const coachAccess = authRepository.getCoachAccess(authContext?.profile);
@@ -2299,13 +2353,24 @@ const startAuthenticatedPanel = async () => {
   selectedStudentId = "";
   renderAll();
 
-  await Promise.allSettled([
+  const refreshResults = await Promise.allSettled([
     refreshStudents({ silent: true }),
     refreshPublishedWorkouts({ silent: true }),
     refreshWorkoutSessions({ silent: true })
   ]);
+  refreshResults.forEach((result, index) => {
+    if (result.status === "rejected") {
+      const resources = ["alunos", "treinos", "sessões"];
+      console.warn(`[FlowFit][professor] Falha ao carregar ${resources[index]}; a sessão permanece ativa.`, result.reason);
+    }
+  });
 
-  const remote = await themeRepository.fetchBrandTheme();
+  let remote = null;
+  try {
+    remote = await themeRepository.fetchBrandTheme();
+  } catch (error) {
+    warnOptionalFeature("tema remoto", error);
+  }
   if (!remote) {
     fillThemeInputs(DEFAULT_BRAND_THEME);
     applyTheme(DEFAULT_BRAND_THEME);
@@ -2325,55 +2390,70 @@ const boot = async () => {
   await startAuthenticatedPanel();
 };
 
-if (Platform.canUseServiceWorker() && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
-}
+const initializeOptionalPwaFeatures = () => {
+  try {
+    if (Platform.canUseServiceWorker() && globalThis.navigator?.serviceWorker) {
+      const registerServiceWorker = () => navigator.serviceWorker.register("./sw.js")
+        .catch((error) => warnOptionalFeature("service worker", error));
+      if (document.readyState === "complete") registerServiceWorker();
+      else window.addEventListener("load", registerServiceWorker, { once: true });
+    }
 
-window.addEventListener("beforeinstallprompt", (event) => {
-  if (isInstalledRuntime()) {
-    deferredInstallPrompt = null;
+    window.addEventListener("beforeinstallprompt", (event) => {
+      if (isInstalledRuntime()) {
+        deferredInstallPrompt = null;
+        syncInstallButton();
+        return;
+      }
+      event.preventDefault();
+      deferredInstallPrompt = event;
+      syncInstallButton();
+    });
+
+    installAppButton?.addEventListener("click", async () => {
+      try {
+        if (!deferredInstallPrompt || isInstalledRuntime()) {
+          deferredInstallPrompt = null;
+          syncInstallButton();
+          return;
+        }
+        installAppButton.hidden = true;
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+        syncInstallButton();
+      } catch (error) {
+        deferredInstallPrompt = null;
+        syncInstallButton();
+        warnOptionalFeature("instalação PWA", error);
+      }
+    });
+
+    window.addEventListener("appinstalled", () => {
+      deferredInstallPrompt = null;
+      syncInstallButton();
+    });
+
+    const displayModeQuery = window.matchMedia?.("(display-mode: standalone)");
+    if (displayModeQuery?.addEventListener) {
+      displayModeQuery.addEventListener("change", syncInstallButton);
+    } else {
+      displayModeQuery?.addListener?.(syncInstallButton);
+    }
     syncInstallButton();
-    return;
+  } catch (error) {
+    warnOptionalFeature("inicialização PWA", error);
   }
-  event.preventDefault();
-  deferredInstallPrompt = event;
-  syncInstallButton();
-});
+};
 
-installAppButton?.addEventListener("click", async () => {
-  if (!deferredInstallPrompt || isInstalledRuntime()) {
-    deferredInstallPrompt = null;
-    syncInstallButton();
-    return;
-  }
-  installAppButton.hidden = true;
-  deferredInstallPrompt.prompt();
-  await deferredInstallPrompt.userChoice.catch(() => null);
-  deferredInstallPrompt = null;
-  syncInstallButton();
-});
-
-window.addEventListener("appinstalled", () => {
-  deferredInstallPrompt = null;
-  syncInstallButton();
-});
-
-const displayModeQuery = window.matchMedia?.("(display-mode: standalone)");
-if (displayModeQuery?.addEventListener) {
-  displayModeQuery.addEventListener("change", syncInstallButton);
-} else {
-  displayModeQuery?.addListener?.(syncInstallButton);
-}
-syncInstallButton();
+initializeOptionalPwaFeatures();
 
 boot().catch((error) => {
-  console.error("Falha ao iniciar appProfessor", error);
-  window.FlowFitProfessorErrors = window.FlowFitProfessorErrors || [];
-  window.FlowFitProfessorErrors.push(String(error?.message || error));
-  document.body?.setAttribute("data-professor-error", String(error?.message || error).slice(0, 180));
+  rememberProfessorFailure("session-bootstrap", error);
   window.FlowFitProfessorReady = false;
   setAuthLocked(true);
   setAuthChecking(false);
-  setAuthStatus("Não foi possível verificar sua sessão. Tente novamente.", "warning");
+  setAuthGateSignOutVisible(authenticatedSessionDetected);
+  setAuthStatus("Não foi possível verificar sua sessão. Recarregue a página ou tente entrar novamente.", "warning");
   showToast("Falha ao iniciar painel.");
 });

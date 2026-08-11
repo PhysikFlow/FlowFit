@@ -94,11 +94,13 @@ A migração mantém alunos, contas, temas, treinos e históricos existentes. El
 
 ## Painel administrativo
 
-Em uma instalação existente, rode `supabase/admin-console.sql` depois de `supabase/update-student-access.sql`. A migração não altera o status dos personals já cadastrados; apenas faz novos cadastros começarem como `pending`.
+Em uma instalação existente, rode `supabase/admin-console.sql` depois de `supabase/update-student-access.sql`. Em seguida, rode `supabase/fix-coach-capability-admin-listing.sql` para que identidades cujo maior papel é `admin` também apareçam como personals, sem mudar seu `role`. As migrações não removem contas nem dados.
 
 A migration já registra `recursaocausaexaustao@gmail.com` como primeiro administrador. Essa conta precisa aparecer antes em `Authentication > Users`; se ainda não existir, entre ou crie a conta primeiro e execute `supabase/admin-console.sql` novamente. O SQL interrompe a execução com uma mensagem clara quando não encontra o usuário e mostra o email administrativo ao concluir.
 
 Abra `/admin/` e entre com essa mesma conta. Não existe cadastro de administrador pelo frontend. A lista, os detalhes e as alterações usam RPCs `security definer` que verificam `platform_admins`; as tabelas administrativas também têm RLS e não aceitam escrita direta do navegador.
+
+Se um cadastro de professor tiver sido interrompido depois do `auth.signUp`, rode `supabase/diagnose-auth-roles.sql`. A consulta de identidades sem profile mostra contas parcialmente concluídas sem alterar dados. Depois de confirmar o e-mail e entrar novamente em `/appProfessor/`, o bootstrap tenta criar de forma idempotente o profile `coach` com status `pending`; ele nunca rebaixa um profile `admin` nem promove automaticamente um papel inferior.
 
 O campo de vencimento reutiliza `profiles.coach_trial_ends_at` como data geral de acesso nesta fase manual. O motivo/mensagem ao personal reutiliza `profiles.coach_status_note`. Observações internas ficam separadas em `coach_admin_settings` e nunca entram nas consultas comuns do personal.
 

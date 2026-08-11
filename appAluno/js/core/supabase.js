@@ -17,7 +17,10 @@ export const getSupabase = () => {
           persistSession: true
         }
       }))
-      .catch(() => null);
+      .catch((error) => {
+        console.error("[FlowFit][supabase] Falha ao carregar o cliente Supabase.", error);
+        return null;
+      });
   }
   return clientPromise;
 };

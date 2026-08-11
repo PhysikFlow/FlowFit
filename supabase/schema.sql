@@ -1345,6 +1345,24 @@ create policy "profiles_insert_own"
     and coach_status = 'pending'
   );
 
+-- profiles.role guarda o maior papel da identidade. Logo, "ser personal" não
+-- pode ser inferido apenas por role = 'coach': todo admin também possui a
+-- capacidade de operar um tenant de personal no modelo atual.
+create or replace function public.has_coach_capability(p_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.user_id = p_user_id
+      and p.role in ('coach', 'admin')
+  );
+$$;
+
 create or replace function public.admin_get_overview()
 returns table (
   total bigint,
@@ -1375,7 +1393,7 @@ begin
     count(*) filter (where p.coach_status = 'suspended')::bigint,
     count(*) filter (where p.coach_status = 'cancelled')::bigint
   from public.profiles p
-  where p.role = 'coach';
+  where public.has_coach_capability(p.user_id);
 end;
 $$;
 
@@ -1430,7 +1448,7 @@ begin
   join auth.users u on u.id = p.user_id
   left join public.students s on s.coach_id = p.user_id::text
   left join public.coach_admin_settings cas on cas.coach_id = p.user_id
-  where p.role = 'coach'
+  where public.has_coach_capability(p.user_id)
     and (v_status is null or p.coach_status = v_status)
     and (
       v_search = ''
@@ -1500,7 +1518,7 @@ begin
   left join public.students s on s.coach_id = p.user_id::text
   left join public.coach_admin_settings cas on cas.coach_id = p.user_id
   where p.user_id = p_coach_id
-    and p.role = 'coach'
+    and public.has_coach_capability(p.user_id)
   group by p.user_id, p.name, u.email, p.contact_email, p.created_at,
            u.last_sign_in_at, cas.plan, p.coach_trial_ends_at,
            p.coach_status, p.coach_status_note, cas.notes, p.headline,
@@ -1609,7 +1627,7 @@ begin
   from public.profiles p
   left join public.coach_admin_settings cas on cas.coach_id = p.user_id
   where p.user_id = p_coach_id
-    and p.role = 'coach'
+    and public.has_coach_capability(p.user_id)
   for update of p;
 
   if not found then
@@ -1680,6 +1698,7 @@ grant select on public.coach_admin_settings to authenticated;
 grant select on public.coach_admin_history to authenticated;
 
 revoke all on function public.is_platform_admin() from public, anon, authenticated;
+revoke all on function public.has_coach_capability(uuid) from public, anon, authenticated;
 revoke all on function public.admin_get_overview() from public, anon, authenticated;
 revoke all on function public.admin_list_coaches(text, text) from public, anon, authenticated;
 revoke all on function public.admin_get_coach(uuid) from public, anon, authenticated;

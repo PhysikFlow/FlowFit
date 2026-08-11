@@ -1,105 +1,11 @@
--- ============================================================================
--- FlowFit: painel administrativo de personals (migração incremental)
---
--- Pode ser executada mais de uma vez. Não apaga nem altera o status de contas
--- existentes. Novos perfis de personal passam a iniciar como "pending".
--- ============================================================================
+-- FlowFit - alinhar a administração de personals à hierarquia de papéis.
+-- Migration aditiva/idempotente. Não altera role e não remove dados.
 
 begin;
 
-alter table public.profiles
-  alter column coach_status set default 'pending';
-
-create table if not exists public.platform_admins (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  created_at timestamptz not null default now(),
-  created_by uuid references auth.users(id) on delete set null
-);
-
-create table if not exists public.coach_admin_settings (
-  coach_id uuid primary key references public.profiles(user_id) on delete cascade,
-  plan text not null default 'Plano piloto',
-  notes text not null default '',
-  updated_at timestamptz not null default now(),
-  updated_by uuid references auth.users(id) on delete set null,
-  constraint coach_admin_settings_plan_length check (char_length(plan) between 1 and 80),
-  constraint coach_admin_settings_notes_length check (char_length(notes) <= 5000)
-);
-
-create table if not exists public.coach_admin_history (
-  id uuid primary key default gen_random_uuid(),
-  coach_id uuid not null references public.profiles(user_id) on delete cascade,
-  admin_user_id uuid references auth.users(id) on delete set null,
-  action text not null,
-  previous_values jsonb not null default '{}'::jsonb,
-  new_values jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  constraint coach_admin_history_action_length check (char_length(action) between 1 and 80)
-);
-
-create index if not exists coach_admin_history_coach_created_idx
-  on public.coach_admin_history (coach_id, created_at desc);
-
-create or replace function public.is_platform_admin()
-returns boolean
-language sql
-stable
-security definer
-set search_path = pg_catalog, public
-as $$
-  select auth.uid() is not null
-     and (
-       exists (
-         select 1
-         from public.platform_admins pa
-         where pa.user_id = auth.uid()
-       )
-       or exists (
-         select 1
-         from public.profiles p
-         where p.user_id = auth.uid()
-           and p.role = 'admin'
-       )
-     );
-$$;
-
-alter table public.platform_admins enable row level security;
-alter table public.coach_admin_settings enable row level security;
-alter table public.coach_admin_history enable row level security;
-
-drop policy if exists "platform_admins_select_admin" on public.platform_admins;
-create policy "platform_admins_select_admin"
-  on public.platform_admins for select
-  to authenticated
-  using (public.is_platform_admin());
-
-drop policy if exists "coach_admin_settings_select_admin" on public.coach_admin_settings;
-create policy "coach_admin_settings_select_admin"
-  on public.coach_admin_settings for select
-  to authenticated
-  using (public.is_platform_admin());
-
-drop policy if exists "coach_admin_history_select_admin" on public.coach_admin_history;
-create policy "coach_admin_history_select_admin"
-  on public.coach_admin_history for select
-  to authenticated
-  using (public.is_platform_admin());
-
--- O perfil próprio só pode ser criado como pending. A ativação ocorre pelas
--- funções administrativas abaixo, nunca por update direto do frontend.
-drop policy if exists "profiles_insert_own" on public.profiles;
-create policy "profiles_insert_own"
-  on public.profiles for insert
-  to authenticated
-  with check (
-    (select auth.uid()) = user_id
-    and role = 'coach'
-    and coach_status = 'pending'
-  );
-
--- profiles.role guarda o maior papel da identidade. Logo, "ser personal" não
--- pode ser inferido apenas por role = 'coach': todo admin também possui a
--- capacidade de operar um tenant de personal no modelo atual.
+-- profiles.role guarda o maior papel da identidade. No modelo atual, admin
+-- também pode operar como personal; esta função representa essa capacidade
+-- sem rebaixar o papel principal para coach.
 create or replace function public.has_coach_capability(p_user_id uuid)
 returns boolean
 language sql
@@ -278,41 +184,6 @@ begin
 end;
 $$;
 
-create or replace function public.admin_list_coach_history(p_coach_id uuid)
-returns table (
-  id uuid,
-  action text,
-  actor_email text,
-  previous_values jsonb,
-  new_values jsonb,
-  created_at timestamptz
-)
-language plpgsql
-stable
-security definer
-set search_path = pg_catalog, public
-as $$
-begin
-  if not public.is_platform_admin() then
-    raise exception 'Acesso administrativo não autorizado.' using errcode = 'P0001';
-  end if;
-
-  return query
-  select
-    h.id,
-    h.action,
-    coalesce(u.email, 'Administrador removido')::text,
-    h.previous_values,
-    h.new_values,
-    h.created_at
-  from public.coach_admin_history h
-  left join auth.users u on u.id = h.admin_user_id
-  where h.coach_id = p_coach_id
-  order by h.created_at desc
-  limit 100;
-end;
-$$;
-
 create or replace function public.admin_update_coach(
   p_coach_id uuid,
   p_status text,
@@ -442,72 +313,25 @@ begin
 end;
 $$;
 
-revoke all on public.platform_admins from anon, authenticated;
-revoke all on public.coach_admin_settings from anon, authenticated;
-revoke all on public.coach_admin_history from anon, authenticated;
-grant select on public.platform_admins to authenticated;
-grant select on public.coach_admin_settings to authenticated;
-grant select on public.coach_admin_history to authenticated;
-
-revoke all on function public.is_platform_admin() from public, anon, authenticated;
+-- A função auxiliar só deve ser usada pelas RPCs security definer acima.
 revoke all on function public.has_coach_capability(uuid) from public, anon, authenticated;
+
+-- Mantém explícitas as permissões já existentes das RPCs substituídas.
 revoke all on function public.admin_get_overview() from public, anon, authenticated;
 revoke all on function public.admin_list_coaches(text, text) from public, anon, authenticated;
 revoke all on function public.admin_get_coach(uuid) from public, anon, authenticated;
-revoke all on function public.admin_list_coach_history(uuid) from public, anon, authenticated;
 revoke all on function public.admin_update_coach(uuid, text, text, timestamptz, text, text) from public, anon, authenticated;
 
-grant execute on function public.is_platform_admin() to authenticated;
 grant execute on function public.admin_get_overview() to authenticated;
 grant execute on function public.admin_list_coaches(text, text) to authenticated;
 grant execute on function public.admin_get_coach(uuid) to authenticated;
-grant execute on function public.admin_list_coach_history(uuid) to authenticated;
 grant execute on function public.admin_update_coach(uuid, text, text, timestamptz, text, text) to authenticated;
-
--- Primeiro administrador da instalação. A conta precisa existir em
--- Authentication > Users antes da execução desta migration.
-do $flowfit_admin_bootstrap$
-declare
-  v_admin_id uuid;
-begin
-  select u.id
-    into v_admin_id
-  from auth.users u
-  where lower(u.email) = lower('recursaocausaexaustao@gmail.com')
-  order by u.created_at
-  limit 1;
-
-  if v_admin_id is null then
-    raise exception 'A conta recursaocausaexaustao@gmail.com ainda não existe em Authentication > Users.'
-      using hint = 'Entre ou crie essa conta primeiro e execute supabase/admin-console.sql novamente.';
-  end if;
-
-  insert into public.profiles (user_id, role, name, headline, coach_status, updated_at)
-  select
-    u.id,
-    'admin',
-    coalesce(nullif(split_part(u.email, '@', 1), ''), 'Administrador'),
-    'Administrador da plataforma',
-    'active',
-    now()
-  from auth.users u
-  where u.id = v_admin_id
-  on conflict (user_id) do update
-    set role = 'admin',
-        updated_at = now();
-
-  insert into public.platform_admins (user_id, created_by)
-  values (v_admin_id, v_admin_id)
-  on conflict (user_id) do nothing;
-end;
-$flowfit_admin_bootstrap$;
 
 commit;
 
--- Confirmação exibida ao final no SQL Editor.
-select
-  u.email as admin_email,
-  pa.created_at as admin_since
-from public.platform_admins pa
-join auth.users u on u.id = pa.user_id
-where lower(u.email) = lower('recursaocausaexaustao@gmail.com');
+-- Verificação: admins continuam role=admin e passam a aparecer nas RPCs.
+select p.user_id, u.email, p.role, p.coach_status
+from public.profiles p
+join auth.users u on u.id = p.user_id
+where p.role in ('coach', 'admin')
+order by p.created_at desc;

@@ -100,7 +100,7 @@ select
   p.coach_status,
   count(*) as coach_count
 from public.profiles p
-where p.role = 'coach'
+where public.has_coach_capability(p.user_id)
 group by p.coach_status
 order by p.coach_status;
 
@@ -123,5 +123,5 @@ select
 from public.profiles p
 join auth.users u on u.id = p.user_id
 left join public.coach_admin_settings cas on cas.coach_id = p.user_id
-where p.role = 'coach'
+where public.has_coach_capability(p.user_id)
 order by p.created_at desc;

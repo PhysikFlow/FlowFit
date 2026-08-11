@@ -1,4 +1,4 @@
-import { getSupabase } from "../../core/supabase.js?v=build-20260809-6";
+import { getSupabase } from "../../core/supabase.js?v=build-20260811-2";
 
 const PROFILES_TABLE = "profiles";
 const PROFILE_COLUMNS_BASE = "user_id, role, name, created_at, updated_at";
@@ -117,6 +117,13 @@ const isMissingProfileColumn = (error) => {
     || error?.code === "PGRST204"
     || /column .* does not exist/i.test(message)
     || /could not find .* column/i.test(message);
+};
+
+const isProfileConflict = (error) => {
+  const message = String(error?.message || "");
+  return error?.code === "23505"
+    || /duplicate key/i.test(message)
+    || /already exists/i.test(message);
 };
 
 const authMessage = (error, fallback = "Não foi possível autenticar.") => {
@@ -247,7 +254,8 @@ export const authRepository = {
   async getSession() {
     const client = await getSupabase();
     if (!client) return null;
-    const { data } = await client.auth.getSession();
+    const { data, error } = await client.auth.getSession();
+    if (error) throw error;
     return data?.session || null;
   },
 
@@ -303,7 +311,16 @@ export const authRepository = {
 
     const safeRole = normalizeRole(role);
     const safeName = normalizeName(name, user.email || "Usuário");
-    const existing = await this.getProfile();
+    const existingResult = await this.getProfileResult();
+    if (existingResult.error) {
+      return {
+        synced: false,
+        profile: null,
+        reason: "profile-read-failed",
+        error: existingResult.error
+      };
+    }
+    const existing = existingResult.profile;
 
     if (existing) {
       if (!roleAtLeast(existing.role, safeRole)) {
@@ -355,7 +372,32 @@ export const authRepository = {
       error = fallback.error;
     }
 
-    return { synced: !error, error, profile: profileFromRow(data) };
+    // Duas abas ou dois callbacks de autenticação podem tentar reparar o
+    // mesmo perfil ao mesmo tempo. O conflito de chave significa que uma delas
+    // venceu a corrida; releia o registro em vez de tratar a conta como quebrada.
+    if (isProfileConflict(error)) {
+      const recovered = await this.getProfileResult();
+      if (recovered.profile) {
+        if (!roleAtLeast(recovered.profile.role, safeRole)) {
+          return {
+            synced: true,
+            profile: recovered.profile,
+            roleMismatch: true,
+            existingRole: recovered.profile.role,
+            requestedRole: safeRole
+          };
+        }
+        return { synced: true, profile: recovered.profile, recovered: true };
+      }
+      if (recovered.error) error = recovered.error;
+    }
+
+    return {
+      synced: !error,
+      error,
+      profile: profileFromRow(data),
+      reason: error ? "profile-write-failed" : undefined
+    };
   },
 
   async updateProfile({ name, headline, bio, city, contactEmail, phone, whatsapp, cref } = {}) {
@@ -430,7 +472,15 @@ export const authRepository = {
       };
     }
 
-    return { ok: true, session: data.session, user: data.user, profile: profileResult.profile };
+    return {
+      ok: true,
+      authenticated: true,
+      session: data.session,
+      user: data.user,
+      profile: profileResult.profile,
+      profileIncomplete: !profileResult.synced,
+      profileError: profileResult.error || null
+    };
   },
 
   async signUp({ email, password, role, name, redirectTo, createProfile = true, coachStatus = COACH_STATUS.TRIAL } = {}) {
@@ -473,7 +523,15 @@ export const authRepository = {
       };
     }
 
-    return { ok: true, session, user: data.user, profile: profileResult.profile };
+    return {
+      ok: true,
+      authenticated: true,
+      session,
+      user: data.user,
+      profile: profileResult.profile,
+      profileIncomplete: !profileResult.synced,
+      profileError: profileResult.error || null
+    };
   },
 
   async signInWithOAuth({ provider, redirectTo } = {}) {
