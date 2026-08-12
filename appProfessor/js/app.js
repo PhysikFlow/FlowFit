@@ -404,7 +404,32 @@ const authModeContent = {
   }
 };
 
+const clearAuthenticatedAccessState = () => {
+  authForm?.removeAttribute("data-account-state");
+  authForm?.removeAttribute("data-account-status");
+};
+
+const showAuthenticatedAccessState = ({ status = "pending", message = "", email = "" } = {}) => {
+  const titles = {
+    pending: "Cadastro recebido",
+    suspended: "Acesso suspenso",
+    cancelled: "Conta cancelada",
+    error: "Conta autenticada"
+  };
+  authForm?.setAttribute("data-account-state", "blocked");
+  authForm?.setAttribute("data-account-status", status);
+  if (authTitle) authTitle.textContent = titles[status] || "Acesso ainda não liberado";
+  if (authCopy) {
+    authCopy.textContent = email
+      ? `${email} está autenticado como personal.`
+      : "Sua identidade foi autenticada como personal.";
+  }
+  setAuthStatus(message || "Seu cadastro foi salvo e aguarda liberação.", "warning");
+  setAuthGateSignOutVisible(true);
+};
+
 const syncAuthMode = (mode = authAction, { preserveStatus = false } = {}) => {
+  clearAuthenticatedAccessState();
   authAction = mode === "signup" ? "signup" : "signin";
   const content = authModeContent[authAction];
   if (authForm) authForm.dataset.authMode = authAction;
@@ -2325,8 +2350,11 @@ const startAuthenticatedPanel = async () => {
     console.error("[FlowFit][professor] Sessão válida, mas o perfil não pôde ser carregado ou reparado.", profileResult.error);
     setAuthLocked(true);
     setAuthChecking(false);
-    setAuthGateSignOutVisible(true);
-    setAuthStatus("Sua conta está autenticada, mas o perfil de professor não pôde ser concluído. Recarregue a página; se persistir, informe o suporte.", "warning");
+    showAuthenticatedAccessState({
+      status: "error",
+      email: session.user.email,
+      message: "Sua conta está autenticada, mas o perfil de professor não pôde ser concluído. Recarregue a página; se persistir, informe o suporte."
+    });
     return;
   }
 
@@ -2336,8 +2364,11 @@ const startAuthenticatedPanel = async () => {
   if (!coachAccess.ok) {
     setAuthLocked(true);
     setAuthChecking(false);
-    setAuthGateSignOutVisible(true);
-    setAuthStatus(coachAccess.message, "warning");
+    showAuthenticatedAccessState({
+      status: coachAccess.status || "error",
+      email: authContext?.email || session.user.email,
+      message: coachAccess.message
+    });
     return;
   }
 

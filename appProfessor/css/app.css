@@ -83,6 +83,31 @@ body.is-auth-locked {
   line-height: 1.4;
 }
 
+.auth-card[data-account-state="blocked"] .auth-mode-tabs,
+.auth-card[data-account-state="blocked"] label,
+.auth-card[data-account-state="blocked"] [data-auth-reset],
+.auth-card[data-account-state="blocked"] [data-auth-submit],
+.auth-card[data-account-state="blocked"] [data-auth-secondary],
+.auth-card[data-account-state="blocked"] .auth-divider,
+.auth-card[data-account-state="blocked"] .oauth-grid {
+  display: none;
+}
+
+.auth-card[data-account-state="blocked"] [data-auth-status] {
+  display: block;
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 34%, var(--color-line));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+  color: var(--color-text);
+  font-weight: 750;
+}
+
+.auth-card[data-account-state="blocked"] [data-auth-gate-sign-out] {
+  justify-self: start;
+  margin-top: var(--space-2);
+}
+
 .auth-card .auth-secondary-action {
   display: none;
 }

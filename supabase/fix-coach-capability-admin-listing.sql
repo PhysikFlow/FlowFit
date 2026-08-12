@@ -281,7 +281,7 @@ begin
 
   insert into public.coach_admin_settings (coach_id, plan, notes, updated_at, updated_by)
   values (p_coach_id, v_plan, v_admin_notes, v_now, auth.uid())
-  on conflict (coach_id) do update
+  on conflict on constraint coach_admin_settings_pkey do update
     set plan = excluded.plan,
         notes = excluded.notes,
         updated_at = excluded.updated_at,

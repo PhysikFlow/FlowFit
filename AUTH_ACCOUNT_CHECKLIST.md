@@ -24,13 +24,14 @@ Escopo: `/admin`, `/appProfessor` (a área chamada de `/professor` na auditoria)
 | `[x]` | AUTH-BOOT-003 | Médio | APIs PWA opcionais podiam compartilhar o mesmo contexto de inicialização e usavam `catch` vazio. | `initializeOptionalPwaFeatures()` isola service worker/instalação; falhas geram `console.warn` e não alteram a sessão. |
 | `[x]` | AUTH-BOOT-004 | Médio | Falha ao importar o cliente Supabase era convertida silenciosamente em `null`. | `appAluno/js/core/supabase.js` preserva a degradação, mas registra o erro original sem token/senha. |
 | `[~]` | AUTH-PROFILE-001 | Alto | `auth.users` podia existir sem `profiles` depois de confirmação pendente, Google ou interrupção pós-signup. | Aplicar `supabase/provision-auth-profiles.sql`; `ensureProfile()` passa a usar `ensure_own_profile`, que faz upsert idempotente no backend. O INSERT direto existe somente como compatibilidade quando a RPC ainda não está instalada. |
-| `[~]` | AUTH-PROFILE-002 | Alto | Confirmar no banco todas as identidades sem perfil criadas durante falhas antigas. | O diagnóstico encontrou ao menos `bcea0234-25f8-457f-8ca9-777d7f48cb08` (`frismarcomputer@gmail.com`) criado por Google, com `requested_role=null` e sem profile. Depois da migration, novo login em `/appProfessor/` deve repará-lo como `coach/pending`. |
+| `[x]` | AUTH-PROFILE-002 | Alto | Confirmar no banco todas as identidades sem perfil criadas durante falhas antigas. | `bcea0234-25f8-457f-8ca9-777d7f48cb08` (`frismarcomputer@gmail.com`) foi reparado pelo login Google e passou a aparecer no `/admin` como `coach/pending`. Continuar monitorando outras linhas pelo diagnóstico. |
 | `[~]` | AUTH-PROFILE-003 | Médio | Testar duas abas concluindo simultaneamente o mesmo perfil. | A RPC usa `INSERT ... ON CONFLICT DO UPDATE`; o smoke unitário passou, mas o teste com duas abas e Supabase real continua pendente. |
 | `[~]` | AUTH-PROFILE-004 | Alto | Google e link mágico não enviam `flowfit_requested_role`; o papel não pode depender desse metadata. | `/appProfessor/` solicita `coach` à RPC após autenticar. `/appAluno/` solicita `student` somente dentro do claim transacional após vínculo válido. Confirmar ambos com contas reais. |
 | `[~]` | AUTH-PROFILE-005 | Alto | Conta de aluno existente que também inicia cadastro de professor precisa preservar uma identidade e o maior papel. | `ensure_own_profile` promove `student -> coach`, sempre `pending`; preserva `admin` e nunca rebaixa. Testar aluno já vinculado, aprovação posterior e manutenção dos vínculos. |
 | `[x]` | AUTH-STUDENT-001 | Alto | Email/Google desconhecido não pode ganhar acesso de aluno apenas por autenticar. | `claim_student_access` verifica vínculo por email/convite e contagem de acessos antes de chamar `ensure_own_profile('student', ...)`; falha inteira é transacional. |
 | `[x]` | AUTH-BOOT-005 | Médio | Google/link mágico do aluno podiam lançar exceção não tratada no handler. | Handlers agora capturam a exceção, registram a etapa e mantêm o auth gate com mensagem recuperável. |
-| `[~]` | AUTH-CACHE-001 | Médio | Garantir que computadores com PWA antiga recebam a correção. | Deployar `build-20260811-3`, `flowfit-professor-v30` e `flowfit-aluno-v55`; testar update com uma instalação que ainda tenha o cache anterior. |
+| `[~]` | AUTH-FEEDBACK-001 | Alto | Professor `pending` voltava do Google para uma tela visualmente idêntica ao login, embora o profile tivesse sido criado. | Deployar `build-20260812-2`/`flowfit-professor-v32`; o auth gate deve mostrar “Cadastro recebido”, email autenticado, mensagem de aprovação e ação para sair, ocultando campos de login. |
+| `[~]` | AUTH-CACHE-001 | Médio | Garantir que computadores com PWA antiga recebam a correção. | Deployar `build-20260812-2`, `flowfit-professor-v32` e `flowfit-aluno-v55`; testar update com uma instalação que ainda tenha o cache anterior. |
 
 ## Hierarquia de papéis e capacidade de professor
 
@@ -40,6 +41,7 @@ Escopo: `/admin`, `/appProfessor` (a área chamada de `/professor` na auditoria)
 | `[x]` | ROLE-COACH-002 | Alto | Editar o tenant do admin não pode rebaixar `role` para `coach`. | `admin_update_coach` altera somente status, vencimento e configuração administrativa; validar `profiles.role='admin'` antes/depois. |
 | `[x]` | ROLE-COACH-003 | Médio | Revisar ocorrências restantes de `role='coach'`. | Mantidas apenas onde exclusividade é intencional: autocadastro/insert de perfil deve criar `coach pending`; `can_operate_as_coach` possui ramo explícito para admin. RPCs de catálogo usam `has_coach_capability`. |
 | `[ ]` | ROLE-COACH-004 | Médio | Decidir se todo admin deve sempre ignorar `coach_status` em `/professor`. | Hoje `can_operate_as_coach()` aceita admin independentemente de `pending/suspended/cancelled`; documentar como regra intencional ou separar capacidade administrativa de status do tenant. |
+| `[~]` | ADMIN-RPC-001 | Alto | `admin_update_coach` falhava para qualquer personal com `column reference "coach_id" is ambiguous`. | Aplicar `supabase/fix-admin-update-coach-ambiguity.sql`; o conflito passa a usar `ON CONFLICT ON CONSTRAINT coach_admin_settings_pkey`. Testar uma mudança real e conferir profile, settings e history. |
 | `[x]` | ROLE-ESC-001 | Alto | Impedir elevação direta de `profiles.role` pela Data API. | Grants limitam update autenticado às colunas de perfil público; `role` e `coach_status` não estão concedidos. Revalidar grants no banco real. |
 | `[x]` | ROLE-ADMIN-001 | Alto | RPCs administrativas exigem backend authorization. | Todas verificam `is_platform_admin()` em função `security definer`; testar chamada direta com aluno/professor e esperar erro `P0001`. |
 
@@ -109,13 +111,18 @@ Escopo: `/admin`, `/appProfessor` (a área chamada de `/professor` na auditoria)
 | 2026-08-11 | ROLE-COACH-001..003 | SQL estático | RPCs usam `has_coach_capability`; update não escreve `role`. | Corrigido no repositório; migration ainda precisa ser aplicada no Supabase. |
 | 2026-08-11 | AUTH-BOOT-001..003, SESSION-005 | Chromium local | `/appProfessor`, `/appAluno` e `/admin` abriram sem erros/warnings; fallback de 8 s não disparou com o módulo pronto. | Aprovado sem credenciais; login real e deploy continuam pendentes. |
 | 2026-08-11 | Infra de teste | `scripts/ui-smoke.mjs` | Neste ambiente, o runner encerrou com `unsettled top-level await` em `Page.enable`, antes de inspecionar as rotas. | Não é evidência de falha do app; corrigir/rodar o harness em outro ambiente antes de usá-lo como gate. |
+| 2026-08-12 | AUTH-PROFILE-002, AUTH-PROFILE-004 | JSON do banco + relato do `/admin` | `ensure_own_profile` existe no banco e `frismarcomputer@gmail.com` passou a aparecer como `coach/pending`. | Provisionamento Google confirmado; feedback visual do pending corrigido no repositório e ainda depende de deploy. |
+| 2026-08-12 | AUTH-PERM-001 | GitHub Pages no navegador integrado | `/appProfessor/` abriu e iniciou o redirect Google sem erros/warnings de console; busca no código continua sem qualquer chamada a Permissions. | Não reproduzido fora do computador afetado; evidência aponta para código injetado/extensão até que um stack mostre arquivo do FlowFit. |
+| 2026-08-12 | ADMIN-RPC-001, AUTH-FEEDBACK-001 | JSON do banco + `scripts/admin-auth-regression-smoke.mjs` | Função real continha `ON CONFLICT (coach_id)` e retorno homônimo; migration usa a constraint. Smoke confere quatro fontes SQL, autorização, histórico, feedback e cache. | Código aprovado; aplicar SQL, deployar e validar com conta real. |
 
 ## Comandos/arquivos de confirmação
 
 1. Diagnóstico somente leitura: `supabase/diagnose-auth-roles.sql`.
 2. Provisionamento persistente: `supabase/provision-auth-profiles.sql`.
 3. Correção incremental da lista de personals: `supabase/fix-coach-capability-admin-listing.sql`.
-4. Schema consolidado para instalações novas: `supabase/schema.sql`.
-5. Smoke de UI: `node scripts/ui-smoke.mjs http://127.0.0.1:8080`.
-6. Smoke do reparo de profile: `node scripts/auth-repository-smoke.mjs`.
-7. Busca conceitual obrigatória antes de fechar mudanças de papel: `rg -n "role.*coach|can_operate_as_coach|has_coach_capability|ensure_own_profile" admin appProfessor appAluno supabase`.
+4. Correção da edição administrativa: `supabase/fix-admin-update-coach-ambiguity.sql`.
+5. Schema consolidado para instalações novas: `supabase/schema.sql`.
+6. Smoke de UI: `node scripts/ui-smoke.mjs http://127.0.0.1:8080`.
+7. Smokes de autenticação/admin: `node scripts/auth-repository-smoke.mjs` e `node scripts/admin-auth-regression-smoke.mjs`.
+8. Verificação pós-migration em um único JSON: `supabase/verify-auth-admin-fixes.sql`.
+9. Busca conceitual obrigatória antes de fechar mudanças de papel: `rg -n "role.*coach|can_operate_as_coach|has_coach_capability|ensure_own_profile" admin appProfessor appAluno supabase`.

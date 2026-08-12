@@ -95,7 +95,7 @@ A migração mantém alunos, contas, temas, treinos e históricos existentes. El
 
 ## Painel administrativo
 
-Em uma instalação existente, rode `supabase/admin-console.sql` depois de `supabase/update-student-access.sql`. Em seguida, rode `supabase/fix-coach-capability-admin-listing.sql` para que identidades cujo maior papel é `admin` também apareçam como personals, sem mudar seu `role`. As migrações não removem contas nem dados.
+Em uma instalação existente, rode `supabase/admin-console.sql` depois de `supabase/update-student-access.sql`. Em seguida, rode `supabase/fix-coach-capability-admin-listing.sql` para que identidades cujo maior papel é `admin` também apareçam como personals, sem mudar seu `role`. Por fim, rode `supabase/fix-admin-update-coach-ambiguity.sql`; ela corrige a gravação de status/plano usando explicitamente a primary key de `coach_admin_settings`. Execute `supabase/verify-auth-admin-fixes.sql` para receber um único JSON de confirmação. As migrations não removem contas nem dados.
 
 A migration já registra `recursaocausaexaustao@gmail.com` como primeiro administrador. Essa conta precisa aparecer antes em `Authentication > Users`; se ainda não existir, entre ou crie a conta primeiro e execute `supabase/admin-console.sql` novamente. O SQL interrompe a execução com uma mensagem clara quando não encontra o usuário e mostra o email administrativo ao concluir.
 
