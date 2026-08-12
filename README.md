@@ -90,8 +90,11 @@ O teste percorre as páginas dos três apps em 320×700, 390×844 e 1440×900. E
 
 1. Rode `supabase/update-student-access.sql` no SQL Editor.
 2. Rode `supabase/provision-auth-profiles.sql` inteiro. Ele cria a RPC idempotente usada depois de login por senha, Google ou link mágico e atualiza o claim do aluno sem liberar emails desconhecidos.
-3. Rode `supabase/diagnose-development-data.sql` e confira se as consultas de duplicidade e planos incompletos retornam zero linhas.
-4. Não rode `supabase/reset-development-data.sql`; ele continua reservado para uma limpeza deliberada do ambiente de desenvolvimento.
+3. Rode `supabase/harden-database-default-privileges.sql`. Ela não altera dados: restringe criação no schema exposto, remove o `EXECUTE` automático de funções futuras e endurece o `search_path` das funções FlowFit existentes.
+4. Rode `supabase/enforce-coach-read-status.sql`. Ela alinha as policies de leitura ao status do professor, bloqueando chamadas diretas de contas `pending`, `suspended` ou `cancelled`.
+5. Rode `supabase/verify-security-hardening.sql`; o JSON deve terminar com `"ok": true`.
+6. Rode `supabase/diagnose-development-data.sql` e confira se as consultas de duplicidade e planos incompletos retornam zero linhas.
+7. Não rode `supabase/reset-development-data.sql`; ele continua reservado para uma limpeza deliberada do ambiente de desenvolvimento.
 
 A migração mantém alunos, contas, temas, treinos e históricos existentes. Ela adiciona o acesso direto por email, preserva a RPC antiga de convite por compatibilidade e cria a publicação transacional de treinos.
 

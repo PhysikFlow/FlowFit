@@ -163,7 +163,7 @@ create or replace function public.validate_student_invite(p_token text, p_email 
 returns table (valid boolean, email_matches boolean, reason text)
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 declare
   v_student public.students%rowtype;
@@ -190,7 +190,7 @@ create or replace function public.claim_student_access(p_token text default null
 returns table (student_id text, coach_id text, access_method text)
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 declare
   v_user_id uuid := auth.uid();
@@ -261,7 +261,7 @@ create or replace function public.claim_student_invite(p_token text)
 returns table (student_id text)
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 begin
   perform * from public.claim_student_access(p_token);
@@ -277,7 +277,7 @@ create or replace function public.publish_student_workout(p_workout jsonb, p_exe
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 declare
   v_user_id uuid := auth.uid();

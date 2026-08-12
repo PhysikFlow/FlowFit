@@ -1,4 +1,4 @@
-import { getSupabase } from "../../core/supabase.js?v=build-20260812-4";
+import { getSupabase } from "../../core/supabase.js?v=build-20260812-5";
 
 const PROFILES_TABLE = "profiles";
 const PROFILE_COLUMNS_BASE = "user_id, role, name, created_at, updated_at";

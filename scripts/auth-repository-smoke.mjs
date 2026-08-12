@@ -2,6 +2,22 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
+const supabaseCore = await import(new URL(
+  `../appAluno/js/core/supabase.js?smoke=${Date.now()}`,
+  import.meta.url
+));
+const removedLegacyKeys = [];
+supabaseCore.clearLegacyAuthStorage({
+  removeItem(key) {
+    removedLegacyKeys.push(key);
+  }
+});
+assert.deepEqual(removedLegacyKeys, [
+  supabaseCore.LEGACY_AUTH_STORAGE_KEY,
+  `${supabaseCore.LEGACY_AUTH_STORAGE_KEY}-code-verifier`
+]);
+assert.notEqual(supabaseCore.LEGACY_AUTH_STORAGE_KEY, supabaseCore.AUTH_STORAGE_KEY);
+
 const sourcePath = new URL("../appAluno/js/data/repositories/auth-repository.js", import.meta.url);
 const source = readFileSync(sourcePath, "utf8")
   .replace(/^import .*?;\s*/u, "const getSupabase = () => globalThis.__getSupabase();\n")

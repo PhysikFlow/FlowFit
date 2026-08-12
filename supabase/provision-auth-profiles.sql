@@ -106,7 +106,7 @@ create or replace function public.claim_student_access(p_token text default null
 returns table (student_id text, coach_id text, access_method text)
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 declare
   v_user_id uuid := auth.uid();

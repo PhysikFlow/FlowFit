@@ -30,9 +30,10 @@ Escopo: `/admin`, `/appProfessor` (a área chamada de `/professor` na auditoria)
 | `[~]` | AUTH-PROFILE-005 | Alto | Conta de aluno existente que também inicia cadastro de professor precisa preservar uma identidade e o maior papel. | `ensure_own_profile` promove `student -> coach`, sempre `pending`; preserva `admin` e nunca rebaixa. Testar aluno já vinculado, aprovação posterior e manutenção dos vínculos. |
 | `[x]` | AUTH-STUDENT-001 | Alto | Email/Google desconhecido não pode ganhar acesso de aluno apenas por autenticar. | `claim_student_access` verifica vínculo por email/convite e contagem de acessos antes de chamar `ensure_own_profile('student', ...)`; falha inteira é transacional. |
 | `[x]` | AUTH-BOOT-005 | Médio | Google/link mágico do aluno podiam lançar exceção não tratada no handler. | Handlers agora capturam a exceção, registram a etapa e mantêm o auth gate com mensagem recuperável. |
-| `[~]` | AUTH-OAUTH-001 | Alto | O callback Google retornava com `code`, mas o cliente compartilhado podia perder/sobrescrever o verificador PKCE e nenhuma sessão era criada. | `build-20260812-4` usa PKCE explícito, troca `code` por sessão em `authRepository.getSession()` e só depois limpa os parâmetros do URL. Confirmar login Google real nas três plataformas. |
-| `[~]` | AUTH-FEEDBACK-001 | Alto | Professor `pending` voltava do Google para uma tela visualmente idêntica ao login, embora o profile tivesse sido criado. | Deployar `build-20260812-4`/`flowfit-professor-v34`; o auth gate deve mostrar “Cadastro recebido”, email autenticado, mensagem de aprovação e ação para sair, ocultando campos de login. |
-| `[~]` | AUTH-CACHE-001 | Médio | Garantir que computadores com PWA antiga recebam a correção. | Deployar `build-20260812-4`, `flowfit-professor-v34` e `flowfit-aluno-v57`; testar update com uma instalação que ainda tenha o cache anterior. |
+| `[x]` | AUTH-OAUTH-001 | Alto | O callback Google retornava com `code`, mas o cliente compartilhado podia perder/sobrescrever o verificador PKCE e nenhuma sessão era criada. | `build-20260812-4` passou no login Google real; PKCE explícito troca `code` por sessão antes de limpar o URL. |
+| `[x]` | AUTH-FEEDBACK-001 | Alto | Professor `pending` voltava do Google para uma tela visualmente idêntica ao login, embora o profile tivesse sido criado. | Login real confirmado após deploy; o gate diferencia callback inválido, conta pendente e acesso liberado. |
+| `[~]` | AUTH-STORAGE-001 | Médio | A chave compartilhada antiga continuava no `localStorage` com refresh token válido mesmo sem ser lida. | Deployar `build-20260812-5`; `core/supabase.js` remove somente a chave padrão legada e seu verificador PKCE, preservando as três sessões isoladas. |
+| `[~]` | AUTH-CACHE-001 | Médio | Garantir que computadores com PWA antiga recebam a correção. | Deployar `build-20260812-5`, `flowfit-professor-v35` e `flowfit-aluno-v58`; testar update com uma instalação que ainda tenha o cache anterior. |
 
 ## Hierarquia de papéis e capacidade de professor
 
@@ -45,18 +46,22 @@ Escopo: `/admin`, `/appProfessor` (a área chamada de `/professor` na auditoria)
 | `[~]` | ADMIN-RPC-001 | Alto | `admin_update_coach` falhava para qualquer personal com `column reference "coach_id" is ambiguous`. | Aplicar `supabase/fix-admin-update-coach-ambiguity.sql`; o conflito passa a usar `ON CONFLICT ON CONSTRAINT coach_admin_settings_pkey`. Testar uma mudança real e conferir profile, settings e history. |
 | `[x]` | ROLE-ESC-001 | Alto | Impedir elevação direta de `profiles.role` pela Data API. | Grants limitam update autenticado às colunas de perfil público; `role` e `coach_status` não estão concedidos. Revalidar grants no banco real. |
 | `[x]` | ROLE-ADMIN-001 | Alto | RPCs administrativas exigem backend authorization. | Todas verificam `is_platform_admin()` em função `security definer`; testar chamada direta com aluno/professor e esperar erro `P0001`. |
+| `[~]` | DB-HARDEN-001 | Médio | PostgreSQL concede `EXECUTE` de novas funções a `PUBLIC` por padrão e os papéis da API não devem criar objetos no schema exposto. | Aplicar `supabase/harden-database-default-privileges.sql`; o JSON final deve retornar `anon_create=false`, `authenticated_create=false` e lista vazia em `flowfit_definers_without_hardened_search_path`. |
+| `[x]` | DB-HARDEN-002 | Médio | Toda função `security definer` precisa de `search_path` seguro e privilégio explícito. | `scripts/supabase-security-smoke.mjs` verifica todos os SQLs: nenhum `public, pg_temp`, todas usam `pg_catalog, public` e toda função criada possui `REVOKE ALL` explícito. |
+| `[ ]` | DB-HARDEN-003 | Baixo | Helpers `security definer` usados apenas por RLS/RPC ainda vivem no schema exposto `public`. | Avaliar migração de helpers para schema privado sem quebrar assinaturas públicas das RPCs. O risco atual é mitigado por `REVOKE ALL`, grants mínimos, `search_path` endurecido e remoção de `CREATE` no schema. |
 
 ## Sessões, desativação e alterações de credencial
 
 | Estado | ID | Risco | Item | Evidência/critério de conclusão |
 | --- | --- | --- | --- | --- |
-| `[ ]` | SESSION-001 | Alto | Professor suspenso/cancelado enquanto está com o painel aberto. | Verificar que uma nova abertura bloqueia. Hoje selects por `coach_id` não chamam `can_operate_as_coach`, portanto chamada direta pode continuar lendo dados; decidir e corrigir RLS se a suspensão deve cortar leitura imediatamente. |
+| `[~]` | SESSION-001 | Alto | Professor suspenso/cancelado enquanto está com o painel aberto ainda conseguia ler dados por chamadas diretas, embora UI e escritas bloqueassem. | Aplicar `supabase/enforce-coach-read-status.sql`; sete policies de SELECT passam a exigir `can_operate_as_coach()` no ramo do professor. Confirmar que a próxima requisição perde alunos/treinos/sessões sem esperar o token vencer. |
 | `[ ]` | SESSION-002 | Alto | Usuário removido de `auth.users` com access token ainda não expirado. | Medir leitura/escrita até expiração e refresh; confirmar comportamento de RLS para `auth.uid()` sem profile. |
 | `[ ]` | SESSION-003 | Médio | Senha alterada com sessões existentes. | Testar em dois navegadores se access/refresh tokens antigos continuam válidos e por quanto tempo; definir se precisa revogação global. |
 | `[ ]` | SESSION-004 | Médio | E-mail/login alterado com sessão existente e vínculos de aluno por e-mail. | Verificar auth user, `students.email`, `student_user_id`, seletores e próximo refresh. Não presumir sincronização automática. |
-| `[~]` | SESSION-005 | Alto | Admin, professor e aluno reutilizavam a mesma sessão e o mesmo estado PKCE no origin do GitHub Pages. Login/logout/troca de conta em uma plataforma sobrescrevia as demais e podia restaurar a conta errada. | `core/supabase.js` usa `storageKey` distinta (`flowfit-auth-admin`, `flowfit-auth-professor`, `flowfit-auth-aluno`); OAuth encerra apenas a sessão local da plataforma atual e envia `prompt=select_account`. Confirmar duas plataformas simultaneamente e logout independente em navegador real. |
+| `[x]` | SESSION-005 | Alto | Admin, professor e aluno reutilizavam a mesma sessão e o mesmo estado PKCE no origin do GitHub Pages. Login/logout/troca de conta em uma plataforma sobrescrevia as demais e podia restaurar a conta errada. | Sessões isoladas por plataforma, OAuth com `prompt=select_account` e logout `local`; login real voltou a funcionar sem reutilizar a conta administrativa salva. |
 | `[ ]` | SESSION-006 | Médio | Entrar manualmente na URL de outro perfil com sessão existente. | Repetir matriz admin/coach/student nas três rotas e registrar mensagem, sign-out e acesso de API. |
 | `[ ]` | SESSION-007 | Baixo | Sessão/localStorage parcialmente corrompido. | Corromper somente a chave Supabase em ambiente de teste; app deve voltar ao auth gate sem exibir dados remotos de outro usuário. Conferir caches locais. |
+| `[?]` | SESSION-008 | Médio | Definir se suspender/cancelar o professor também deve interromper o acesso dos alunos vinculados. | A migration nova bloqueia o próprio professor, mas preserva deliberadamente o ramo RLS do aluno. Alterar isso exige decisão de produto sobre continuidade dos treinos já prescritos. |
 
 ## Vínculos professor-aluno e dados órfãos
 
@@ -116,6 +121,8 @@ Escopo: `/admin`, `/appProfessor` (a área chamada de `/professor` na auditoria)
 | 2026-08-12 | AUTH-PERM-001 | GitHub Pages no navegador integrado | `/appProfessor/` abriu e iniciou o redirect Google sem erros/warnings de console; busca no código continua sem qualquer chamada a Permissions. | Não reproduzido fora do computador afetado; evidência aponta para código injetado/extensão até que um stack mostre arquivo do FlowFit. |
 | 2026-08-12 | ADMIN-RPC-001, AUTH-FEEDBACK-001 | JSON do banco + `scripts/admin-auth-regression-smoke.mjs` | Função real continha `ON CONFLICT (coach_id)` e retorno homônimo; migration usa a constraint. Smoke confere quatro fontes SQL, autorização, histórico, feedback e cache. | Código aprovado; aplicar SQL, deployar e validar com conta real. |
 | 2026-08-12 | AUTH-OAUTH-001, SESSION-005, AUTH-CACHE-001 | Smokes unitários + navegador local | 10 cenários do auth passaram; `/admin`, `/appProfessor` e `/appAluno` inicializaram sem erros/warnings. PKCE explícito, seletor de conta e storage isolado estão cobertos por regressão. | Código aprovado sem credenciais; deploy e login Google real nas três plataformas continuam pendentes. |
+| 2026-08-12 | AUTH-OAUTH-001, AUTH-FEEDBACK-001, SESSION-005 | Relato após deploy | Login Google do professor concluiu sessão válida e deixou de restaurar silenciosamente a conta administrativa anterior. | Aprovado com conta real. |
+| 2026-08-12 | AUTH-STORAGE-001, DB-HARDEN-001..002, SESSION-001 | Revisão pós-correção + três smokes | Remove token legado; restringe privilégios padrão; bloqueia leitura direta de coach inativo; SQLs, 10 cenários auth e regressão admin aprovados. | Código aprovado; deploy do build 5 e execução das duas migrations de hardening pendentes. |
 
 ## Comandos/arquivos de confirmação
 
@@ -125,6 +132,9 @@ Escopo: `/admin`, `/appProfessor` (a área chamada de `/professor` na auditoria)
 4. Correção da edição administrativa: `supabase/fix-admin-update-coach-ambiguity.sql`.
 5. Schema consolidado para instalações novas: `supabase/schema.sql`.
 6. Smoke de UI: `node scripts/ui-smoke.mjs http://127.0.0.1:8080`.
-7. Smokes de autenticação/admin: `node scripts/auth-repository-smoke.mjs` e `node scripts/admin-auth-regression-smoke.mjs`.
+7. Smokes de autenticação/admin/Supabase: `node scripts/auth-repository-smoke.mjs`, `node scripts/admin-auth-regression-smoke.mjs` e `node scripts/supabase-security-smoke.mjs`.
 8. Verificação pós-migration em um único JSON: `supabase/verify-auth-admin-fixes.sql`.
 9. Busca conceitual obrigatória antes de fechar mudanças de papel: `rg -n "role.*coach|can_operate_as_coach|has_coach_capability|ensure_own_profile" admin appProfessor appAluno supabase`.
+10. Endurecimento sem alteração de dados: `supabase/harden-database-default-privileges.sql`.
+11. Bloqueio de leitura para professor inativo: `supabase/enforce-coach-read-status.sql`.
+12. Verificação pós-hardening em um único JSON: `supabase/verify-security-hardening.sql`.

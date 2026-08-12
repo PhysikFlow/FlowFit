@@ -68,7 +68,7 @@ create or replace function public.publish_student_workout(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 declare
   v_user_id uuid := auth.uid();
@@ -218,7 +218,7 @@ create or replace function public.sync_workout_session(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 declare
   v_user_id uuid := auth.uid();

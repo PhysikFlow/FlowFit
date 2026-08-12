@@ -1,6 +1,6 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
-import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-4";
-import { adminRepository } from "./admin-repository.js?v=build-20260812-4";
+import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-5";
+import { adminRepository } from "./admin-repository.js?v=build-20260812-5";
 
 const STATUS_LABELS = Object.freeze({
   pending: "Aguardando aprovação",

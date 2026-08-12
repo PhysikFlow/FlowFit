@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-aluno-v57";
+const CACHE_NAME = "flowfit-aluno-v58";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -11,12 +11,12 @@ const APP_SHELL = [
   "./css/tokens.css?v=build-20260809-7",
   "./css/components.css?v=build-20260811-9",
   "./css/app.css?v=build-20260812-1",
-  "./js/app.js?v=build-20260812-4",
-  "./js/data/repositories/auth-repository.js?v=build-20260812-4",
-  "./js/data/repositories/student-repository.js?v=build-20260812-4",
-  "./js/data/repositories/theme-repository.js?v=build-20260812-4",
+  "./js/app.js?v=build-20260812-5",
+  "./js/data/repositories/auth-repository.js?v=build-20260812-5",
+  "./js/data/repositories/student-repository.js?v=build-20260812-5",
+  "./js/data/repositories/theme-repository.js?v=build-20260812-5",
   "./js/data/repositories/workout-repository.js?v=build-20260812-1",
-  "./js/data/repositories/session-repository.js?v=build-20260812-4",
+  "./js/data/repositories/session-repository.js?v=build-20260812-5",
   "./js/config.js?v=build-20260809-6",
   "./js/core/brand-theme.js?v=build-20260809-7",
   "./js/core/icons.js?v=build-20260810-7",
@@ -24,7 +24,7 @@ const APP_SHELL = [
   "./js/core/store.js?v=build-20260812-1",
   "./js/core/session-draft-storage.js?v=build-20260811-2",
   "./js/core/theme.js?v=build-20260809-7",
-  "./js/core/supabase.js?v=build-20260812-4",
+  "./js/core/supabase.js?v=build-20260812-5",
   "./manifest.webmanifest"
 ];
 

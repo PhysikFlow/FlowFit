@@ -1,6 +1,6 @@
 import { Platform } from "../../core/platform.js?v=build-20260809-6";
-import { getSupabase } from "../../core/supabase.js?v=build-20260812-4";
-import { authRepository } from "./auth-repository.js?v=build-20260812-4";
+import { getSupabase } from "../../core/supabase.js?v=build-20260812-5";
+import { authRepository } from "./auth-repository.js?v=build-20260812-5";
 
 export const WORKOUT_SESSIONS_KEY = "flowfit.workout-sessions";
 

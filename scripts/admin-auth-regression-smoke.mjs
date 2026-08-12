@@ -39,10 +39,12 @@ assert.match(professorApp, /O login do Google voltou ao FlowFit, mas nenhuma ses
 assert.match(professorApp, /url\.search = ""/);
 assert.match(professorCss, /data-account-state="blocked"/);
 assert.match(professorIndex, /app\.css\?v=build-20260812-3/);
-assert.match(professorIndex, /app\.js\?v=build-20260812-4/);
-assert.match(professorWorker, /flowfit-professor-v34/);
-assert.match(studentWorker, /flowfit-aluno-v57/);
+assert.match(professorIndex, /app\.js\?v=build-20260812-5/);
+assert.match(professorWorker, /flowfit-professor-v35/);
+assert.match(studentWorker, /flowfit-aluno-v58/);
 assert.match(supabaseClient, /storageKey: AUTH_STORAGE_KEY/);
+assert.match(supabaseClient, /LEGACY_AUTH_STORAGE_KEY/);
+assert.match(supabaseClient, /removeItem\(LEGACY_AUTH_STORAGE_KEY\)/);
 assert.match(supabaseClient, /detectSessionInUrl: false/);
 assert.match(supabaseClient, /flowType: "pkce"/);
 assert.match(supabaseClient, /\/appprofessor/);

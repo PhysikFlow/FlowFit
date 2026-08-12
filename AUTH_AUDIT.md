@@ -1,8 +1,22 @@
-# Auditoria de Autenticação — FlowFit (appAluno + appProfessor)
+# Auditoria de Autenticação — FlowFit (admin + professor + aluno)
 
-**Escopo:** fluxos de autenticação, cadastro, papel (aluno/personal), vínculo professor↔aluno e mensagens exibidas ao usuário.
-**Método:** leitura dos dois aplicativos, repositórios compartilhados, schema do banco e guias do projeto.
+**Escopo:** fluxos de autenticação, cadastro, papel (admin/aluno/personal), vínculo professor↔aluno e mensagens exibidas ao usuário.
+**Método:** leitura das três aplicações, repositórios compartilhados, schema do banco e guias do projeto.
 **Status:** auditoria documental original + atualização de implementação em 2026-08-05. Pontos que dependem de configuração externa do painel do Supabase estão marcados como **precisa confirmar no dashboard**.
+
+---
+
+## Atualização pós-correção — 2026-08-12
+
+Esta seção substitui as descrições históricas de sessão/OAuth abaixo onde houver conflito.
+
+- `/admin`, `/appProfessor` e `/appAluno` continuam usando o mesmo projeto Supabase, mas agora possuem sessões locais isoladas por `storageKey`: `flowfit-auth-admin`, `flowfit-auth-professor` e `flowfit-auth-aluno`.
+- O cliente usa PKCE com `detectSessionInUrl: false`. `authRepository.getSession()` troca explicitamente o parâmetro `code` por uma sessão e só depois remove os parâmetros de autenticação do URL.
+- O login Google solicita `prompt=select_account`. Antes de trocar a conta, encerra somente a sessão da plataforma atual com `scope: "local"`; isso não encerra as outras plataformas ou dispositivos.
+- A chave padrão antiga `sb-<project-ref>-auth-token`, que era compartilhada, é removida para não deixar um refresh token legado abandonado no navegador.
+- O login real Google do professor foi confirmado pelo usuário depois do deploy de `build-20260812-4`. O endurecimento posterior está em `build-20260812-5`.
+- As funções `security definer` possuem `REVOKE/GRANT` explícitos e `search_path = pg_catalog, public`. A migration `supabase/harden-database-default-privileges.sql` também revoga `CREATE` dos papéis da API e o `EXECUTE` automático para funções futuras.
+- A migration `supabase/enforce-coach-read-status.sql` corrige a diferença entre frontend e RLS: professores `pending`, `suspended` ou `cancelled` deixam de ler diretamente alunos, temas, treinos e sessões; o próprio profile continua legível para mostrar o motivo do bloqueio.
 
 ---
 

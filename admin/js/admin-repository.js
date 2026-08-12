@@ -1,5 +1,5 @@
-import { getSupabase } from "../../appAluno/js/core/supabase.js?v=build-20260812-4";
-import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-4";
+import { getSupabase } from "../../appAluno/js/core/supabase.js?v=build-20260812-5";
+import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-5";
 
 const messageFromError = (error, fallback) => {
   const message = String(error?.message || "").trim();

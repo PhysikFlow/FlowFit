@@ -16,6 +16,13 @@
 -- - tabelas publicas ficam com RLS habilitado; anon nao acessa dados reais
 -- ============================================================================
 
+-- Data API roles podem usar objetos explicitamente concedidos, mas nunca criar
+-- objetos no schema exposto. Novas funcoes exigem GRANT EXECUTE deliberado.
+revoke create on schema public from public, anon, authenticated;
+grant usage on schema public to anon, authenticated;
+alter default privileges in schema public
+  revoke execute on functions from public, anon, authenticated;
+
 create table if not exists public.profiles (
   user_id    uuid primary key references auth.users(id) on delete cascade,
   role       text not null,
@@ -496,7 +503,7 @@ create or replace function public.validate_student_invite(p_token text, p_email 
 returns table (valid boolean, email_matches boolean, reason text)
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 declare
   v_student public.students%rowtype;
@@ -540,7 +547,7 @@ create or replace function public.claim_student_access(p_token text default null
 returns table (student_id text, coach_id text, access_method text)
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 declare
   v_user_id uuid := auth.uid();
@@ -642,7 +649,7 @@ create or replace function public.claim_student_invite(p_token text)
 returns table (student_id text)
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 begin
   perform * from public.claim_student_access(p_token);
@@ -660,7 +667,7 @@ create or replace function public.publish_student_workout(p_workout jsonb, p_exe
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 declare
   v_user_id uuid := auth.uid();
@@ -796,7 +803,7 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 declare
   v_user_id uuid := auth.uid();
@@ -974,7 +981,10 @@ create policy "brand_theme_select_authenticated"
   on public.brand_theme for select
   to authenticated
   using (
-    coach_id = (select auth.uid())::text
+    (
+      coach_id = (select auth.uid())::text
+      and (select public.can_operate_as_coach())
+    )
     or exists (
       select 1
       from public.students s
@@ -1007,7 +1017,10 @@ create policy "students_select_authenticated_owner"
   on public.students for select
   to authenticated
   using (
-    coach_id = (select auth.uid())::text
+    (
+      coach_id = (select auth.uid())::text
+      and (select public.can_operate_as_coach())
+    )
     or student_user_id = (select auth.uid())
   );
 
@@ -1043,7 +1056,10 @@ create policy "workout_plans_select_authenticated_owner"
   on public.workout_plans for select
   to authenticated
   using (
-    coach_id = (select auth.uid())::text
+    (
+      coach_id = (select auth.uid())::text
+      and (select public.can_operate_as_coach())
+    )
     or exists (
       select 1
       from public.students s
@@ -1085,7 +1101,10 @@ create policy "workout_exercises_select_authenticated_owner"
   on public.workout_exercises for select
   to authenticated
   using (
-    coach_id = (select auth.uid())::text
+    (
+      coach_id = (select auth.uid())::text
+      and (select public.can_operate_as_coach())
+    )
     or exists (
       select 1
       from public.workout_plans wp
@@ -1130,7 +1149,10 @@ create policy "workout_sessions_select_authenticated_owner"
   on public.workout_sessions for select
   to authenticated
   using (
-    coach_id = (select auth.uid())::text
+    (
+      coach_id = (select auth.uid())::text
+      and (select public.can_operate_as_coach())
+    )
     or exists (
       select 1
       from public.students s
@@ -1195,7 +1217,10 @@ create policy "workout_set_logs_select_authenticated_owner"
   on public.workout_set_logs for select
   to authenticated
   using (
-    coach_id = (select auth.uid())::text
+    (
+      coach_id = (select auth.uid())::text
+      and (select public.can_operate_as_coach())
+    )
     or exists (
       select 1
       from public.workout_sessions ws
@@ -1272,7 +1297,10 @@ create policy "workout_feedback_select_authenticated_owner"
   on public.workout_feedback for select
   to authenticated
   using (
-    coach_id = (select auth.uid())::text
+    (
+      coach_id = (select auth.uid())::text
+      and (select public.can_operate_as_coach())
+    )
     or exists (
       select 1
       from public.workout_sessions ws
@@ -1929,7 +1957,7 @@ create or replace function public.publish_student_workout(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 declare
   v_user_id uuid := auth.uid();
@@ -2079,7 +2107,7 @@ create or replace function public.sync_workout_session(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public
 as $$
 declare
   v_user_id uuid := auth.uid();

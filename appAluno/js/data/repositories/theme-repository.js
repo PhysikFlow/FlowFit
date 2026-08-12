@@ -1,7 +1,7 @@
-import { getSupabase } from "../../core/supabase.js?v=build-20260812-4";
+import { getSupabase } from "../../core/supabase.js?v=build-20260812-5";
 import { Platform } from "../../core/platform.js?v=build-20260809-6";
 import { LEGACY_REMOTE_THEME_KEY, REMOTE_THEME_KEY, normalizeBrandTheme } from "../../core/brand-theme.js?v=build-20260809-7";
-import { authRepository } from "./auth-repository.js?v=build-20260812-4";
+import { authRepository } from "./auth-repository.js?v=build-20260812-5";
 
 const TABLE = "brand_theme";
 const THEME_COLUMNS_BASE = "coach_id, brand_name, tagline, accent, mode, updated_at";
