@@ -4,7 +4,7 @@ import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrast
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260811-3";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260811-3";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260811-3";
-import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260811-3";
+import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260812-1";
 import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260811-3";
 
 const pages = [...document.querySelectorAll("[data-page]")];
@@ -1523,7 +1523,8 @@ const renderWorkoutPreview = () => {
           <label>Tipo da demonstração
             <select name="draft-media-type-${index}" data-draft-exercise-field="mediaType" data-draft-exercise-index="${index}">
               <option value="none" ${!exercise.mediaType || exercise.mediaType === "none" ? "selected" : ""}>Sem mídia</option>
-              <option value="image" ${exercise.mediaType === "image" ? "selected" : ""}>Imagem ou GIF</option>
+              <option value="image" ${exercise.mediaType === "image" ? "selected" : ""}>Imagem</option>
+              <option value="gif" ${exercise.mediaType === "gif" ? "selected" : ""}>GIF</option>
               <option value="video" ${exercise.mediaType === "video" ? "selected" : ""}>Vídeo direto</option>
               <option value="youtube" ${exercise.mediaType === "youtube" ? "selected" : ""}>YouTube</option>
               <option value="external" ${exercise.mediaType === "external" ? "selected" : ""}>Link externo</option>

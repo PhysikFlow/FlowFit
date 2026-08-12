@@ -4,7 +4,8 @@
 
 alter table public.workout_exercises
   add column if not exists instructions text not null default '',
-  add column if not exists media_url text not null default '';
+  add column if not exists media_url text not null default '',
+  add column if not exists media_type text not null default 'none';
 
 do $$
 begin
@@ -17,6 +18,12 @@ begin
       add constraint workout_exercises_media_url_https_check
       check (media_url = '' or media_url ~* '^https://');
   end if;
+
+  alter table public.workout_exercises
+    drop constraint if exists workout_exercises_media_type_check;
+  alter table public.workout_exercises
+    add constraint workout_exercises_media_type_check
+    check (media_type in ('none', 'image', 'gif', 'video', 'youtube', 'external'));
 end
 $$;
 
@@ -278,6 +285,8 @@ declare
   v_workout_id text := trim(coalesce(p_workout ->> 'id', ''));
   v_student_id text := trim(coalesce(p_workout ->> 'student_id', ''));
   v_exercise jsonb;
+  v_media_url text;
+  v_media_type text;
   v_count integer := 0;
   v_result jsonb;
 begin
@@ -320,8 +329,17 @@ begin
   delete from public.workout_exercises where workout_id = v_workout_id and coach_id = v_coach_id;
   for v_exercise in select value from jsonb_array_elements(p_exercises)
   loop
+    v_media_url := trim(coalesce(v_exercise ->> 'media_url', ''));
+    v_media_type := lower(trim(coalesce(v_exercise ->> 'media_type', case when v_media_url = '' then 'none' else 'external' end)));
+    if v_media_url <> '' and v_media_url !~* '^https://' then
+      raise exception 'exercise_media_url_requires_https';
+    end if;
+    if v_media_type not in ('none', 'image', 'gif', 'video', 'youtube', 'external') then
+      raise exception 'exercise_media_type_invalid';
+    end if;
+
     insert into public.workout_exercises (
-      id, workout_id, coach_id, position, name, target, prescription, load, rest, tempo, rir, notes, instructions, media_url, updated_at
+      id, workout_id, coach_id, position, name, target, prescription, load, rest, tempo, rir, notes, instructions, media_url, media_type, updated_at
     ) values (
       trim(coalesce(v_exercise ->> 'id', v_workout_id || '-ex-' || v_count::text)),
       v_workout_id, v_coach_id, v_count,
@@ -334,7 +352,7 @@ begin
       trim(coalesce(v_exercise ->> 'rir', '2')),
       trim(coalesce(v_exercise ->> 'notes', 'Criado no painel do professor.')),
       trim(coalesce(v_exercise ->> 'instructions', '')),
-      trim(coalesce(v_exercise ->> 'media_url', '')), now()
+      v_media_url, v_media_type, now()
     );
     v_count := v_count + 1;
   end loop;

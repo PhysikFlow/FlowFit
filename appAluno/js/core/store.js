@@ -4,7 +4,8 @@ import { SessionDraftStorage } from "./session-draft-storage.js?v=build-20260811
 const APP_STATE_KEY = "flowfit.aluno.state";
 
 export const SESSION_PHASE = Object.freeze({
-  ACTIVE: "active",
+  ACTIVE_SET: "active_set",
+  TRANSITIONING: "transitioning",
   RESTING: "resting",
   PAUSED: "paused",
   AWAITING_SUMMARY: "awaiting_summary",
@@ -14,7 +15,8 @@ export const SESSION_PHASE = Object.freeze({
 });
 
 const LEGACY_PHASES = Object.freeze({
-  exercise: SESSION_PHASE.ACTIVE,
+  active: SESSION_PHASE.ACTIVE_SET,
+  exercise: SESSION_PHASE.ACTIVE_SET,
   rest: SESSION_PHASE.RESTING,
   review: SESSION_PHASE.AWAITING_SUMMARY,
   success: SESSION_PHASE.COMPLETED
@@ -25,13 +27,19 @@ const normalizeSession = (session) => {
   const legacyPhase = LEGACY_PHASES[session.phase];
   const phase = (legacyPhase || Object.values(SESSION_PHASE).includes(session.phase))
     ? (legacyPhase || session.phase)
-    : SESSION_PHASE.ACTIVE;
+    : SESSION_PHASE.ACTIVE_SET;
+  const legacyResumePhase = LEGACY_PHASES[session.resumePhase];
+  const resumePhase = legacyResumePhase || (Object.values(SESSION_PHASE).includes(session.resumePhase)
+    ? session.resumePhase
+    : null);
   return {
     ...session,
     schemaVersion: 2,
     phase: phase === SESSION_PHASE.COMPLETED && session.syncStatus !== "synced"
       ? SESSION_PHASE.PENDING_SYNC
       : phase,
+    resumePhase,
+    pausedDurationSeconds: Math.max(0, Number(session.pausedDurationSeconds || 0)),
     setEntries: Array.isArray(session.setEntries) ? session.setEntries : []
   };
 };
@@ -161,7 +169,7 @@ export const Store = {
     this.state.activeSession = {
       ...current,
       setEntries: entries.filter((item) => item !== target),
-      phase: SESSION_PHASE.ACTIVE,
+      phase: SESSION_PHASE.ACTIVE_SET,
       currentExerciseId: workoutExerciseId,
       currentSetNumber: Number(setNumber),
       restEndsAt: null

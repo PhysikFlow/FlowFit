@@ -1,12 +1,12 @@
 import { Platform } from "./core/platform.js?v=build-20260809-6";
-import { SESSION_PHASE, Store } from "./core/store.js?v=build-20260811-3";
+import { SESSION_PHASE, Store } from "./core/store.js?v=build-20260812-1";
 import { Theme } from "./core/theme.js?v=build-20260809-7";
 import { svgIcon } from "./core/icons.js?v=build-20260810-7";
 import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260809-7";
 import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260811-3";
 import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260811-3";
 import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260811-3";
-import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260811-3";
+import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260812-1";
 import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260811-3";
 
 const pages = [...document.querySelectorAll("[data-page]")];
@@ -31,6 +31,7 @@ const workoutRunner = document.querySelector("[data-workout-runner]");
 const exerciseSheet = document.querySelector("[data-exercise-sheet]");
 const infoDialog = document.querySelector("[data-info-dialog]");
 const discomfortDialog = document.querySelector("[data-discomfort-dialog]");
+const pauseDialog = document.querySelector("[data-pause-dialog]");
 const discomfortForm = document.querySelector("[data-discomfort-form]");
 const progressDisclosure = document.querySelector("[data-progress-disclosure]");
 const scheduleDisclosure = document.querySelector("[data-schedule-disclosure]");
@@ -42,6 +43,7 @@ let toastTimer;
 let runnerTickId;
 let wakeLockSentinel = null;
 const SET_CLICK_DEBOUNCE_MS = 2000;
+const SET_TRANSITION_MS = 720;
 const setClickLocks = new Set();
 const compactWorkoutQuery = window.matchMedia("(max-width: 767px)");
 let focusedExerciseId = "";
@@ -207,43 +209,123 @@ const findPreviousSet = (exercise, setNumber) => {
   return null;
 };
 
-const createSessionSnapshot = (workout) => ({
-  id: workout.id,
-  code: workout.code,
-  title: workout.title,
-  focus: workout.focus,
-  version: workout.version || 1,
-  exercises: (workout.exercises || []).map((exercise, index) => ({
-    ...exercise,
-    workoutExerciseId: exercise.workoutExerciseId || exercise.id || `${workout.id}-item-${index + 1}`,
-    exerciseId: exercise.exerciseId || exercise.id || ""
-  }))
-});
+const findPreviousExerciseLogs = (exercise) => {
+  for (const session of previousSessions) {
+    if (!["completed", "partial"].includes(session.status)) continue;
+    const historicalExerciseId = exercise.exerciseId || exercise.id;
+    const exactLogs = (session.setLogs || []).filter((log) => log.exerciseId === historicalExerciseId);
+    const nameLogs = (session.setLogs || []).filter((log) => (
+      normalizeExerciseName(log.exerciseName) === normalizeExerciseName(exercise.name)
+    ));
+    const logs = exactLogs.length ? exactLogs : nameLogs;
+    if (logs.length) return [...logs].sort((a, b) => Number(a.setNumber || 0) - Number(b.setNumber || 0));
+  }
+  return [];
+};
+
+const createStableId = (prefix) => {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  return uuid ? `${prefix}-${uuid}` : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const getElapsedSeconds = (session, now = Date.now()) => {
+  const startedAt = new Date(session?.startedAt || now).getTime();
+  const pausedAt = session?.pausedAt ? new Date(session.pausedAt).getTime() : null;
+  const activeUntil = Number.isFinite(pausedAt) ? pausedAt : now;
+  return Math.max(0, Math.floor((activeUntil - startedAt) / 1000) - Number(session?.pausedDurationSeconds || 0));
+};
+
+const pauseActiveSession = (session = getActiveSession()) => {
+  if (!session || session.phase === SESSION_PHASE.PAUSED) return session;
+  return Store.updateActiveSession({
+    phase: SESSION_PHASE.PAUSED,
+    resumePhase: session.phase,
+    pausedAt: new Date().toISOString()
+  });
+};
+
+const resumeActiveSession = (session = getActiveSession()) => {
+  if (!session || session.phase !== SESSION_PHASE.PAUSED) return session;
+  const pausedAt = new Date(session.pausedAt || Date.now()).getTime();
+  const pausedFor = Number.isFinite(pausedAt) ? Math.max(0, Math.floor((Date.now() - pausedAt) / 1000)) : 0;
+  let phase = session.resumePhase || SESSION_PHASE.ACTIVE_SET;
+  if (phase === SESSION_PHASE.TRANSITIONING && new Date(session.transitionEndsAt || 0).getTime() <= Date.now()) {
+    phase = session.pendingExerciseId ? SESSION_PHASE.RESTING : SESSION_PHASE.AWAITING_SUMMARY;
+  }
+  if (phase === SESSION_PHASE.RESTING && new Date(session.restEndsAt || 0).getTime() <= Date.now()) {
+    phase = session.pendingExerciseId || session.currentExerciseId
+      ? SESSION_PHASE.ACTIVE_SET
+      : SESSION_PHASE.AWAITING_SUMMARY;
+  }
+  return Store.updateActiveSession({
+    phase,
+    resumePhase: null,
+    pausedAt: null,
+    pausedDurationSeconds: Number(session.pausedDurationSeconds || 0) + pausedFor,
+    transitionEndsAt: phase === SESSION_PHASE.TRANSITIONING ? session.transitionEndsAt : null,
+    restEndsAt: phase === SESSION_PHASE.RESTING ? session.restEndsAt : null,
+    pendingExerciseId: [SESSION_PHASE.TRANSITIONING, SESSION_PHASE.RESTING].includes(phase) ? session.pendingExerciseId : null,
+    pendingSetNumber: [SESSION_PHASE.TRANSITIONING, SESSION_PHASE.RESTING].includes(phase) ? session.pendingSetNumber : null
+  });
+};
+
+const createSessionSnapshot = (workout) => {
+  const exercises = workout.exercises || [];
+  const occurrenceCounts = new Map();
+  exercises.forEach((exercise) => {
+    const baseId = exercise.workoutExerciseId || exercise.id || "";
+    occurrenceCounts.set(baseId, Number(occurrenceCounts.get(baseId) || 0) + 1);
+  });
+  return {
+    id: workout.id,
+    code: workout.code,
+    title: workout.title,
+    focus: workout.focus,
+    version: workout.version || 1,
+    exercises: exercises.map((exercise, index) => {
+      const baseId = exercise.workoutExerciseId || exercise.id || `${workout.id}-item-${index + 1}`;
+      return {
+        ...exercise,
+        workoutExerciseId: Number(occurrenceCounts.get(baseId) || 0) > 1
+          ? `${baseId}-occurrence-${index + 1}`
+          : baseId,
+        exerciseId: exercise.exerciseId || exercise.id || ""
+      };
+    })
+  };
+};
 
 const createActiveSession = (workout) => {
-  const firstExercise = workout.exercises?.[0];
+  const workoutSnapshot = createSessionSnapshot(workout);
+  const firstExercise = workoutSnapshot.exercises?.[0];
   const session = {
-    id: `session-${Date.now()}`,
+    id: createStableId("session"),
     coachId: workout.coachId || currentStudent.coachId || "",
     studentId: currentStudent.id,
     studentKey: currentStudent.studentKey || workout.studentKey || "",
     studentEmail: currentStudent.email || "",
     workoutId: workout.id,
     workoutVersion: workout.version || 1,
-    workoutSnapshot: createSessionSnapshot(workout),
+    workoutSnapshot,
     startedAt: new Date().toISOString(),
     schemaVersion: 2,
-    phase: SESSION_PHASE.ACTIVE,
-    syncStatus: "draft",
+    phase: SESSION_PHASE.ACTIVE_SET,
+    syncStatus: "local",
     currentExerciseId: occurrenceId(firstExercise),
     currentSetNumber: 1,
     restEndsAt: null,
+    transitionEndsAt: null,
+    pendingExerciseId: null,
+    pendingSetNumber: null,
+    pausedAt: null,
+    pausedDurationSeconds: 0,
     setEntries: []
   };
 
   const legacyDone = Store.state.activeWorkoutId === workout.id ? Store.state.setLogs || {} : {};
   Object.entries(legacyDone).forEach(([exerciseId, count]) => {
-    const exercise = workout.exercises.find((item) => item.id === exerciseId);
+    const exerciseIndex = workout.exercises.findIndex((item) => item.id === exerciseId);
+    const exercise = workoutSnapshot.exercises[exerciseIndex];
     if (!exercise) return;
     const log = Store.getExerciseLog(exerciseId, {
       load: parseLoadKg(exercise.load),
@@ -253,7 +335,7 @@ const createActiveSession = (workout) => {
       session.setEntries.push({
         workoutExerciseId: occurrenceId(exercise),
         exerciseId: exercise.exerciseId || exercise.id,
-        exercisePosition: workout.exercises.indexOf(exercise),
+        exercisePosition: exerciseIndex,
         exerciseName: exercise.name,
         setNumber,
         setKind: "working",
@@ -274,6 +356,10 @@ const createActiveSession = (workout) => {
 const formatVolume = (value) => `${(value / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}t`;
 
 const formatDecimal = (value) => Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+
+const formatSetPerformance = (loadKg, reps) => Number(loadKg) > 0
+  ? `${formatDecimal(loadKg)} kg × ${Number(reps || 0)}`
+  : `${Number(reps || 0)} reps`;
 
 const formatShortDate = (date) => new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(date));
 
@@ -346,15 +432,7 @@ const pageExists = (name) => pages.some((page) => page.dataset.page === name);
 const navigate = (name, updateHash = true) => {
   if (name === "workout/session" && getActiveSession()) {
     const session = getActiveSession();
-    if (session.phase === SESSION_PHASE.PAUSED) {
-      const resting = session.resumePhase === SESSION_PHASE.RESTING
-        && Number.isFinite(new Date(session.restEndsAt).getTime())
-        && new Date(session.restEndsAt).getTime() > Date.now();
-      Store.updateActiveSession({
-        phase: resting ? SESSION_PHASE.RESTING : SESSION_PHASE.ACTIVE,
-        resumePhase: null
-      });
-    }
+    if (session.phase === SESSION_PHASE.PAUSED) resumeActiveSession(session);
     document.body.classList.add("has-workout-runner");
     workoutRunner.hidden = false;
     workoutRunner.setAttribute("aria-hidden", "false");
@@ -367,8 +445,8 @@ const navigate = (name, updateHash = true) => {
   }
   if (!workoutRunner.hidden) {
     const session = getActiveSession();
-    if ([SESSION_PHASE.ACTIVE, SESSION_PHASE.RESTING].includes(session?.phase)) {
-      Store.updateActiveSession({ phase: SESSION_PHASE.PAUSED, resumePhase: session.phase });
+    if ([SESSION_PHASE.ACTIVE_SET, SESSION_PHASE.TRANSITIONING, SESSION_PHASE.RESTING].includes(session?.phase)) {
+      pauseActiveSession(session);
     }
     document.body.classList.remove("has-workout-runner");
     workoutRunner.hidden = true;
@@ -722,7 +800,9 @@ const buildWorkoutSessionPayload = () => {
     const index = Math.max(0, exercises.findIndex((item) => occurrenceId(item) === workoutExerciseId));
     const loadKg = Number(entry.loadKg || 0);
     const reps = Number(entry.reps || 0);
-    const exerciseFeedback = activeSession.exerciseFeedback?.[workoutExerciseId] || {};
+    const exerciseFeedback = activeSession.exerciseFeedback?.[`${workoutExerciseId}:${entry.setNumber}`]
+      || activeSession.exerciseFeedback?.[workoutExerciseId]
+      || {};
     return {
       id: `${sessionId}-ex-${String(index + 1).padStart(2, "0")}-set-${String(entry.setNumber).padStart(2, "0")}`,
       sessionId,
@@ -745,7 +825,7 @@ const buildWorkoutSessionPayload = () => {
       setKind: entry.setKind || "working",
       completedAt: entry.completedAt || finishedAt,
       discomfort: exerciseFeedback.severity || "none",
-      discomfortNote: exerciseFeedback.note || ""
+      discomfortNote: [exerciseFeedback.region, exerciseFeedback.note].filter(Boolean).join(" · ")
     };
   });
   const completedSets = setLogs.length;
@@ -772,7 +852,7 @@ const buildWorkoutSessionPayload = () => {
     totalSets,
     completedSets,
     volumeKg: Math.round(volumeKg),
-    durationSeconds: Math.max(0, Math.round((new Date(finishedAt) - new Date(startedAt)) / 1000)),
+    durationSeconds: getElapsedSeconds(activeSession, new Date(finishedAt).getTime()),
     startedAt,
     finishedAt,
     feedback: {
@@ -933,7 +1013,7 @@ const renderRunnerMedia = (exercise) => {
   const declaredType = String(exercise.mediaType || "").toLowerCase();
   const extension = url.pathname.split(".").pop()?.toLowerCase() || "";
   const youtubeId = getYouTubeVideoId(source);
-  const mediaType = ["image", "video", "youtube", "external"].includes(declaredType)
+  const mediaType = ["image", "gif", "video", "youtube", "external"].includes(declaredType)
     ? declaredType
     : youtubeId ? "youtube"
       : ["png", "jpg", "jpeg", "gif", "webp", "avif"].includes(extension) ? "image"
@@ -950,7 +1030,7 @@ const renderRunnerMedia = (exercise) => {
     return;
   }
 
-  if (mediaType === "image") {
+  if (["image", "gif"].includes(mediaType)) {
     const image = document.createElement("img");
     image.src = source;
     image.alt = `Demonstração de ${exercise.name}`;
@@ -965,7 +1045,8 @@ const renderRunnerMedia = (exercise) => {
     video.loop = true;
     video.autoplay = true;
     video.playsInline = true;
-    video.controls = true;
+    video.controls = false;
+    video.preload = "metadata";
     target.append(video);
     return;
   }
@@ -1012,7 +1093,7 @@ const renderRunnerExerciseSheet = (session) => {
           <div><strong>${escapeHtml(exercise.name)}</strong><small>${escapeHtml(exercise.prescription)} · ${entries.length}/${total} séries</small></div>
           <b>${entries.length >= total ? "✓" : `${entries.length}/${total}`}</b>
         </button>
-        ${entries.length ? `<div class="runner-sheet__sets">${entries.map((entry) => `<button type="button" data-edit-completed-set="${escapeHtml(workoutExerciseId)}" data-edit-set-number="${entry.setNumber}">S${entry.setNumber} · ${entry.loadKg}kg × ${entry.reps}</button>`).join("")}</div>` : ""}
+        ${entries.length ? `<div class="runner-sheet__sets">${entries.map((entry) => `<button type="button" data-edit-completed-set="${escapeHtml(workoutExerciseId)}" data-edit-set-number="${entry.setNumber}">S${entry.setNumber} · ${formatSetPerformance(entry.loadKg, entry.reps)}</button>`).join("")}</div>` : ""}
       </article>
     `;
   }).join("");
@@ -1021,10 +1102,12 @@ const renderRunnerExerciseSheet = (session) => {
 const renderRunnerReview = (session) => {
   const done = getCompletedSessionSets(session);
   const total = getSessionTotalSets(session);
-  const duration = Math.max(0, Math.round((Date.now() - new Date(session.startedAt).getTime()) / 1000));
+  const duration = getElapsedSeconds(session);
   document.querySelector("[data-review-duration]").textContent = duration < 60 ? "<1 min" : `${Math.round(duration / 60)} min`;
   document.querySelector("[data-review-sets]").textContent = `${done}/${total}`;
   document.querySelector("[data-review-volume]").textContent = `${Math.round(getWorkoutVolume(session)).toLocaleString("pt-BR")} kg`;
+  document.querySelector("[data-review-exercises]").textContent = new Set(getSessionEntries(session)
+    .map((entry) => entry.workoutExerciseId || entry.exerciseId)).size;
   const progressionIds = getProgressionExerciseIds(session);
   const progressionNames = getSessionExercises(session)
     .filter((exercise) => progressionIds.has(occurrenceId(exercise)))
@@ -1044,6 +1127,21 @@ const renderRunnerReview = (session) => {
     : "Enviar e concluir";
 };
 
+const renderRunnerPerformanceHint = (exercise, setNumber) => {
+  const target = document.querySelector("[data-runner-performance]");
+  if (!target || !exercise) return;
+  const previous = findPreviousSet(exercise, setNumber);
+  const loadValue = document.querySelector("[data-runner-load]")?.value;
+  const repsValue = document.querySelector("[data-runner-reps]")?.value;
+  const load = loadValue === "" ? null : Number(loadValue);
+  const reps = repsValue === "" ? null : Number(repsValue);
+  const isBetter = previous && load !== null && reps !== null
+    && ((load > Number(previous.loadKg || 0) && reps >= Number(previous.reps || 0))
+      || (load >= Number(previous.loadKg || 0) && reps > Number(previous.reps || 0)));
+  target.hidden = !isBetter;
+  target.textContent = isBetter ? "↑ Melhor que o registro comparável da última sessão" : "";
+};
+
 const renderWorkoutRunner = () => {
   const session = getActiveSession();
   if (!session) return;
@@ -1052,11 +1150,14 @@ const renderWorkoutRunner = () => {
   const percent = total ? Math.round((done / total) * 100) : 0;
   document.querySelector("[data-runner-workout-title]").textContent = `Treino ${session.workoutSnapshot?.code || ""}`.trim();
   document.querySelector("[data-runner-progress-title]").textContent = session.workoutSnapshot?.title || "Treino";
-  document.querySelector("[data-runner-progress-copy]").textContent = `${done}/${total} séries`;
+  const exercises = getSessionExercises(session);
+  const activeExerciseIndex = Math.max(0, exercises.findIndex((item) => occurrenceId(item) === session.currentExerciseId));
+  document.querySelector("[data-runner-progress-copy]").textContent = `${Math.min(activeExerciseIndex + 1, exercises.length)} de ${exercises.length} exercícios · ${done}/${total} séries`;
   document.querySelector("[data-runner-progress]").style.setProperty("--progress", `${percent}%`);
   document.querySelector("[data-runner-progress-track]")?.setAttribute("aria-valuenow", String(percent));
   const visualPhase = {
-    [SESSION_PHASE.ACTIVE]: "exercise",
+    [SESSION_PHASE.ACTIVE_SET]: "exercise",
+    [SESSION_PHASE.TRANSITIONING]: "transition",
     [SESSION_PHASE.RESTING]: "rest",
     [SESSION_PHASE.PAUSED]: "exercise",
     [SESSION_PHASE.AWAITING_SUMMARY]: "review",
@@ -1075,6 +1176,15 @@ const renderWorkoutRunner = () => {
   }
   renderRunnerExerciseSheet(session);
 
+  if (session.phase === SESSION_PHASE.TRANSITIONING) {
+    const transitionCopy = document.querySelector("[data-runner-transition-copy]");
+    transitionCopy.textContent = session.pendingExerciseId
+      ? "Preparando o descanso antes da próxima série."
+      : "Todas as séries foram realizadas. Preparando seu resumo.";
+    syncRunnerClock();
+    return;
+  }
+
   if ([SESSION_PHASE.AWAITING_SUMMARY, SESSION_PHASE.PENDING_SYNC].includes(session.phase)) {
     renderRunnerReview(session);
     return;
@@ -1086,10 +1196,12 @@ const renderWorkoutRunner = () => {
     return;
   }
   if (session.phase === SESSION_PHASE.RESTING) {
-    const next = getNextIncompleteTarget(session, session.currentExerciseId);
-    document.querySelector("[data-runner-rest-next]").textContent = next
-      ? `${next.exercise.name} · série ${next.setNumber}`
-      : "Resumo do treino";
+    const nextExercise = findSessionExercise(session.pendingExerciseId || session.currentExerciseId, session);
+    const nextSetNumber = Number(session.pendingSetNumber || session.currentSetNumber || 1);
+    document.querySelector("[data-runner-rest-next]").textContent = nextExercise?.name || "Resumo do treino";
+    document.querySelector("[data-runner-rest-position]").textContent = nextExercise
+      ? `Série ${nextSetNumber} de ${parseTotalSets(nextExercise)}`
+      : "Treino finalizado";
     syncRunnerClock();
     return;
   }
@@ -1108,8 +1220,8 @@ const renderWorkoutRunner = () => {
     Store.updateActiveSession({ currentExerciseId: occurrenceId(exercise), currentSetNumber: setNumber });
   }
 
-  const exercises = getSessionExercises(session);
   const previous = findPreviousSet(exercise, setNumber);
+  const previousLogs = findPreviousExerciseLogs(exercise);
   const exerciseIndex = exercises.findIndex((item) => occurrenceId(item) === occurrenceId(exercise));
   document.querySelector("[data-runner-exercise-position]").textContent = `Exercício ${exerciseIndex + 1} de ${exercises.length}`;
   document.querySelector("[data-runner-exercise-name]").textContent = exercise.name;
@@ -1120,28 +1232,52 @@ const renderWorkoutRunner = () => {
   const instructions = document.querySelector("[data-runner-instructions]");
   instructions.hidden = !exercise.instructions;
   instructions.textContent = exercise.instructions || "";
-  document.querySelector("[data-previous-set-value]").textContent = previous
-    ? `${previous.loadKg} kg × ${previous.reps} reps`
-    : "Sem registro comparável";
+  const comparableLogs = previousLogs.filter((log) => Number(log.setNumber || 0) > 0).slice(0, 4);
+  document.querySelector("[data-previous-set-value]").textContent = comparableLogs.length
+    ? comparableLogs.map((log) => formatSetPerformance(log.loadKg, log.reps)).join(" · ")
+    : previous ? formatSetPerformance(previous.loadKg, previous.reps) : "Sem histórico comparável";
   const loadInput = document.querySelector("[data-runner-load]");
   const repsInput = document.querySelector("[data-runner-reps]");
-  loadInput.value = session.currentLoad ?? previous?.loadKg ?? parseLoadKg(exercise.load);
+  const suggestedLoad = session.currentLoad ?? previous?.loadKg ?? parseLoadKg(exercise.load);
+  loadInput.value = Number(suggestedLoad) > 0 ? suggestedLoad : "";
   repsInput.value = session.currentReps ?? previous?.reps ?? parseReps(exercise);
   document.querySelector("[data-correct-last-set]").hidden = getExerciseEntries(occurrenceId(exercise), session).length === 0;
   renderRunnerMedia(exercise);
+  renderRunnerPerformanceHint(exercise, setNumber);
   syncRunnerClock();
 };
 
 const syncRunnerClock = () => {
   const session = getActiveSession();
   if (!session) return;
-  const elapsed = Math.max(0, Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000));
+  const elapsed = getElapsedSeconds(session);
   document.querySelector("[data-runner-elapsed]").textContent = formatClock(elapsed);
+  if (session.phase === SESSION_PHASE.TRANSITIONING) {
+    const transitionRemaining = new Date(session.transitionEndsAt || 0).getTime() - Date.now();
+    if (transitionRemaining <= 0) {
+      const hasNext = Boolean(session.pendingExerciseId);
+      const restIsActive = hasNext && new Date(session.restEndsAt || 0).getTime() > Date.now();
+      Store.updateActiveSession({
+        phase: hasNext ? (restIsActive ? SESSION_PHASE.RESTING : SESSION_PHASE.ACTIVE_SET) : SESSION_PHASE.AWAITING_SUMMARY,
+        transitionEndsAt: null,
+        pendingExerciseId: restIsActive ? session.pendingExerciseId : null,
+        pendingSetNumber: restIsActive ? session.pendingSetNumber : null,
+        restEndsAt: restIsActive ? session.restEndsAt : null
+      });
+      renderWorkoutRunner();
+    }
+    return;
+  }
   if (session.phase !== SESSION_PHASE.RESTING) return;
   const remaining = Math.max(0, Math.ceil((new Date(session.restEndsAt).getTime() - Date.now()) / 1000));
   document.querySelector("[data-runner-rest-clock]").textContent = formatClock(remaining);
   if (remaining <= 0) {
-    Store.updateActiveSession({ phase: getNextIncompleteTarget(session, session.currentExerciseId) ? SESSION_PHASE.ACTIVE : SESSION_PHASE.AWAITING_SUMMARY, restEndsAt: null });
+    Store.updateActiveSession({
+      phase: getNextIncompleteTarget(session, session.currentExerciseId) ? SESSION_PHASE.ACTIVE_SET : SESSION_PHASE.AWAITING_SUMMARY,
+      restEndsAt: null,
+      pendingExerciseId: null,
+      pendingSetNumber: null
+    });
     Platform.notify("Descanso finalizado.");
     renderWorkoutRunner();
   }
@@ -1162,7 +1298,12 @@ const requestRunnerWakeLock = async () => {
   if (!navigator.wakeLock || document.visibilityState !== "visible" || workoutRunner.hidden) return;
   try {
     wakeLockSentinel = await navigator.wakeLock.request("screen");
-    wakeLockSentinel.addEventListener("release", () => { wakeLockSentinel = null; }, { once: true });
+    wakeLockSentinel.addEventListener("release", () => {
+      wakeLockSentinel = null;
+      if (document.visibilityState === "visible" && !workoutRunner.hidden) {
+        window.setTimeout(() => requestRunnerWakeLock(), 250);
+      }
+    }, { once: true });
   } catch {
     wakeLockSentinel = null;
   }
@@ -1619,8 +1760,16 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("input", (event) => {
-  if (event.target.matches("[data-runner-load]")) Store.updateActiveSession({ currentLoad: Number(event.target.value || 0) });
-  if (event.target.matches("[data-runner-reps]")) Store.updateActiveSession({ currentReps: Number(event.target.value || 0) });
+  if (event.target.matches("[data-runner-load], [data-runner-reps]")) {
+    const session = getActiveSession();
+    if (!session) return;
+    if (event.target.matches("[data-runner-load]")) {
+      Store.updateActiveSession({ currentLoad: event.target.value === "" ? null : Number(event.target.value) });
+    } else {
+      Store.updateActiveSession({ currentReps: event.target.value === "" ? null : Number(event.target.value) });
+    }
+    renderRunnerPerformanceHint(findSessionExercise(session.currentExerciseId, session), Number(session.currentSetNumber || 1));
+  }
 });
 
 document.querySelector("[data-coach-selector]")?.addEventListener("change", (event) => {
@@ -1714,12 +1863,37 @@ const startCurrentWorkoutSession = () => {
 
 document.querySelector("[data-start-workout]")?.addEventListener("click", startCurrentWorkoutSession);
 
+pauseDialog?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  pauseDialog.close();
+  resumeActiveSession(getActiveSession());
+  renderWorkoutRunner();
+  requestRunnerWakeLock();
+});
+
 workoutRunner?.addEventListener("click", (event) => {
   const session = getActiveSession();
   if (!session) return;
 
   if (event.target.closest("[data-pause-session]")) {
+    pauseActiveSession(session);
+    syncRunnerClock();
+    if (pauseDialog && !pauseDialog.open) pauseDialog.showModal();
+    return;
+  }
+
+  if (event.target.closest("[data-continue-session]")) {
+    pauseDialog.close?.();
+    resumeActiveSession(getActiveSession());
+    renderWorkoutRunner();
+    requestRunnerWakeLock();
+    return;
+  }
+
+  if (event.target.closest("[data-exit-session]")) {
+    pauseDialog.close?.();
     navigate("workout");
+    showToast("Seu treino foi pausado. Você poderá continuar depois.");
     return;
   }
 
@@ -1747,7 +1921,7 @@ workoutRunner?.addEventListener("click", (event) => {
       return;
     }
     Store.updateActiveSession({
-      phase: SESSION_PHASE.ACTIVE,
+      phase: SESSION_PHASE.ACTIVE_SET,
       currentExerciseId: occurrenceId(exercise),
       currentSetNumber: setNumber,
       currentLoad: null,
@@ -1786,8 +1960,12 @@ workoutRunner?.addEventListener("click", (event) => {
   }
 
   if (event.target.closest("[data-report-discomfort]")) {
-    const current = session.exerciseFeedback?.[session.currentExerciseId] || {};
+    const feedbackKey = `${session.currentExerciseId}:${session.currentSetNumber}`;
+    const current = session.exerciseFeedback?.[feedbackKey]
+      || session.exerciseFeedback?.[session.currentExerciseId]
+      || {};
     discomfortForm.elements.severity.value = current.severity || "mild";
+    discomfortForm.elements.region.value = current.region || "";
     discomfortForm.elements.note.value = current.note || "";
     if (discomfortDialog && !discomfortDialog.open) discomfortDialog.showModal();
     return;
@@ -1798,9 +1976,13 @@ workoutRunner?.addEventListener("click", (event) => {
     const data = new FormData(discomfortForm);
     const severity = String(data.get("severity") || "mild");
     const feedback = { ...(session.exerciseFeedback || {}) };
-    if (severity === "none") delete feedback[session.currentExerciseId];
-    else feedback[session.currentExerciseId] = {
+    const feedbackKey = `${session.currentExerciseId}:${session.currentSetNumber}`;
+    if (severity === "none") delete feedback[feedbackKey];
+    else feedback[feedbackKey] = {
+      workoutExerciseId: session.currentExerciseId,
+      setNumber: Number(session.currentSetNumber || 1),
       severity,
+      region: String(data.get("region") || ""),
       note: String(data.get("note") || "").trim(),
       reportedAt: new Date().toISOString()
     };
@@ -1825,7 +2007,6 @@ workoutRunner?.addEventListener("click", (event) => {
     }
     setClickLocks.add(lockKey);
     completeButton.disabled = true;
-    completeButton.textContent = "Série registrada";
     playSetFeedback(completeButton);
     Store.addActiveSetEntry({
       workoutExerciseId,
@@ -1842,25 +2023,21 @@ workoutRunner?.addEventListener("click", (event) => {
     renderHome();
     renderExercises();
 
-    window.setTimeout(() => {
-      const updated = getActiveSession();
-      if (!updated) return;
-      const next = getNextIncompleteTarget(updated, workoutExerciseId);
-      Store.updateActiveSession(next ? {
-        phase: SESSION_PHASE.RESTING,
-        currentExerciseId: occurrenceId(next.exercise),
-        currentSetNumber: next.setNumber,
-        currentLoad: null,
-        currentReps: null,
-        restEndsAt: new Date(Date.now() + (parseRestSeconds(exercise) * 1000)).toISOString()
-      } : {
-        phase: SESSION_PHASE.AWAITING_SUMMARY,
-        currentLoad: null,
-        currentReps: null,
-        restEndsAt: null
-      });
-      renderWorkoutRunner();
-    }, 680);
+    const updated = getActiveSession();
+    const next = getNextIncompleteTarget(updated, workoutExerciseId);
+    const transitionEndsAt = Date.now() + SET_TRANSITION_MS;
+    Store.updateActiveSession({
+      phase: SESSION_PHASE.TRANSITIONING,
+      currentExerciseId: next ? occurrenceId(next.exercise) : workoutExerciseId,
+      currentSetNumber: next ? next.setNumber : setNumber,
+      currentLoad: null,
+      currentReps: null,
+      pendingExerciseId: next ? occurrenceId(next.exercise) : null,
+      pendingSetNumber: next?.setNumber || null,
+      transitionEndsAt: new Date(transitionEndsAt).toISOString(),
+      restEndsAt: next ? new Date(transitionEndsAt + (parseRestSeconds(exercise) * 1000)).toISOString() : null
+    });
+    renderWorkoutRunner();
     window.setTimeout(() => setClickLocks.delete(lockKey), SET_CLICK_DEBOUNCE_MS);
     return;
   }
@@ -1879,7 +2056,12 @@ workoutRunner?.addEventListener("click", (event) => {
 
   if (event.target.closest("[data-skip-runner-rest]")) {
     const next = getNextIncompleteTarget(session, session.currentExerciseId);
-    Store.updateActiveSession({ phase: next ? SESSION_PHASE.ACTIVE : SESSION_PHASE.AWAITING_SUMMARY, restEndsAt: null });
+    Store.updateActiveSession({
+      phase: next ? SESSION_PHASE.ACTIVE_SET : SESSION_PHASE.AWAITING_SUMMARY,
+      restEndsAt: null,
+      pendingExerciseId: null,
+      pendingSetNumber: null
+    });
     renderWorkoutRunner();
     return;
   }
@@ -1902,7 +2084,13 @@ workoutRunner?.addEventListener("click", (event) => {
       return;
     }
     if (done < total && !window.confirm(`Encerrar como treino parcial? ${total - done} série(s) ficarão pendentes.`)) return;
-    Store.updateActiveSession({ phase: SESSION_PHASE.AWAITING_SUMMARY, restEndsAt: null });
+    Store.updateActiveSession({
+      phase: SESSION_PHASE.AWAITING_SUMMARY,
+      restEndsAt: null,
+      transitionEndsAt: null,
+      pendingExerciseId: null,
+      pendingSetNumber: null
+    });
     renderWorkoutRunner();
     return;
   }
@@ -1915,7 +2103,7 @@ workoutRunner?.addEventListener("click", (event) => {
       return;
     }
     Store.updateActiveSession({
-      phase: SESSION_PHASE.ACTIVE,
+      phase: SESSION_PHASE.ACTIVE_SET,
       currentExerciseId: occurrenceId(next.exercise),
       currentSetNumber: next.setNumber,
       currentLoad: null,

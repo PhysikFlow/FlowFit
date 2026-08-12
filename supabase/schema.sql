@@ -109,7 +109,7 @@ create table if not exists public.workout_exercises (
   notes        text not null default 'Criado no painel do professor.',
   instructions text not null default '',
   media_url    text not null default '' check (media_url = '' or media_url ~* '^https://'),
-  media_type   text not null default 'none' check (media_type in ('none', 'image', 'video', 'youtube', 'external')),
+  media_type   text not null default 'none' check (media_type in ('none', 'image', 'gif', 'video', 'youtube', 'external')),
   updated_at   timestamptz not null default now()
 );
 
@@ -1899,15 +1899,11 @@ begin
       check (set_number is null or set_number > 0);
   end if;
 
-  if not exists (
-    select 1 from pg_constraint
-    where conname = 'workout_exercises_media_type_check'
-      and conrelid = 'public.workout_exercises'::regclass
-  ) then
-    alter table public.workout_exercises
-      add constraint workout_exercises_media_type_check
-      check (media_type in ('none', 'image', 'video', 'youtube', 'external'));
-  end if;
+  alter table public.workout_exercises
+    drop constraint if exists workout_exercises_media_type_check;
+  alter table public.workout_exercises
+    add constraint workout_exercises_media_type_check
+    check (media_type in ('none', 'image', 'gif', 'video', 'youtube', 'external'));
 
   if not exists (
     select 1 from pg_constraint
@@ -2021,7 +2017,7 @@ begin
     if v_media_url <> '' and v_media_url !~* '^https://' then
       raise exception 'exercise_media_url_requires_https';
     end if;
-    if v_media_type not in ('none', 'image', 'video', 'youtube', 'external') then
+    if v_media_type not in ('none', 'image', 'gif', 'video', 'youtube', 'external') then
       raise exception 'exercise_media_type_invalid';
     end if;
 

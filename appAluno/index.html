@@ -16,8 +16,8 @@
     <link rel="preload" as="image" type="image/png" href="assets/icons/startup-logo-512.png" fetchpriority="high" />
     <link rel="stylesheet" href="css/tokens.css?v=build-20260809-7" />
     <link rel="stylesheet" href="css/components.css?v=build-20260811-9" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260811-1" />
-    <script type="module" src="js/app.js?v=build-20260811-3"></script>
+    <link rel="stylesheet" href="css/app.css?v=build-20260812-1" />
+    <script type="module" src="js/app.js?v=build-20260812-1"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title" aria-busy="true">
@@ -258,8 +258,8 @@
 
     <section class="workout-runner" data-workout-runner hidden aria-labelledby="runner-exercise-name">
       <header class="runner-topbar">
-        <button class="icon-button" type="button" data-pause-session aria-label="Pausar e voltar ao treino">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        <button class="icon-button" type="button" data-pause-session aria-label="Pausar treino">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12" /><path d="M15 6v12" /></svg>
         </button>
         <div>
           <strong data-runner-workout-title>Treino</strong>
@@ -296,14 +296,16 @@
           </div>
 
           <article class="previous-set" data-previous-set>
-            <span>Última sessão</span>
+            <span>Última vez</span>
             <strong data-previous-set-value>Sem registro comparável</strong>
           </article>
 
+          <strong class="runner-result-title">Resultado de hoje</strong>
           <div class="runner-log" aria-label="Registro da série atual">
-            <label>Carga <span><input type="number" inputmode="decimal" min="0" step="0.5" data-runner-load aria-label="Carga da série atual em quilos" /><b>kg</b></span></label>
+            <label>Carga <span><input type="number" inputmode="decimal" min="0" step="0.5" placeholder="Ex.: 20" data-runner-load aria-label="Carga da série atual em quilos" /><b>kg</b></span></label>
             <label>Repetições <input type="number" inputmode="numeric" min="1" step="1" data-runner-reps aria-label="Repetições da série atual" /></label>
           </div>
+          <p class="runner-performance" data-runner-performance hidden></p>
 
           <button class="set-button runner-complete-set" type="button" data-complete-runner-set>Concluir série</button>
           <div class="runner-secondary-actions">
@@ -312,12 +314,20 @@
           </div>
         </section>
 
+        <section class="runner-phase runner-transition" data-runner-phase="transition" hidden aria-live="assertive">
+          <span class="runner-transition__icon" aria-hidden="true">✓</span>
+          <span class="eyebrow">Série concluída</span>
+          <h1 tabindex="-1" data-runner-phase-focus>Registro salvo</h1>
+          <p data-runner-transition-copy>Preparando o descanso.</p>
+        </section>
+
         <section class="runner-phase runner-rest" data-runner-phase="rest" hidden aria-live="polite">
           <span class="eyebrow">Descanso</span>
           <strong class="runner-rest__clock" tabindex="-1" data-runner-rest-clock data-runner-phase-focus>01:00</strong>
           <div class="runner-rest__next">
             <small>Próxima série</small>
-            <strong data-runner-rest-next>Exercício · série 2</strong>
+            <strong data-runner-rest-next>Exercício</strong>
+            <span data-runner-rest-position>Série 2 de 3</span>
           </div>
           <div class="button-group button-group--inline">
             <button class="button button--quiet" type="button" data-skip-runner-rest>Pular descanso</button>
@@ -335,6 +345,7 @@
             <span><strong data-review-duration>0 min</strong><small>duração</small></span>
             <span><strong data-review-sets>0/0</strong><small>séries</small></span>
             <span><strong data-review-volume>0 kg</strong><small>volume</small></span>
+            <span><strong data-review-exercises>0</strong><small>exercícios</small></span>
             <span><strong data-review-progressions>0</strong><small>melhores desempenhos</small></span>
           </section>
           <p class="runner-review__progressions" data-review-progression-list hidden></p>
@@ -395,6 +406,17 @@
               <option value="none">Remover registro</option>
             </select>
           </label>
+          <label>Região
+            <select name="region">
+              <option value="">Selecione, se quiser</option>
+              <option>Ombro</option>
+              <option>Coluna</option>
+              <option>Quadril</option>
+              <option>Joelho</option>
+              <option>Tornozelo</option>
+              <option value="Outra região">Outra região</option>
+            </select>
+          </label>
           <label>Onde ou como sentiu?
             <textarea name="note" rows="3" maxlength="300" placeholder="Ex.: incômodo no ombro direito"></textarea>
           </label>
@@ -403,6 +425,16 @@
             <button class="button" value="save" data-save-discomfort>Salvar</button>
           </div>
         </form>
+      </dialog>
+
+      <dialog class="runner-info-dialog runner-pause-dialog" data-pause-dialog aria-labelledby="pause-title">
+        <span class="runner-pause-dialog__icon" aria-hidden="true">Ⅱ</span>
+        <h2 id="pause-title">Pausar treino?</h2>
+        <p>Seu progresso fica salvo neste aparelho. Você poderá continuar exatamente de onde parou.</p>
+        <div class="button-group button-group--stacked">
+          <button class="button" type="button" data-continue-session>Continuar treino</button>
+          <button class="button button--quiet" type="button" data-exit-session>Sair com treino pausado</button>
+        </div>
       </dialog>
     </section>
 

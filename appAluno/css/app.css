@@ -1025,23 +1025,36 @@ body.has-workout-runner > .toast { visibility: hidden; }
 .runner-prescription__meta button { min-height: 2.2rem; padding: 0.3rem 0.7rem; border: 1px solid var(--color-line); border-radius: var(--radius-pill); background: var(--color-bg-elevated); color: var(--color-muted); cursor: pointer; font-size: var(--text-xs); font-weight: 800; }
 .runner-prescription p { max-width: 34rem; margin: 0 auto; color: var(--color-muted); line-height: 1.45; }
 
-.previous-set { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-4); padding: var(--space-3); border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-bg-elevated); }
+.previous-set { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-4); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-line); }
 .previous-set span { color: var(--color-muted); font-size: var(--text-xs); font-weight: 800; }
 .previous-set strong { overflow-wrap: anywhere; text-align: right; }
 
-.runner-log { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-3); }
+.runner-result-title { display: block; margin-top: var(--space-4); font-size: var(--text-sm); }
+.runner-log { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-2); }
 .runner-log label { display: grid; gap: var(--space-1); color: var(--color-muted); font-size: var(--text-xs); font-weight: 850; }
 .runner-log label > span { position: relative; }
-.runner-log input { width: 100%; min-height: 4.2rem; padding: 0.5rem 0.8rem; font-size: clamp(1.45rem, 6vw, 2rem); font-weight: 900; text-align: center; }
+.runner-log input { width: 100%; min-height: 4.2rem; padding: 0.5rem 0.8rem; border: 1px solid var(--color-line-strong); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-bg-elevated) 88%, transparent); color: var(--color-text); font-size: clamp(1.45rem, 6vw, 2rem); font-weight: 900; text-align: center; appearance: textfield; transition: border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out), background 160ms var(--ease-out); }
+.runner-log input::-webkit-inner-spin-button,
+.runner-log input::-webkit-outer-spin-button { margin: 0; appearance: none; }
+.runner-log input:focus-visible { outline: none; border-color: var(--color-accent); background: var(--color-surface-strong); box-shadow: 0 0 0 0.2rem var(--color-accent-soft); }
+.runner-log input::placeholder { color: var(--color-subtle); font-size: var(--text-sm); font-weight: 700; }
 .runner-log label > span input { padding-right: 2.6rem; }
 .runner-log label > span b { position: absolute; top: 50%; right: 0.8rem; color: var(--color-muted); transform: translateY(-50%); }
-.runner-complete-set { width: 100%; min-height: 4.4rem; margin-top: var(--space-3); font-size: var(--text-base); text-transform: uppercase; }
+.runner-performance { margin: var(--space-2) 0 0; color: var(--color-success); font-size: var(--text-xs); font-weight: 850; text-align: center; }
+.runner-complete-set { width: 100%; min-height: 4.4rem; margin-top: var(--space-3); font-size: var(--text-base); }
 .runner-correct { display: block; margin: var(--space-3) auto 0; }
+
+.runner-transition { display: grid; justify-items: center; text-align: center; }
+.runner-transition__icon,
+.runner-pause-dialog__icon { display: grid; width: 4.5rem; height: 4.5rem; place-items: center; margin-bottom: var(--space-4); border-radius: 50%; background: var(--color-success-soft); color: var(--color-success); font-size: 2rem; font-weight: 950; }
+.runner-transition h1 { margin: var(--space-2) 0; font-size: clamp(1.8rem, 7vw, 2.5rem); }
+.runner-transition p { margin: 0; color: var(--color-muted); }
 
 .runner-rest { display: grid; place-items: center; text-align: center; }
 .runner-rest__clock { margin-top: var(--space-2); color: var(--color-accent); font-size: clamp(4.5rem, 22vw, 8rem); font-variant-numeric: tabular-nums; letter-spacing: -0.07em; line-height: 0.95; }
 .runner-rest__next { display: grid; gap: var(--space-1); margin: var(--space-6) 0 var(--space-4); }
-.runner-rest__next small { color: var(--color-muted); }
+.runner-rest__next small,
+.runner-rest__next span { color: var(--color-muted); }
 
 .runner-review header,
 .runner-success { text-align: center; }
@@ -1050,9 +1063,11 @@ body.has-workout-runner > .toast { visibility: hidden; }
 .runner-review header p,
 .runner-success p { margin: 0; color: var(--color-muted); }
 
-.runner-review__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; margin-top: var(--space-4); border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-bg-elevated); }
+.runner-review__stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; margin-top: var(--space-4); border-block: 1px solid var(--color-line); }
 .runner-review__stats span { display: grid; gap: var(--space-1); padding: var(--space-3) var(--space-2); text-align: center; }
-.runner-review__stats span + span { border-left: 1px solid var(--color-line); }
+.runner-review__stats span:nth-child(even) { border-left: 1px solid var(--color-line); }
+.runner-review__stats span:nth-child(n + 3) { border-top: 1px solid var(--color-line); }
+.runner-review__stats span:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .runner-review__stats small { color: var(--color-muted); font-size: var(--text-xs); }
 .runner-review__progressions { margin: var(--space-2) 0 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-success-line); border-radius: var(--radius-md); background: var(--color-success-soft); color: var(--color-success); font-size: var(--text-sm); font-weight: 800; text-align: center; }
 .runner-feedback { display: grid; gap: var(--space-3); margin-top: var(--space-4); text-align: left; }
@@ -1060,10 +1075,11 @@ body.has-workout-runner > .toast { visibility: hidden; }
 .runner-feedback legend { margin-bottom: var(--space-2); color: var(--color-muted); font-size: var(--text-xs); font-weight: 850; }
 
 .segmented-control { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); padding: 0.25rem; border: 1px solid var(--color-line); border-radius: var(--radius-pill); background: var(--color-bg-elevated); }
-.segmented-control label { cursor: pointer; }
-.segmented-control input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented-control label { position: relative; min-width: 0; cursor: pointer; }
+.segmented-control input { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); opacity: 0; pointer-events: none; }
 .segmented-control span { display: grid; min-height: 2.6rem; place-items: center; border-radius: var(--radius-pill); color: var(--color-muted); font-size: var(--text-xs); font-weight: 850; }
 .segmented-control input:checked + span { background: var(--color-accent-soft); color: var(--color-accent); }
+.segmented-control input:focus-visible + span { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .runner-review > .text-button { display: block; margin: var(--space-3) auto 0; }
 
 .runner-success { display: grid; justify-items: center; }
@@ -1091,6 +1107,9 @@ body.has-workout-runner > .toast { visibility: hidden; }
 
 .runner-info-dialog { width: min(calc(100% - 2rem), 28rem); margin: auto; border-radius: var(--radius-lg); }
 .runner-info-dialog p { color: var(--color-muted); line-height: 1.55; }
+.runner-pause-dialog { text-align: center; }
+.runner-pause-dialog__icon { margin-inline: auto; background: var(--color-accent-soft); color: var(--color-accent); }
+.runner-pause-dialog .button-group { margin-top: var(--space-4); }
 
 .set-button {
   min-width: 3rem;

@@ -163,7 +163,7 @@ const initialsFromName = (name) => normalizeText(name, "Aluno")
 
 const fallbackStudentIdFromKey = (studentKey) => `student-${studentKey}`;
 
-const VALID_MEDIA_TYPES = new Set(["none", "image", "video", "youtube", "external"]);
+const VALID_MEDIA_TYPES = new Set(["none", "image", "gif", "video", "youtube", "external"]);
 const normalizeMediaType = (value, mediaUrl = "") => {
   const normalized = normalizeText(value).toLowerCase();
   if (VALID_MEDIA_TYPES.has(normalized)) return normalized;
