@@ -30,9 +30,13 @@ const professorWorker = read("appProfessor/sw.js");
 assert.match(professorApp, /showAuthenticatedAccessState\(\{/);
 assert.match(professorApp, /status: coachAccess\.status \|\| "error"/);
 assert.match(professorApp, /email: authContext\?\.email \|\| session\.user\.email/);
+assert.match(professorApp, /const professorAuthReturn =/);
+assert.match(professorApp, /for \(const delay of \[150, 350, 700\]\)/);
+assert.match(professorApp, /O login do Google voltou ao FlowFit, mas nenhuma sessão válida foi criada/);
+assert.match(professorApp, /url\.search = ""/);
 assert.match(professorCss, /data-account-state="blocked"/);
-assert.match(professorIndex, /app\.css\?v=build-20260812-2/);
-assert.match(professorIndex, /app\.js\?v=build-20260812-2/);
-assert.match(professorWorker, /flowfit-professor-v32/);
+assert.match(professorIndex, /app\.css\?v=build-20260812-3/);
+assert.match(professorIndex, /app\.js\?v=build-20260812-3/);
+assert.match(professorWorker, /flowfit-professor-v33/);
 
 console.log("admin-auth-regression-smoke: RPC e feedback pending aprovados");

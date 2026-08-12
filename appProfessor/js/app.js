@@ -377,10 +377,35 @@ const renderThemePalettes = ({ syncToTheme = false } = {}) => {
   themePaletteList.replaceChildren(fragment);
 };
 
+const professorAuthReturn = (() => {
+  const url = new URL(window.location.href);
+  const search = url.searchParams;
+  const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+  return {
+    detected: search.has("code") || search.has("error") || hash.has("access_token") || hash.has("error"),
+    error: search.get("error_description") || hash.get("error_description") || search.get("error") || hash.get("error") || ""
+  };
+})();
+
 const getAuthRedirectUrl = () => {
   const url = new URL(window.location.href);
+  url.search = "";
   url.hash = "";
   return url.href;
+};
+
+const getSessionAfterAuthReturn = async () => {
+  let session = await authRepository.getSession();
+  if (session?.user || !professorAuthReturn.detected) return session;
+
+  // Alguns navegadores entregam o callback antes de a persistencia local da
+  // sessao terminar. Releia por uma janela curta antes de declarar falha.
+  for (const delay of [150, 350, 700]) {
+    await new Promise((resolve) => window.setTimeout(resolve, delay));
+    session = await authRepository.getSession();
+    if (session?.user) return session;
+  }
+  return null;
 };
 
 const getProviderLabel = () => "Google";
@@ -2318,14 +2343,29 @@ authGateSignOut?.addEventListener("click", signOutProfessor);
 
 const startAuthenticatedPanel = async () => {
   setAuthChecking(true);
-  const session = await authRepository.getSession();
+  let session = null;
+  try {
+    session = await getSessionAfterAuthReturn();
+  } catch (error) {
+    rememberProfessorFailure("oauth-callback-session", error);
+    setAuthLocked(true);
+    setAuthChecking(false);
+    syncAuthMode("signin", { preserveStatus: true });
+    setAuthGateSignOutVisible(false);
+    setAuthStatus("O Google retornou, mas não foi possível concluir a sessão. Tente novamente; se persistir, envie o erro registrado no console.", "warning");
+    return false;
+  }
   if (!session?.user) {
     authenticatedSessionDetected = false;
     setAuthLocked(true);
     setAuthChecking(false);
-    syncAuthMode("signin");
+    syncAuthMode("signin", { preserveStatus: professorAuthReturn.detected });
     setAuthGateSignOutVisible(false);
-    return;
+    if (professorAuthReturn.detected) {
+      const detail = professorAuthReturn.error ? ` Motivo informado: ${professorAuthReturn.error}.` : "";
+      setAuthStatus(`O login do Google voltou ao FlowFit, mas nenhuma sessão válida foi criada.${detail} Tente novamente ou use email e senha.`, "warning");
+    }
+    return false;
   }
   authenticatedSessionDetected = true;
 

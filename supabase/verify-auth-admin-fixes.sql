@@ -19,6 +19,46 @@ target_user as (
   left join public.profiles p on p.user_id = u.id
   where lower(u.email) = 'frismarcomputer@gmail.com'
   limit 1
+),
+auth_inventory as (
+  select
+    u.id,
+    u.email,
+    u.created_at,
+    u.email_confirmed_at,
+    u.last_sign_in_at,
+    u.deleted_at,
+    u.banned_until,
+    coalesce(u.raw_app_meta_data ->> 'provider', '') as primary_provider,
+    coalesce(u.raw_user_meta_data ->> 'flowfit_requested_role', '') as requested_role,
+    p.role as profile_role,
+    p.coach_status,
+    p.created_at as profile_created_at,
+    exists (
+      select 1 from public.platform_admins pa where pa.user_id = u.id
+    ) as in_platform_admins,
+    (
+      select count(*)
+      from public.students s
+      where lower(trim(coalesce(s.email, ''))) = lower(trim(coalesce(u.email, '')))
+    ) as student_rows_by_email,
+    (
+      select count(*)
+      from public.students s
+      where s.student_user_id = u.id
+    ) as linked_student_rows,
+    case
+      when p.user_id is null then 'profile-missing'
+      when p.role = 'coach' and p.coach_status = 'pending' then 'coach-pending'
+      else 'ok'
+    end as diagnosis,
+    coalesce((
+      select jsonb_agg(i.provider order by i.provider)
+      from auth.identities i
+      where i.user_id = u.id
+    ), '[]'::jsonb) as providers
+  from auth.users u
+  left join public.profiles p on p.user_id = u.id
 )
 select jsonb_pretty(jsonb_build_object(
   'checked_at', now(),
@@ -42,11 +82,17 @@ select jsonb_pretty(jsonb_build_object(
     )
     from public.profiles p
   ),
-  'orphan_auth_users', (
-    select count(*)
-    from auth.users u
-    left join public.profiles p on p.user_id = u.id
-    where p.user_id is null
+  'auth_inventory', coalesce((
+    select jsonb_agg(to_jsonb(ai) order by ai.created_at desc)
+    from auth_inventory ai
+  ), '[]'::jsonb),
+  'orphan_auth_users', jsonb_build_object(
+    'count', (select count(*) from auth_inventory ai where ai.profile_role is null),
+    'users', coalesce((
+      select jsonb_agg(to_jsonb(ai) order by ai.created_at desc)
+      from auth_inventory ai
+      where ai.profile_role is null
+    ), '[]'::jsonb)
   )
 )) as flowfit_auth_admin_verification
 from function_state fs;
