@@ -11,6 +11,14 @@ const source = readFileSync(sourcePath, "utf8")
 const context = vm.createContext({
   console,
   URL,
+  URLSearchParams,
+  location: new URL("https://flowfit.test/appProfessor/"),
+  history: {
+    state: null,
+    replaceState(_state, _title, href) {
+      context.location = new URL(href);
+    }
+  },
   globalThis: null
 });
 context.globalThis = context;
@@ -38,16 +46,29 @@ const missingProvisionRpc = {
   error: { code: "PGRST202", message: "Could not find the function public.ensure_own_profile" }
 };
 
-const createClient = ({ reads = [], inserts = [], rpcs = [], signUpResult = null } = {}) => {
+const createClient = ({ reads = [], inserts = [], rpcs = [], signUpResult = null, exchangeResult = null } = {}) => {
   const insertedPayloads = [];
   const rpcCalls = [];
+  const oauthCalls = [];
+  const signOutCalls = [];
+  const exchangeCalls = [];
   let signedOut = false;
   const client = {
     auth: {
       getSession: async () => ({ data: { session }, error: null }),
+      exchangeCodeForSession: async (code) => {
+        exchangeCalls.push(code);
+        return exchangeResult || { data: { session }, error: null };
+      },
+      setSession: async () => ({ data: { session }, error: null }),
+      signInWithOAuth: async (options) => {
+        oauthCalls.push(options);
+        return { data: { url: "https://accounts.google.test/" }, error: null };
+      },
       signUp: async () => signUpResult || ({ data: { session, user }, error: null }),
-      signOut: async () => {
+      signOut: async (options) => {
         signedOut = true;
+        signOutCalls.push(options);
         return { error: null };
       }
     },
@@ -80,7 +101,15 @@ const createClient = ({ reads = [], inserts = [], rpcs = [], signUpResult = null
       };
     }
   };
-  return { client, insertedPayloads, rpcCalls, wasSignedOut: () => signedOut };
+  return {
+    client,
+    insertedPayloads,
+    rpcCalls,
+    oauthCalls,
+    signOutCalls,
+    exchangeCalls,
+    wasSignedOut: () => signedOut
+  };
 };
 
 const runWithClient = async (setup, operation) => {
@@ -198,6 +227,29 @@ const runWithClient = async (setup, operation) => {
   assert.equal(result.existingRole, "student");
 }
 
+{
+  context.location = new URL("https://flowfit.test/appProfessor/?code=oauth-code&invite=preservar");
+  const setup = createClient();
+  const result = await runWithClient(setup, () => authRepository.getSession());
+  assert.equal(result.user.id, user.id);
+  assert.deepEqual(setup.exchangeCalls, ["oauth-code"]);
+  assert.equal(context.location.searchParams.get("code"), null);
+  assert.equal(context.location.searchParams.get("invite"), "preservar");
+}
+
+{
+  context.location = new URL("https://flowfit.test/appProfessor/");
+  const setup = createClient();
+  const result = await runWithClient(setup, () => authRepository.signInWithOAuth({
+    provider: "google",
+    redirectTo: "https://flowfit.test/appProfessor/"
+  }));
+  assert.equal(result.ok, true);
+  assert.equal(setup.signOutCalls.length, 1);
+  assert.equal(setup.signOutCalls[0].scope, "local");
+  assert.equal(setup.oauthCalls[0].options.queryParams.prompt, "select_account");
+}
+
 const profileMigration = readFileSync(
   new URL("../supabase/provision-auth-profiles.sql", import.meta.url),
   "utf8"
@@ -211,4 +263,4 @@ assert.ok(profileMigration.includes("current_profile.role = 'student' and exclud
 assert.ok(profileMigration.includes("revoke all on function public.ensure_own_profile(text, text) from public, anon, authenticated"));
 assert.ok(studentLinkGuard > 0 && accessCountGuard > 0 && studentProvision > accessCountGuard);
 
-console.log("auth-repository-smoke: 8 cenários e invariantes SQL aprovados");
+console.log("auth-repository-smoke: 10 cenários e invariantes SQL aprovados");

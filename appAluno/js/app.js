@@ -3,11 +3,11 @@ import { SESSION_PHASE, Store } from "./core/store.js?v=build-20260812-1";
 import { Theme } from "./core/theme.js?v=build-20260809-7";
 import { svgIcon } from "./core/icons.js?v=build-20260810-7";
 import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260809-7";
-import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260811-3";
-import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260811-3";
-import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260811-3";
+import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260812-4";
+import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260812-4";
+import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260812-4";
 import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260812-1";
-import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260811-3";
+import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260812-4";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];

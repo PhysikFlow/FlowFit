@@ -49,6 +49,8 @@ O projeto roda em GitHub Pages sem backend proprio. Por isso, login e autorizaca
 
 O frontend chama `supabase.auth.signInWithOAuth()` apenas para `google`. Para funcionar em producao, o provedor tambem precisa estar configurado fora do codigo.
 
+O retorno usa PKCE e troca explicitamente o `code` por uma sessao antes de limpar o URL. Como `/admin`, `/appProfessor` e `/appAluno` compartilham o mesmo dominio, cada plataforma usa uma chave de armazenamento Supabase propria. Assim, login, troca de conta e logout em uma area nao substituem a sessao das outras. Depois da primeira versao com essa separacao, e necessario entrar uma vez em cada plataforma para criar as novas sessoes locais.
+
 ### Google
 
 1. No Google Cloud/Auth Platform, crie um OAuth Client do tipo `Web application`.

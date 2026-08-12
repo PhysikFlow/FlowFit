@@ -1,4 +1,4 @@
-import { getSupabase } from "../../core/supabase.js?v=build-20260811-2";
+import { getSupabase } from "../../core/supabase.js?v=build-20260812-4";
 
 const PROFILES_TABLE = "profiles";
 const PROFILE_COLUMNS_BASE = "user_id, role, name, created_at, updated_at";
@@ -117,6 +117,70 @@ const isMissingProfileColumn = (error) => {
     || error?.code === "PGRST204"
     || /column .* does not exist/i.test(message)
     || /could not find .* column/i.test(message);
+};
+
+let authRedirectPromise = null;
+
+const getAuthRedirectParams = () => {
+  try {
+    const url = new URL(globalThis.location?.href || "");
+    const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+    return {
+      code: url.searchParams.get("code") || "",
+      error: url.searchParams.get("error_description")
+        || hash.get("error_description")
+        || url.searchParams.get("error")
+        || hash.get("error")
+        || "",
+      errorCode: url.searchParams.get("error_code") || hash.get("error_code") || "",
+      accessToken: hash.get("access_token") || "",
+      refreshToken: hash.get("refresh_token") || ""
+    };
+  } catch {
+    return { code: "", error: "", errorCode: "", accessToken: "", refreshToken: "" };
+  }
+};
+
+const clearAuthRedirectParams = () => {
+  try {
+    const url = new URL(globalThis.location?.href || "");
+    ["code", "error", "error_code", "error_description"].forEach((key) => url.searchParams.delete(key));
+    const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+    ["access_token", "refresh_token", "expires_at", "expires_in", "provider_token", "token_type", "type", "error", "error_code", "error_description"]
+      .forEach((key) => hash.delete(key));
+    url.hash = hash.toString() ? `#${hash.toString()}` : "";
+    globalThis.history?.replaceState(globalThis.history.state, "", url.href);
+  } catch {
+    // A sessao continua valida mesmo quando o navegador impede a limpeza do URL.
+  }
+};
+
+const exchangeAuthRedirect = async (client) => {
+  const params = getAuthRedirectParams();
+  if (!params.code && !params.accessToken && !params.error) return null;
+
+  if (!authRedirectPromise) {
+    authRedirectPromise = (async () => {
+      if (params.error) {
+        const error = new Error(params.error);
+        error.code = params.errorCode || "oauth_callback_error";
+        throw error;
+      }
+
+      const result = params.code
+        ? await client.auth.exchangeCodeForSession(params.code)
+        : await client.auth.setSession({
+          access_token: params.accessToken,
+          refresh_token: params.refreshToken
+        });
+
+      if (result.error) throw result.error;
+      clearAuthRedirectParams();
+      return result.data?.session || null;
+    })();
+  }
+
+  return authRedirectPromise;
 };
 
 const isProfileConflict = (error) => {
@@ -262,6 +326,8 @@ export const authRepository = {
   async getSession() {
     const client = await getSupabase();
     if (!client) return null;
+    const redirectSession = await exchangeAuthRedirect(client);
+    if (redirectSession) return redirectSession;
     const { data, error } = await client.auth.getSession();
     if (error) throw error;
     return data?.session || null;
@@ -519,7 +585,7 @@ export const authRepository = {
 
     const profileResult = await this.ensureProfile({ role, name, createIfMissing: createProfile });
     if (profileResult.roleMismatch) {
-      await client.auth.signOut();
+      await client.auth.signOut({ scope: "local" });
       return {
         ok: false,
         message: `Esta conta já existe como ${roleLabel(profileResult.existingRole)} e não pode acessar como ${roleLabel(profileResult.requestedRole)}.`
@@ -570,7 +636,7 @@ export const authRepository = {
 
     const profileResult = await this.ensureProfile({ role: safeRole, name: safeName, coachStatus });
     if (profileResult.roleMismatch) {
-      await client.auth.signOut();
+      await client.auth.signOut({ scope: "local" });
       return {
         ok: false,
         message: `Esta conta já existe como ${roleLabel(profileResult.existingRole)} e não pode acessar como ${roleLabel(profileResult.requestedRole)}.`
@@ -597,10 +663,21 @@ export const authRepository = {
       return { ok: false, message: "Provedor de login inválido." };
     }
 
+    // A troca de conta deve afetar somente a plataforma atual. Com storageKey
+    // separado, este logout local nao encerra admin/professor/aluno entre si.
+    const current = await client.auth.getSession();
+    if (current.data?.session) {
+      const localSignOut = await client.auth.signOut({ scope: "local" });
+      if (localSignOut.error) {
+        return { ok: false, error: localSignOut.error, message: authMessage(localSignOut.error) };
+      }
+    }
+
     const { data, error } = await client.auth.signInWithOAuth({
       provider: safeProvider,
       options: {
-        redirectTo: normalizeRedirectUrl(redirectTo)
+        redirectTo: normalizeRedirectUrl(redirectTo),
+        queryParams: { prompt: "select_account" }
       }
     });
 
@@ -649,7 +726,7 @@ export const authRepository = {
   async signOut() {
     const client = await getSupabase();
     if (!client) return;
-    await client.auth.signOut();
+    await client.auth.signOut({ scope: "local" });
   },
 
   async getAuthContext() {

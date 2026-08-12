@@ -1,7 +1,7 @@
 import { Platform } from "../../core/platform.js?v=build-20260809-6";
-import { getSupabase } from "../../core/supabase.js?v=build-20260811-2";
+import { getSupabase } from "../../core/supabase.js?v=build-20260812-4";
 import { DEMO_COACH_ID } from "../../config.js?v=build-20260809-6";
-import { authRepository } from "./auth-repository.js?v=build-20260811-3";
+import { authRepository } from "./auth-repository.js?v=build-20260812-4";
 
 export const PUBLISHED_WORKOUTS_KEY = "flowfit.published-workouts";
 

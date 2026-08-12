@@ -2,7 +2,7 @@
 
 Documento operacional para agentes retomarem a auditoria, confirmarem correções e evitarem regressões. A descrição detalhada da arquitetura continua em `AUTH_AUDIT.md`; este arquivo é a fonte de acompanhamento.
 
-Atualizado em: 2026-08-11  
+Atualizado em: 2026-08-12
 Escopo: `/admin`, `/appProfessor` (a área chamada de `/professor` na auditoria) e `/appAluno` (a área chamada de `/aluno` na auditoria).
 
 ## Como usar
@@ -30,8 +30,9 @@ Escopo: `/admin`, `/appProfessor` (a área chamada de `/professor` na auditoria)
 | `[~]` | AUTH-PROFILE-005 | Alto | Conta de aluno existente que também inicia cadastro de professor precisa preservar uma identidade e o maior papel. | `ensure_own_profile` promove `student -> coach`, sempre `pending`; preserva `admin` e nunca rebaixa. Testar aluno já vinculado, aprovação posterior e manutenção dos vínculos. |
 | `[x]` | AUTH-STUDENT-001 | Alto | Email/Google desconhecido não pode ganhar acesso de aluno apenas por autenticar. | `claim_student_access` verifica vínculo por email/convite e contagem de acessos antes de chamar `ensure_own_profile('student', ...)`; falha inteira é transacional. |
 | `[x]` | AUTH-BOOT-005 | Médio | Google/link mágico do aluno podiam lançar exceção não tratada no handler. | Handlers agora capturam a exceção, registram a etapa e mantêm o auth gate com mensagem recuperável. |
-| `[~]` | AUTH-FEEDBACK-001 | Alto | Professor `pending` voltava do Google para uma tela visualmente idêntica ao login, embora o profile tivesse sido criado. | Deployar `build-20260812-3`/`flowfit-professor-v33`; o auth gate deve mostrar “Cadastro recebido”, email autenticado, mensagem de aprovação e ação para sair, ocultando campos de login. Callback sem sessão recebe erro explícito e faz três releituras curtas antes de falhar. |
-| `[~]` | AUTH-CACHE-001 | Médio | Garantir que computadores com PWA antiga recebam a correção. | Deployar `build-20260812-3`, `flowfit-professor-v33` e `flowfit-aluno-v55`; testar update com uma instalação que ainda tenha o cache anterior. |
+| `[~]` | AUTH-OAUTH-001 | Alto | O callback Google retornava com `code`, mas o cliente compartilhado podia perder/sobrescrever o verificador PKCE e nenhuma sessão era criada. | `build-20260812-4` usa PKCE explícito, troca `code` por sessão em `authRepository.getSession()` e só depois limpa os parâmetros do URL. Confirmar login Google real nas três plataformas. |
+| `[~]` | AUTH-FEEDBACK-001 | Alto | Professor `pending` voltava do Google para uma tela visualmente idêntica ao login, embora o profile tivesse sido criado. | Deployar `build-20260812-4`/`flowfit-professor-v34`; o auth gate deve mostrar “Cadastro recebido”, email autenticado, mensagem de aprovação e ação para sair, ocultando campos de login. |
+| `[~]` | AUTH-CACHE-001 | Médio | Garantir que computadores com PWA antiga recebam a correção. | Deployar `build-20260812-4`, `flowfit-professor-v34` e `flowfit-aluno-v57`; testar update com uma instalação que ainda tenha o cache anterior. |
 
 ## Hierarquia de papéis e capacidade de professor
 
@@ -53,7 +54,7 @@ Escopo: `/admin`, `/appProfessor` (a área chamada de `/professor` na auditoria)
 | `[ ]` | SESSION-002 | Alto | Usuário removido de `auth.users` com access token ainda não expirado. | Medir leitura/escrita até expiração e refresh; confirmar comportamento de RLS para `auth.uid()` sem profile. |
 | `[ ]` | SESSION-003 | Médio | Senha alterada com sessões existentes. | Testar em dois navegadores se access/refresh tokens antigos continuam válidos e por quanto tempo; definir se precisa revogação global. |
 | `[ ]` | SESSION-004 | Médio | E-mail/login alterado com sessão existente e vínculos de aluno por e-mail. | Verificar auth user, `students.email`, `student_user_id`, seletores e próximo refresh. Não presumir sincronização automática. |
-| `[x]` | SESSION-005 | Médio | Sessão reutilizada entre plataformas no mesmo origin. | É compartilhada pelo cliente Supabase/localStorage; cada app deve reaplicar seu gate. Professor rejeita papel inferior, admin usa RPC, aluno resolve vínculos. |
+| `[~]` | SESSION-005 | Alto | Admin, professor e aluno reutilizavam a mesma sessão e o mesmo estado PKCE no origin do GitHub Pages. Login/logout/troca de conta em uma plataforma sobrescrevia as demais e podia restaurar a conta errada. | `core/supabase.js` usa `storageKey` distinta (`flowfit-auth-admin`, `flowfit-auth-professor`, `flowfit-auth-aluno`); OAuth encerra apenas a sessão local da plataforma atual e envia `prompt=select_account`. Confirmar duas plataformas simultaneamente e logout independente em navegador real. |
 | `[ ]` | SESSION-006 | Médio | Entrar manualmente na URL de outro perfil com sessão existente. | Repetir matriz admin/coach/student nas três rotas e registrar mensagem, sign-out e acesso de API. |
 | `[ ]` | SESSION-007 | Baixo | Sessão/localStorage parcialmente corrompido. | Corromper somente a chave Supabase em ambiente de teste; app deve voltar ao auth gate sem exibir dados remotos de outro usuário. Conferir caches locais. |
 
@@ -114,6 +115,7 @@ Escopo: `/admin`, `/appProfessor` (a área chamada de `/professor` na auditoria)
 | 2026-08-12 | AUTH-PROFILE-002, AUTH-PROFILE-004 | JSON do banco + relato do `/admin` | `ensure_own_profile` existe no banco e `frismarcomputer@gmail.com` passou a aparecer como `coach/pending`. | Provisionamento Google confirmado; feedback visual do pending corrigido no repositório e ainda depende de deploy. |
 | 2026-08-12 | AUTH-PERM-001 | GitHub Pages no navegador integrado | `/appProfessor/` abriu e iniciou o redirect Google sem erros/warnings de console; busca no código continua sem qualquer chamada a Permissions. | Não reproduzido fora do computador afetado; evidência aponta para código injetado/extensão até que um stack mostre arquivo do FlowFit. |
 | 2026-08-12 | ADMIN-RPC-001, AUTH-FEEDBACK-001 | JSON do banco + `scripts/admin-auth-regression-smoke.mjs` | Função real continha `ON CONFLICT (coach_id)` e retorno homônimo; migration usa a constraint. Smoke confere quatro fontes SQL, autorização, histórico, feedback e cache. | Código aprovado; aplicar SQL, deployar e validar com conta real. |
+| 2026-08-12 | AUTH-OAUTH-001, SESSION-005, AUTH-CACHE-001 | Smokes unitários + navegador local | 10 cenários do auth passaram; `/admin`, `/appProfessor` e `/appAluno` inicializaram sem erros/warnings. PKCE explícito, seletor de conta e storage isolado estão cobertos por regressão. | Código aprovado sem credenciais; deploy e login Google real nas três plataformas continuam pendentes. |
 
 ## Comandos/arquivos de confirmação
 

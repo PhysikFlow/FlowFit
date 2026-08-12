@@ -26,6 +26,9 @@ const professorApp = read("appProfessor/js/app.js");
 const professorCss = read("appProfessor/css/app.css");
 const professorIndex = read("appProfessor/index.html");
 const professorWorker = read("appProfessor/sw.js");
+const studentWorker = read("appAluno/sw.js");
+const supabaseClient = read("appAluno/js/core/supabase.js");
+const authRepository = read("appAluno/js/data/repositories/auth-repository.js");
 
 assert.match(professorApp, /showAuthenticatedAccessState\(\{/);
 assert.match(professorApp, /status: coachAccess\.status \|\| "error"/);
@@ -36,7 +39,16 @@ assert.match(professorApp, /O login do Google voltou ao FlowFit, mas nenhuma ses
 assert.match(professorApp, /url\.search = ""/);
 assert.match(professorCss, /data-account-state="blocked"/);
 assert.match(professorIndex, /app\.css\?v=build-20260812-3/);
-assert.match(professorIndex, /app\.js\?v=build-20260812-3/);
-assert.match(professorWorker, /flowfit-professor-v33/);
+assert.match(professorIndex, /app\.js\?v=build-20260812-4/);
+assert.match(professorWorker, /flowfit-professor-v34/);
+assert.match(studentWorker, /flowfit-aluno-v57/);
+assert.match(supabaseClient, /storageKey: AUTH_STORAGE_KEY/);
+assert.match(supabaseClient, /detectSessionInUrl: false/);
+assert.match(supabaseClient, /flowType: "pkce"/);
+assert.match(supabaseClient, /\/appprofessor/);
+assert.match(supabaseClient, /\/admin/);
+assert.match(authRepository, /exchangeCodeForSession\(params\.code\)/);
+assert.match(authRepository, /prompt: "select_account"/);
+assert.match(authRepository, /signOut\(\{ scope: "local" \}\)/);
 
 console.log("admin-auth-regression-smoke: RPC e feedback pending aprovados");
