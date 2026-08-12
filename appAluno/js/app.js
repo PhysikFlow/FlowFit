@@ -1,13 +1,13 @@
 import { Platform } from "./core/platform.js?v=build-20260809-6";
-import { SESSION_PHASE, Store } from "./core/store.js?v=build-20260811-2";
+import { SESSION_PHASE, Store } from "./core/store.js?v=build-20260811-3";
 import { Theme } from "./core/theme.js?v=build-20260809-7";
 import { svgIcon } from "./core/icons.js?v=build-20260810-7";
 import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260809-7";
-import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260811-2";
-import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260811-2";
-import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260811-2";
-import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260811-2";
-import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260811-2";
+import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260811-3";
+import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260811-3";
+import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260811-3";
+import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260811-3";
+import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260811-3";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -448,13 +448,18 @@ const getProviderLabel = () => "Google";
 const handleOAuthSignIn = async (provider) => {
   const label = getProviderLabel(provider);
   setAuthStatus(`Abrindo login com ${label}...`, "");
-  const result = await authRepository.signInWithOAuth({
-    provider,
-    redirectTo: getAuthRedirectUrl()
-  });
+  try {
+    const result = await authRepository.signInWithOAuth({
+      provider,
+      redirectTo: getAuthRedirectUrl()
+    });
 
-  if (!result.ok) {
-    setAuthStatus(result.message || `Não foi possível abrir login com ${label}.`, "warning");
+    if (!result.ok) {
+      setAuthStatus(result.message || `Não foi possível abrir login com ${label}.`, "warning");
+    }
+  } catch (error) {
+    console.error("[FlowFit][aluno][oauth-start] Falha ao iniciar o login social.", error);
+    setAuthStatus(`Não foi possível abrir login com ${label}. Tente novamente.`, "warning");
   }
 };
 
@@ -1952,30 +1957,35 @@ onboardingForm?.addEventListener("submit", async (event) => {
   const data = Object.fromEntries(new FormData(onboardingForm));
   setAuthStatus("Enviando link seguro...", "");
 
-  const inviteToken = getInviteToken();
-  if (inviteToken) {
-    const inviteResult = await studentRepository.validateInvite({ token: inviteToken, email: data.email });
-    if (!inviteResult.valid || !inviteResult.emailMatches) {
-      if (inviteResult.reason !== "email-mismatch") {
-        pendingInviteToken = "";
-        Platform.storage.remove(PENDING_INVITE_KEY);
-        syncAuthMode("access", { preserveStatus: true });
+  try {
+    const inviteToken = getInviteToken();
+    if (inviteToken) {
+      const inviteResult = await studentRepository.validateInvite({ token: inviteToken, email: data.email });
+      if (!inviteResult.valid || !inviteResult.emailMatches) {
+        if (inviteResult.reason !== "email-mismatch") {
+          pendingInviteToken = "";
+          Platform.storage.remove(PENDING_INVITE_KEY);
+          syncAuthMode("access", { preserveStatus: true });
+        }
+        setAuthStatus("Convite inválido, expirado ou usado com um email diferente do cadastrado pelo personal.", "warning");
+        return;
       }
-      setAuthStatus("Convite inválido, expirado ou usado com um email diferente do cadastrado pelo personal.", "warning");
+    }
+
+    const result = await authRepository.signInWithMagicLink({
+      email: data.email,
+      redirectTo: getAuthRedirectUrl()
+    });
+
+    if (!result.ok) {
+      setAuthStatus(result.message || "Não foi possível enviar o link de acesso.", "warning");
       return;
     }
+    setAuthStatus(result.message, "synced");
+  } catch (error) {
+    console.error("[FlowFit][aluno][magic-link] Falha ao validar convite ou enviar link.", error);
+    setAuthStatus("Não foi possível concluir o acesso agora. Tente novamente.", "warning");
   }
-
-  const result = await authRepository.signInWithMagicLink({
-    email: data.email,
-    redirectTo: getAuthRedirectUrl()
-  });
-
-  if (!result.ok) {
-    setAuthStatus(result.message || "Não foi possível enviar o link de acesso.", "warning");
-    return;
-  }
-  setAuthStatus(result.message, "synced");
 });
 
 const signOut = async () => {

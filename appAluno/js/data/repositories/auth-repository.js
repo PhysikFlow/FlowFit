@@ -126,6 +126,14 @@ const isProfileConflict = (error) => {
     || /already exists/i.test(message);
 };
 
+const isMissingProfileProvisionRpc = (error) => {
+  const message = String(error?.message || "");
+  return error?.code === "PGRST202"
+    || error?.code === "42883"
+    || /could not find the function .*ensure_own_profile/i.test(message)
+    || /function .*ensure_own_profile.* does not exist/i.test(message);
+};
+
 const authMessage = (error, fallback = "Não foi possível autenticar.") => {
   const message = String(error?.message || "").toLowerCase();
   const code = String(error?.code || error?.status || "").toLowerCase();
@@ -304,13 +312,59 @@ export const authRepository = {
     return result.profile;
   },
 
-  async ensureProfile({ role = AUTH_ROLES.STUDENT, name, createIfMissing = true, coachStatus = COACH_STATUS.TRIAL } = {}) {
+  async ensureProfile({ role = AUTH_ROLES.STUDENT, name, createIfMissing = true, coachStatus = COACH_STATUS.PENDING } = {}) {
     const client = await getSupabase();
     const user = await this.getUser();
     if (!client || !user) return { synced: false, profile: null, reason: "not-authenticated" };
 
     const safeRole = normalizeRole(role);
     const safeName = normalizeName(name, user.email || "Usuário");
+
+    // O backend é a fonte autoritativa para criar/reparar profiles. Isso cobre
+    // OAuth e link mágico, que não carregam flowfit_requested_role nos metadados
+    // do provedor, e torna duas abas/callbacks concorrentes idempotentes.
+    if (createIfMissing) {
+      const provision = await client.rpc("ensure_own_profile", {
+        p_requested_role: safeRole,
+        p_name: safeName
+      });
+
+      if (!provision.error) {
+        const row = Array.isArray(provision.data) ? provision.data[0] : provision.data;
+        const profile = profileFromRow(row);
+        if (!profile) {
+          return {
+            synced: false,
+            profile: null,
+            reason: "profile-write-failed",
+            error: new Error("ensure_own_profile returned no profile")
+          };
+        }
+        if (!roleAtLeast(profile.role, safeRole)) {
+          return {
+            synced: true,
+            profile,
+            roleMismatch: true,
+            existingRole: profile.role,
+            requestedRole: safeRole
+          };
+        }
+        return { synced: true, profile, provisionedBy: "rpc" };
+      }
+
+      // Compatibilidade durante o deploy: o frontend novo ainda funciona por
+      // INSERT direto apenas quando a migration da RPC ainda não foi aplicada.
+      // Qualquer outro erro da RPC é preservado e nunca mascarado por fallback.
+      if (!isMissingProfileProvisionRpc(provision.error)) {
+        return {
+          synced: false,
+          profile: null,
+          reason: "profile-write-failed",
+          error: provision.error
+        };
+      }
+    }
+
     const existingResult = await this.getProfileResult();
     if (existingResult.error) {
       return {
@@ -483,7 +537,7 @@ export const authRepository = {
     };
   },
 
-  async signUp({ email, password, role, name, redirectTo, createProfile = true, coachStatus = COACH_STATUS.TRIAL } = {}) {
+  async signUp({ email, password, role, name, redirectTo, createProfile = true, coachStatus = COACH_STATUS.PENDING } = {}) {
     const client = await getSupabase();
     if (!client) return { ok: false, message: "Serviço indisponível." };
 

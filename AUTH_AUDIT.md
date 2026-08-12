@@ -6,6 +6,19 @@
 
 ---
 
+## Atualização de implementação — 2026-08-11
+
+Esta seção substitui as descrições históricas abaixo onde houver conflito. O acompanhamento testável está em `AUTH_ACCOUNT_CHECKLIST.md`.
+
+- O diagnóstico real confirmou que Google cria `auth.users` apenas com metadados do provedor; `flowfit_requested_role` pode ser `null`. Logo, metadata não é mais requisito para concluir o cadastro.
+- `supabase/provision-auth-profiles.sql` cria `ensure_own_profile(requested_role, name)`, uma RPC `security definer` idempotente. Ela aceita somente `student`/`coach`, nunca cria `admin`, preserva o maior papel e resolve concorrência por `ON CONFLICT`.
+- `/appProfessor/` chama a RPC depois de qualquer autenticação. Conta Google sem profile passa a receber `coach/pending`; uma identidade `student` que também se cadastra como professor sobe para `coach/pending`; `admin` permanece `admin`.
+- `/appAluno/` não cria profile para qualquer identidade autenticada. `claim_student_access` primeiro exige vínculo real por email/convite e somente então chama a mesma rotina como `student`, dentro da transação.
+- O `INSERT` direto do frontend permanece temporariamente apenas quando o PostgREST informa que a RPC ainda não existe. Erros reais da RPC não são mascarados.
+- Estado de rollout: código preparado e smoke local aprovado; a migration precisa ser aplicada no Supabase e os fluxos reais ainda precisam ser confirmados antes de marcar os itens `[~]` como concluídos.
+
+---
+
 ## Atualização de implementação — 2026-08-08
 
 Regra adotada para a próxima fase:
@@ -160,14 +173,14 @@ appAluno (index.html + app.js)     ─┘              │                      
 | Tabela | Papel na autenticação |
 |---|---|
 | `auth.users` (gerenciada pelo Supabase) | Conta de acesso. Email único por usuário no projeto. **Não é tocada pelo schema.sql.** |
-| `profiles` | **Define o papel.** `user_id uuid PK → auth.users (cascade)`, `role text check ('admin','coach','student')`, `coach_status`, `name` + campos de perfil do coach. **Uma linha por usuário → um email não pode ser coach e aluno ao mesmo tempo no piloto.** |
+| `profiles` | **Define o maior papel.** `user_id uuid PK → auth.users (cascade)`, `role text check ('admin','coach','student')`, `coach_status`, `name` + campos de perfil do coach. A hierarquia permite que a mesma identidade use áreas inferiores sem duplicar o profile. |
 | `students` | **Cadastro do aluno (registro de negócio), NÃO é conta de acesso.** `id text PK`, `coach_id text`, `student_key`, `student_user_id uuid → auth.users (on delete set null)`, `email` (nullable). Índice único `(coach_id, lower(email))`. |
 | `brand_theme` | Marca por coach (`coach_id = auth.uid()::text`); aluno autenticado do coach também pode ler. |
 | `workout_plans`, `workout_exercises`, `workout_sessions`, `workout_set_logs`, `workout_feedback` | Dados por coach/aluno; RLS por `coach_id` ou vínculo do aluno (por `student_user_id` ou email). |
 
 ### 3.2 Funções e triggers
-- **Não existe nenhuma função nem trigger no schema.sql.** Não há `handle_new_user`, não há criação automática de `profiles` no signup.
-- A criação/validação do `profiles` é feita **no cliente**, em `authRepository.ensureProfile()`. Isso significa que o papel de uma conta depende do app que o usuário abriu primeiro (ver seção 4).
+- Não há trigger `handle_new_user`: a identidade pode existir brevemente sem profile até concluir o primeiro callback/login.
+- A criação/reparação do `profiles` é feita pela RPC `ensure_own_profile`, acionada por `authRepository.ensureProfile()` no professor e por `claim_student_access()` após o vínculo válido do aluno.
 
 ### 3.3 Arquivos envolvidos
 | Arquivo | O que faz |
@@ -180,12 +193,14 @@ appAluno (index.html + app.js)     ─┘              │                      
 | `appAluno/js/data/repositories/student-repository.js` | CRUD/mescla de `students` (local + nuvem), `fetchCurrentStudent` por email. |
 | `appAluno/js/data/repositories/workout-repository.js` | Publicação/sincronização de treinos; `toStudentRow` re-upserta `students` ao publicar. |
 | `appAluno/js/data/repositories/session-repository.js` / `theme-repository.js` | Sincronização de sessões e tema (dependem de `authContext.role`). |
-| `supabase/schema.sql` | Tabelas, grants, RLS. |
+| `supabase/schema.sql` / `supabase/provision-auth-profiles.sql` | Tabelas, grants, RLS e provisionamento idempotente do profile. |
 | `appAluno/index.html` / `appProfessor/index.html` | Telas de login/cadastro. |
 
 ---
 
-## 4. Contradições e comportamentos ambíguos
+## 4. Contradições e comportamentos ambíguos históricos
+
+Os itens desta seção registram o estado encontrado na auditoria original. Quando conflitarem com a atualização de 2026-08-11, considerar o checklist atual como fonte operacional.
 
 1. **Vínculo por email × coluna `student_user_id` morta.**
    O schema prevê `students.student_user_id` e a RLS a usa, mas **nenhum código grava esse campo** (sempre `null`). O vínculo real aluno↔cadastro é feito por `lower(email)` **na hora da consulta**. Se o email mudar ou o provedor for outro, o vínculo quebra.
@@ -368,13 +383,13 @@ Passadas por `error.message` sem tradução em:
 
 | Pergunta | Resposta (resumo) |
 |---|---|
-| Como uma conta de aluno é criada? | Pelo próprio aluno, em **Criar conta** no appAluno (`signUp` + `ensureProfile('student')`). O cadastro feito pelo personal em `students` **não** cria conta de acesso. |
-| Como uma conta de personal é criada? | Pelo próprio personal, em **Criar conta** no painel (`signUp` + `ensureProfile('coach')`). |
-| O mesmo email pode existir nos dois apps? | Não no piloto: `auth.users` tem email único e `profiles` é 1:1 com papel único. O mesmo email pode ser **aluno de vários personais**, mas não operar como aluno e personal ao mesmo tempo sem futura tabela de papéis múltiplos. |
-| Onde o papel é armazenado? | `profiles.role` (`'coach'` / `'student'`), criado/validado pelo app via `ensureProfile` — sem trigger no banco. |
+| Como uma conta de aluno é criada? | Google/link mágico cria a identidade Auth; `claim_student_access` só cria/repara `profiles.student` depois de encontrar vínculo por email/convite. O cadastro do personal em `students` não cria `auth.users`. |
+| Como uma conta de personal é criada? | O personal autentica no painel e `ensure_own_profile('coach', ...)` cria/repara o profile como `pending`, inclusive após Google sem metadata de papel. |
+| O mesmo email pode existir nos dois apps? | Sim, como uma única identidade. `profiles.role` guarda o maior papel; coach/admin também podem usar a área de aluno se tiverem vínculo real em `students`. |
+| Onde o papel é armazenado? | `profiles.role` (`admin > coach > student`), provisionado pela RPC no backend; não há trigger automático no nascimento de `auth.users`. |
 | O que acontece quando o personal cadastra um aluno? | Upsert em `students` (local + nuvem) com `coach_id = auth.uid()`. |
 | Cria só cadastro ou também usuário no Auth? | **Só cadastro** (`students`). Não cria `auth.users`, nem `profiles`, nem token de convite. |
-| Google × email/senha? | Ambos usam o mesmo `auth.users`; Google é só método de entrada. O papel continua vindo do `ensureProfile` do app aberto. |
+| Google × email/senha? | Ambos usam o mesmo `auth.users`; Google é só método de entrada. A plataforma conclui o profile pela RPC, sem depender de `flowfit_requested_role`. |
 | Criar conta já existente? | O app não detecta: mostra "Conta criada. Confirme o email..." (quando sem sessão) ou loga na conta existente / mostra erro cru (depende da config de confirmação). |
 | Por que o cadastro "loga" quando o email já existe? | `signUp` devolve sessão do usuário existente (confirmação desligada ou sessão velha via `getSession`) e o app **ignora `roleMismatch`** no caminho de signup. |
 | Por que "não é professor"? | `startAuthenticatedPanel` exige `role === 'coach'`. Atingido por: signup de email já usado como aluno, Google de conta student, ou conta sem perfil (`role` nulo). |

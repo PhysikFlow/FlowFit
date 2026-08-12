@@ -30,7 +30,7 @@ Base web, mobile-first e sem dependencias de framework para um produto de treino
 
 O projeto roda em GitHub Pages sem backend proprio. Por isso, login e autorizacao usam Supabase Auth + Row Level Security.
 
-1. Em projeto novo, rode `supabase/schema.sql`. Em banco já configurado, rode apenas `supabase/update-student-access.sql`.
+1. Em projeto novo, rode `supabase/schema.sql`. Em banco já configurado, rode `supabase/update-student-access.sql` e depois `supabase/provision-auth-profiles.sql`.
 2. Em Authentication > URL Configuration:
    - configure `Site URL` com `https://physikflow.github.io/FlowFit/appProfessor/`;
    - adicione em Redirect URLs:
@@ -87,8 +87,9 @@ O teste percorre as páginas dos três apps em 320×700, 390×844 e 1440×900. E
 ## Atualizar um banco existente sem apagar dados
 
 1. Rode `supabase/update-student-access.sql` no SQL Editor.
-2. Rode `supabase/diagnose-development-data.sql` e confira se as consultas de duplicidade e planos incompletos retornam zero linhas.
-3. Não rode `supabase/reset-development-data.sql`; ele continua reservado para uma limpeza deliberada do ambiente de desenvolvimento.
+2. Rode `supabase/provision-auth-profiles.sql` inteiro. Ele cria a RPC idempotente usada depois de login por senha, Google ou link mágico e atualiza o claim do aluno sem liberar emails desconhecidos.
+3. Rode `supabase/diagnose-development-data.sql` e confira se as consultas de duplicidade e planos incompletos retornam zero linhas.
+4. Não rode `supabase/reset-development-data.sql`; ele continua reservado para uma limpeza deliberada do ambiente de desenvolvimento.
 
 A migração mantém alunos, contas, temas, treinos e históricos existentes. Ela adiciona o acesso direto por email, preserva a RPC antiga de convite por compatibilidade e cria a publicação transacional de treinos.
 
@@ -100,7 +101,9 @@ A migration já registra `recursaocausaexaustao@gmail.com` como primeiro adminis
 
 Abra `/admin/` e entre com essa mesma conta. Não existe cadastro de administrador pelo frontend. A lista, os detalhes e as alterações usam RPCs `security definer` que verificam `platform_admins`; as tabelas administrativas também têm RLS e não aceitam escrita direta do navegador.
 
-Se um cadastro de professor tiver sido interrompido depois do `auth.signUp`, rode `supabase/diagnose-auth-roles.sql`. A consulta de identidades sem profile mostra contas parcialmente concluídas sem alterar dados. Depois de confirmar o e-mail e entrar novamente em `/appProfessor/`, o bootstrap tenta criar de forma idempotente o profile `coach` com status `pending`; ele nunca rebaixa um profile `admin` nem promove automaticamente um papel inferior.
+Se um cadastro de professor tiver sido interrompido depois do `auth.signUp` ou do retorno do Google, rode `supabase/diagnose-auth-roles.sql`. A consulta de identidades sem profile mostra contas parcialmente concluídas sem alterar dados. Depois de aplicar `supabase/provision-auth-profiles.sql`, entrar novamente em `/appProfessor/` cria/repara no backend o profile `coach` com status `pending`, mesmo quando o Google não trouxe `flowfit_requested_role`. A RPC nunca cria `admin`, nunca rebaixa o maior papel salvo e promove `student` para `coach` apenas como `pending`.
+
+No `/appAluno/`, a mesma rotina só é chamada dentro de `claim_student_access` depois de validar um vínculo por email ou convite. Um Google ou link mágico desconhecido pode criar a identidade técnica em `auth.users`, mas não recebe `profiles.student` nem acesso a dados do FlowFit.
 
 O campo de vencimento reutiliza `profiles.coach_trial_ends_at` como data geral de acesso nesta fase manual. O motivo/mensagem ao personal reutiliza `profiles.coach_status_note`. Observações internas ficam separadas em `coach_admin_settings` e nunca entram nas consultas comuns do personal.
 

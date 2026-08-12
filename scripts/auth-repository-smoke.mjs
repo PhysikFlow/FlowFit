@@ -33,8 +33,14 @@ const profileRow = (role = "coach") => ({
   updated_at: "2026-08-11T00:00:00.000Z"
 });
 
-const createClient = ({ reads = [], inserts = [], signUpResult = null } = {}) => {
+const missingProvisionRpc = {
+  data: null,
+  error: { code: "PGRST202", message: "Could not find the function public.ensure_own_profile" }
+};
+
+const createClient = ({ reads = [], inserts = [], rpcs = [], signUpResult = null } = {}) => {
   const insertedPayloads = [];
+  const rpcCalls = [];
   let signedOut = false;
   const client = {
     auth: {
@@ -44,6 +50,10 @@ const createClient = ({ reads = [], inserts = [], signUpResult = null } = {}) =>
         signedOut = true;
         return { error: null };
       }
+    },
+    async rpc(name, args) {
+      rpcCalls.push({ name, args });
+      return rpcs.shift() || missingProvisionRpc;
     },
     from(table) {
       assert.equal(table, "profiles");
@@ -70,13 +80,30 @@ const createClient = ({ reads = [], inserts = [], signUpResult = null } = {}) =>
       };
     }
   };
-  return { client, insertedPayloads, wasSignedOut: () => signedOut };
+  return { client, insertedPayloads, rpcCalls, wasSignedOut: () => signedOut };
 };
 
 const runWithClient = async (setup, operation) => {
   context.__getSupabase = async () => setup.client;
   return operation();
 };
+
+{
+  const setup = createClient({
+    rpcs: [{ data: profileRow(), error: null }]
+  });
+  const result = await runWithClient(setup, () => authRepository.ensureProfile({
+    role: "coach",
+    name: "Professor Teste",
+    coachStatus: "pending"
+  }));
+  assert.equal(result.synced, true);
+  assert.equal(result.provisionedBy, "rpc");
+  assert.equal(result.profile.role, "coach");
+  assert.equal(setup.rpcCalls[0].name, "ensure_own_profile");
+  assert.equal(setup.rpcCalls[0].args.p_requested_role, "coach");
+  assert.equal(setup.insertedPayloads.length, 0);
+}
 
 {
   const setup = createClient({
@@ -91,6 +118,30 @@ const runWithClient = async (setup, operation) => {
   assert.equal(result.synced, true);
   assert.equal(result.profile.role, "coach");
   assert.equal(setup.insertedPayloads[0].coach_status, "pending");
+}
+
+{
+  const setup = createClient({
+    rpcs: [{ data: profileRow("coach"), error: null }]
+  });
+  const result = await runWithClient(setup, () => authRepository.ensureProfile({ role: "coach" }));
+  assert.equal(result.synced, true);
+  assert.equal(result.profile.role, "coach");
+  assert.equal(result.roleMismatch, undefined);
+}
+
+{
+  const rpcError = { code: "P0001", message: "profile backend unavailable" };
+  const setup = createClient({
+    rpcs: [{ data: null, error: rpcError }],
+    reads: [{ data: null, error: null }],
+    inserts: [{ data: profileRow(), error: null }]
+  });
+  const result = await runWithClient(setup, () => authRepository.ensureProfile({ role: "coach" }));
+  assert.equal(result.synced, false);
+  assert.equal(result.reason, "profile-write-failed");
+  assert.equal(result.error.code, rpcError.code);
+  assert.equal(setup.insertedPayloads.length, 0);
 }
 
 {
@@ -147,4 +198,17 @@ const runWithClient = async (setup, operation) => {
   assert.equal(result.existingRole, "student");
 }
 
-console.log("auth-repository-smoke: 5 cenários aprovados");
+const profileMigration = readFileSync(
+  new URL("../supabase/provision-auth-profiles.sql", import.meta.url),
+  "utf8"
+);
+const studentLinkGuard = profileMigration.indexOf("v_requested_role = 'student' and not exists");
+const studentProvision = profileMigration.indexOf("perform public.ensure_own_profile('student', v_profile_name)");
+const accessCountGuard = profileMigration.indexOf("if v_access_count = 0 then");
+assert.ok(profileMigration.includes("v_requested_role not in ('student', 'coach')"));
+assert.ok(profileMigration.includes("on conflict (user_id) do update"));
+assert.ok(profileMigration.includes("current_profile.role = 'student' and excluded.role = 'coach'"));
+assert.ok(profileMigration.includes("revoke all on function public.ensure_own_profile(text, text) from public, anon, authenticated"));
+assert.ok(studentLinkGuard > 0 && accessCountGuard > 0 && studentProvision > accessCountGuard);
+
+console.log("auth-repository-smoke: 8 cenários e invariantes SQL aprovados");
