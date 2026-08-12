@@ -1,13 +1,18 @@
-const CACHE_NAME = "flowfit-professor-v28";
+const CACHE_NAME = "flowfit-professor-v29";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./css/app.css?v=build-20260811-1",
   "./js/app.js?v=build-20260811-2",
-  "../appAluno/assets/icons/app-icon.svg",
+  "../appAluno/assets/icons/apple-touch-icon.png",
+  "../appAluno/assets/icons/icon-192.png",
+  "../appAluno/assets/icons/icon-512.png",
+  "../appAluno/assets/icons/icon-1024.png",
+  "../appAluno/assets/icons/icon-maskable-512.png",
+  "../appAluno/assets/icons/startup-logo-512.png",
   "../appAluno/css/tokens.css?v=build-20260809-7",
-  "../appAluno/css/components.css?v=build-20260809-8",
+  "../appAluno/css/components.css?v=build-20260811-9",
   "../appAluno/js/config.js?v=build-20260809-6",
   "../appAluno/js/core/brand-theme.js?v=build-20260809-7",
   "../appAluno/js/core/icons.js?v=build-20260809-6",
@@ -28,7 +33,9 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys
+        .filter((key) => key.startsWith("flowfit-professor-") && key !== CACHE_NAME)
+        .map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });

@@ -1,10 +1,15 @@
-const CACHE_NAME = "flowfit-aluno-v53";
+const CACHE_NAME = "flowfit-aluno-v54";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./assets/icons/app-icon.svg",
+  "./assets/icons/apple-touch-icon.png",
+  "./assets/icons/icon-192.png",
+  "./assets/icons/icon-512.png",
+  "./assets/icons/icon-1024.png",
+  "./assets/icons/icon-maskable-512.png",
+  "./assets/icons/startup-logo-512.png",
   "./css/tokens.css?v=build-20260809-7",
-  "./css/components.css?v=build-20260809-8",
+  "./css/components.css?v=build-20260811-9",
   "./css/app.css?v=build-20260811-1",
   "./js/app.js?v=build-20260811-2",
   "./js/data/repositories/auth-repository.js?v=build-20260811-2",
@@ -31,7 +36,9 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys
+        .filter((key) => key.startsWith("flowfit-aluno-") && key !== CACHE_NAME)
+        .map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });

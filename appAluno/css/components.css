@@ -27,6 +27,13 @@
   text-align: center;
 }
 
+.app-startup-logo {
+  display: block;
+  width: clamp(6.5rem, 28vw, 7rem);
+  height: auto;
+  object-fit: contain;
+}
+
 .auth-session-check strong {
   margin-top: var(--space-2);
   font-size: var(--text-lg);
