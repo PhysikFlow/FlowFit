@@ -92,7 +92,7 @@ Ele é o lugar onde o personal opera a base. Hoje inclui:
 - perfil profissional;
 - áreas de comunicação e negócio ainda não configuradas de verdade.
 
-O painel só libera operação depois que a conta autenticada tem perfil com papel `coach` e status operacional (`trial`, `active` ou `past_due`). Se a conta for de aluno ou estiver suspensa/cancelada, o painel bloqueia o uso.
+O painel só libera operação depois que a conta autenticada tem capacidade de professor e a RPC `get_own_coach_access()` confirma o acesso. `trial`, `active` e o legado `past_due` operam normalmente; o dia posterior ao vencimento opera como `grace` com aviso; em `D+2` o estado efetivo vira `expired` e o RLS bloqueia. Contas `pending`, `suspended` ou `cancelled` continuam bloqueadas independentemente da data.
 
 ### Supabase
 

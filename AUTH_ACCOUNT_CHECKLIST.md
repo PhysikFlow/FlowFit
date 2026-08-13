@@ -63,6 +63,19 @@ Escopo: `/admin`, `/appProfessor` (a área chamada de `/professor` na auditoria)
 | `[ ]` | SESSION-007 | Baixo | Sessão/localStorage parcialmente corrompido. | Corromper somente a chave Supabase em ambiente de teste; app deve voltar ao auth gate sem exibir dados remotos de outro usuário. Conferir caches locais. |
 | `[?]` | SESSION-008 | Médio | Definir se suspender/cancelar o professor também deve interromper o acesso dos alunos vinculados. | A migration nova bloqueia o próprio professor, mas preserva deliberadamente o ramo RLS do aluno. Alterar isso exige decisão de produto sobre continuidade dos treinos já prescritos. |
 
+## Vencimento automático do professor
+
+| Estado | ID | Risco | Item | Evidência/critério de conclusão |
+| --- | --- | --- | --- | --- |
+| `[x]` | EXPIRY-001 | Alto | O vencimento precisa ser relativo à data de cada professor, sem dia fixo global. | `coach_admin_settings.access_expires_on` guarda uma data civil; `flowfit_private.coach_access_state` calcula D, D+1 e D+2 em `America/Sao_Paulo`. |
+| `[x]` | EXPIRY-002 | Alto | Professor deve operar durante todo D, receber aviso durante D+1 e ser bloqueado em D+2. | `can_operate_as_coach()` usa o estado calculado em cada requisição; `/appProfessor` usa `get_own_coach_access()` para aviso e gate. |
+| `[x]` | EXPIRY-003 | Alto | Sessão aberta não pode contornar o vencimento. | RLS chama `can_operate_as_coach()`; frontend revalida na transição, ao recuperar foco e ao voltar à aba. Validar também com REST real após aplicar a migration. |
+| `[x]` | EXPIRY-004 | Médio | Datas não podem mudar conforme o fuso do navegador. | Admin envia e recebe `date` no formato `YYYY-MM-DD`, sem `Date.toISOString()`; backend usa explicitamente `America/Sao_Paulo`. |
+| `[x]` | EXPIRY-005 | Médio | Renovação não pode remover suspensão ou cancelamento administrativo. | `pending`, `suspended` e `cancelled` têm precedência sobre a data; alterar somente `access_expires_on` não muda `coach_status`. |
+| `[x]` | EXPIRY-006 | Alto | Vencimento do professor não deve bloquear alunos vinculados. | Nenhuma policy do ramo do aluno foi alterada; somente `can_operate_as_coach()` e os ramos de professor passam a considerar o vencimento. |
+| `[~]` | EXPIRY-007 | Médio | Validar no Supabase real fronteiras, privilégios e assinatura RPC. | Aplicar `supabase/automatic-coach-expiration.sql` e executar `supabase/verify-automatic-coach-expiration.sql`; o JSON deve retornar `ok=true`. |
+| `[ ]` | EXPIRY-008 | Médio | Validar renovação e bloqueio em sessão real. | Com uma conta de teste: confirmar aviso em D+1, bloqueio REST/UI em D+2, acesso contínuo do aluno e reativação imediata após nova data futura. |
+
 ## Vínculos professor-aluno e dados órfãos
 
 | Estado | ID | Risco | Item | Evidência/critério de conclusão |

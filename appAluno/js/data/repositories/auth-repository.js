@@ -294,6 +294,34 @@ export const authRepository = {
     return buildCoachAccess(profile);
   },
 
+  async getOwnCoachAccess() {
+    const client = await getSupabase();
+    if (!client) {
+      return { ok: false, access: null, message: "Serviço indisponível no momento." };
+    }
+
+    const { data, error } = await client.rpc("get_own_coach_access");
+    if (error) {
+      return {
+        ok: false,
+        access: null,
+        error,
+        message: "Não foi possível validar o vencimento do acesso. Recarregue a página."
+      };
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) {
+      return {
+        ok: false,
+        access: null,
+        message: "A conta autenticada não possui um perfil de professor válido."
+      };
+    }
+
+    return { ok: true, access: row };
+  },
+
   canAccessRole(profileOrContext, requiredRole) {
     const role = profileOrContext?.role || profileOrContext?.profile?.role || "";
     return roleAtLeast(role, requiredRole);

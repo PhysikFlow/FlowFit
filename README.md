@@ -110,14 +110,18 @@ Se um cadastro de professor tiver sido interrompido depois do `auth.signUp` ou d
 
 No `/appAluno/`, a mesma rotina só é chamada dentro de `claim_student_access` depois de validar um vínculo por email ou convite. Um Google ou link mágico desconhecido pode criar a identidade técnica em `auth.users`, mas não recebe `profiles.student` nem acesso a dados do FlowFit.
 
-O campo de vencimento reutiliza `profiles.coach_trial_ends_at` como data geral de acesso nesta fase manual. O motivo/mensagem ao personal reutiliza `profiles.coach_status_note`. Observações internas ficam separadas em `coach_admin_settings` e nunca entram nas consultas comuns do personal.
+O vencimento comercial fica em `coach_admin_settings.access_expires_on` como uma data civil. A migration `supabase/automatic-coach-expiration.sql` migra datas legadas, preserva `profiles.coach_trial_ends_at` para rollback e calcula tudo em `America/Sao_Paulo`. Execute depois `supabase/verify-automatic-coach-expiration.sql` para receber um único JSON de confirmação.
+
+Para uma data configurada `D`, o professor opera durante todo `D`, continua liberado com aviso durante `D+1` e é bloqueado a partir de `D+2 00:00`. A regra é recalculada pelo RLS em cada requisição, portanto uma sessão aberta não contorna o bloqueio. O acesso dos alunos vinculados permanece inalterado.
 
 Comportamento dos status:
 
 - `pending`: bloqueia e informa que o cadastro aguarda aprovação;
 - `trial` e `active`: liberam o painel normalmente;
-- `past_due`: libera o painel com aviso persistente de pagamento pendente;
+- `past_due`: estado legado que libera o painel com aviso;
 - `suspended` e `cancelled`: bloqueiam o painel e exibem a mensagem definida pela administração.
+
+`grace` e `expired` são estados efetivos calculados, não valores gravados em `profiles.coach_status`. Suspensão, cancelamento e pendência administrativa sempre têm precedência sobre a data.
 
 ## Publicacao de treinos
 

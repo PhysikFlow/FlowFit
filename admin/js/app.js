@@ -1,14 +1,17 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
-import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-5";
-import { adminRepository } from "./admin-repository.js?v=build-20260812-5";
+import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6";
+import { adminRepository } from "./admin-repository.js?v=build-20260812-6";
 
 const STATUS_LABELS = Object.freeze({
   pending: "Aguardando aprovação",
   trial: "Em teste",
   active: "Ativo",
-  past_due: "Pagamento atrasado",
+  past_due: "Atrasado (legado)",
+  grace: "Em carência",
+  expired: "Vencido",
   suspended: "Suspenso",
-  cancelled: "Cancelado"
+  cancelled: "Cancelado",
+  admin: "Administrador"
 });
 
 const authGate = document.querySelector("[data-auth-gate]");
@@ -41,6 +44,8 @@ const escapeHtml = (value) => String(value ?? "")
 
 const formatDate = (value, fallback = "Sem data") => {
   if (!value) return fallback;
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return fallback;
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(date);
@@ -58,13 +63,7 @@ const formatPlan = (value) => {
   return !plan || plan.toLowerCase() === "plano piloto" ? "Plano inicial" : plan;
 };
 
-const toLocalInput = (value) => {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
-};
+const toDateInput = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? String(value) : "";
 
 const setStatus = (target, message, state = "") => {
   if (!target) return;
@@ -121,8 +120,8 @@ const renderCoaches = () => {
       <td>${escapeHtml(formatDate(coach.registered_at))}</td>
       <td>${Number(coach.student_count || 0).toLocaleString("pt-BR")}</td>
       <td>${escapeHtml(formatPlan(coach.plan))}</td>
-      <td>${escapeHtml(formatDate(coach.access_expires_at, "Sem vencimento"))}</td>
-      <td>${badge(coach.status)}</td>
+      <td>${escapeHtml(formatDate(coach.access_expires_on, "Sem vencimento"))}</td>
+      <td>${badge(coach.effective_status)}</td>
       <td class="open-cell">Abrir</td>
     </tr>
   `).join("");
@@ -131,9 +130,9 @@ const renderCoaches = () => {
     <article class="coach-card" data-coach-id="${escapeHtml(coach.coach_id)}" tabindex="0" role="button" aria-label="Abrir ${escapeHtml(coach.name)}">
       <div class="coach-card__head">
         <span class="identity-cell"><strong>${escapeHtml(coach.name)}</strong><small>${escapeHtml(coach.email)}</small></span>
-        <span class="coach-card__status">${badge(coach.status)}<span class="coach-card__open" aria-hidden="true">›</span></span>
+        <span class="coach-card__status">${badge(coach.effective_status)}<span class="coach-card__open" aria-hidden="true">›</span></span>
       </div>
-      <div class="coach-card__meta"><span>${Number(coach.student_count || 0)} alunos</span><span>${escapeHtml(formatPlan(coach.plan))}</span><span>${escapeHtml(coach.access_expires_at ? `Vence ${formatDate(coach.access_expires_at)}` : "Sem vencimento")}</span></div>
+      <div class="coach-card__meta"><span>${Number(coach.student_count || 0)} alunos</span><span>${escapeHtml(formatPlan(coach.plan))}</span><span>${escapeHtml(coach.access_expires_on ? `Vence ${formatDate(coach.access_expires_on)}` : "Sem vencimento")}</span></div>
     </article>
   `).join("");
 };
@@ -192,11 +191,14 @@ const renderCoachDetail = (coach) => {
     <span class="summary-item"><small>Cidade</small><strong>${escapeHtml(coach.city || "Não informada")}</strong></span>
     <span class="summary-item"><small>CREF</small><strong>${escapeHtml(coach.cref || "Não informado")}</strong></span>
     <span class="summary-item"><small>Contato</small><strong>${escapeHtml(coach.phone || coach.whatsapp || "Não informado")}</strong></span>
+    <span class="summary-item"><small>Estado efetivo</small><strong>${badge(coach.effective_status)}</strong></span>
+    <span class="summary-item"><small>Carência</small><strong>${escapeHtml(formatDate(coach.grace_on, "Não aplicável"))}</strong></span>
+    <span class="summary-item"><small>Bloqueio</small><strong>${escapeHtml(formatDate(coach.blocked_on, "Não aplicável"))}</strong></span>
   `;
   detailForm.elements.coachId.value = coach.coach_id;
-  detailForm.elements.status.value = coach.status;
+  detailForm.elements.status.value = coach.configured_status;
   detailForm.elements.plan.value = formatPlan(coach.plan);
-  detailForm.elements.accessExpiresAt.value = toLocalInput(coach.access_expires_at);
+  detailForm.elements.accessExpiresOn.value = toDateInput(coach.access_expires_on);
   detailForm.elements.statusNote.value = coach.status_note || "";
   detailForm.elements.adminNotes.value = coach.admin_notes || "";
   setStatus(detailStatus, "As alterações ficam registradas no histórico.");
@@ -238,7 +240,7 @@ const saveDetail = async ({ targetStatus } = {}) => {
     coachId: values.coachId,
     status,
     plan: values.plan,
-    accessExpiresAt: values.accessExpiresAt ? new Date(values.accessExpiresAt).toISOString() : null,
+    accessExpiresOn: values.accessExpiresOn || null,
     adminNotes: values.adminNotes,
     statusNote: values.statusNote
   });

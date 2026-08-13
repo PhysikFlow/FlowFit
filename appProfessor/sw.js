@@ -1,10 +1,10 @@
-const CACHE_NAME = "flowfit-professor-v35";
+const CACHE_NAME = "flowfit-professor-v36";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./css/app.css?v=build-20260812-3",
-  "./js/app.js?v=build-20260812-5",
+  "./js/app.js?v=build-20260812-6",
   "../appAluno/assets/icons/apple-touch-icon.png",
   "../appAluno/assets/icons/icon-192.png",
   "../appAluno/assets/icons/icon-512.png",
@@ -18,7 +18,7 @@ const APP_SHELL = [
   "../appAluno/js/core/icons.js?v=build-20260809-6",
   "../appAluno/js/core/platform.js?v=build-20260809-6",
   "../appAluno/js/core/supabase.js?v=build-20260812-5",
-  "../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-5",
+  "../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6",
   "../appAluno/js/data/repositories/student-repository.js?v=build-20260812-5",
   "../appAluno/js/data/repositories/theme-repository.js?v=build-20260812-5",
   "../appAluno/js/data/repositories/workout-repository.js?v=build-20260812-1",

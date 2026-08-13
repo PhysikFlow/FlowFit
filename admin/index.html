@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260809-7" />
     <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260809-8" />
     <link rel="stylesheet" href="css/app.css?v=build-20260809-7" />
-    <script type="module" src="js/app.js?v=build-20260812-5"></script>
+    <script type="module" src="js/app.js?v=build-20260812-6"></script>
   </head>
   <body class="is-auth-locked">
     <section class="auth-gate" data-auth-gate aria-labelledby="admin-auth-title" aria-busy="true">
@@ -68,7 +68,8 @@
       <section class="overview-grid" aria-label="Visão geral dos acessos">
         <article class="metric-card card"><span>Ativos</span><strong data-count="active">0</strong></article>
         <article class="metric-card card"><span>Em teste</span><strong data-count="trial">0</strong></article>
-        <article class="metric-card card"><span>Atrasados</span><strong data-count="past_due">0</strong></article>
+        <article class="metric-card card"><span>Em carência</span><strong data-count="grace">0</strong></article>
+        <article class="metric-card card"><span>Vencidos</span><strong data-count="expired">0</strong></article>
         <article class="metric-card card"><span>Suspensos</span><strong data-count="suspended">0</strong></article>
         <article class="metric-card metric-card--quiet card"><span>Pendentes</span><strong data-count="pending">0</strong></article>
         <article class="metric-card metric-card--quiet card"><span>Cancelados</span><strong data-count="cancelled">0</strong></article>
@@ -85,7 +86,8 @@
                 <option value="pending">Aguardando aprovação</option>
                 <option value="trial">Em teste</option>
                 <option value="active">Ativo</option>
-                <option value="past_due">Pagamento atrasado</option>
+                <option value="grace">Em carência</option>
+                <option value="expired">Vencido</option>
                 <option value="suspended">Suspenso</option>
                 <option value="cancelled">Cancelado</option>
               </select>
@@ -122,13 +124,13 @@
                 <option value="pending">Aguardando aprovação</option>
                 <option value="trial">Em teste</option>
                 <option value="active">Ativo</option>
-                <option value="past_due">Pagamento atrasado</option>
+                <option value="past_due" disabled>Atrasado (legado)</option>
                 <option value="suspended">Suspenso</option>
                 <option value="cancelled">Cancelado</option>
               </select>
             </label>
             <label>Plano <input name="plan" maxlength="80" placeholder="Plano inicial" required /></label>
-            <label class="form-span">Vencimento <input type="datetime-local" name="accessExpiresAt" /></label>
+            <label class="form-span">Vencimento <input type="date" name="accessExpiresOn" /></label>
             <label class="form-span">Mensagem exibida ao personal
               <textarea name="statusNote" maxlength="500" rows="3" placeholder="Ex.: Entre em contato para regularizar o pagamento."></textarea>
             </label>

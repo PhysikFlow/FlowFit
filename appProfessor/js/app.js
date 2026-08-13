@@ -2,7 +2,7 @@ import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260809-6";
 import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260809-7";
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260812-5";
-import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-5";
+import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260812-5";
 import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260812-1";
 import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260812-5";
@@ -184,6 +184,8 @@ let dataStatus = "Local";
 let authContext = null;
 let authAction = "signin";
 let authenticatedSessionDetected = false;
+let coachAccessTimer = null;
+let coachAccessRevalidationPromise = null;
 let editingWorkoutId = "";
 let workoutDraftDetails = [];
 let deferredInstallPrompt = null;
@@ -439,6 +441,7 @@ const showAuthenticatedAccessState = ({ status = "pending", message = "", email 
     pending: "Cadastro recebido",
     suspended: "Acesso suspenso",
     cancelled: "Conta cancelada",
+    expired: "Plano vencido",
     error: "Conta autenticada"
   };
   authForm?.setAttribute("data-account-state", "blocked");
@@ -451,6 +454,62 @@ const showAuthenticatedAccessState = ({ status = "pending", message = "", email 
   }
   setAuthStatus(message || "Seu cadastro foi salvo e aguarda liberação.", "warning");
   setAuthGateSignOutVisible(true);
+};
+
+const formatAccessDate = (value) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : "data não informada";
+};
+
+const coachAccessView = (access) => {
+  const status = access?.effective_status || access?.configured_status || "error";
+  const customMessage = String(access?.status_note || "").trim();
+
+  if (status === "grace") {
+    return {
+      ok: true,
+      status,
+      warning: true,
+      message: `Seu plano venceu em ${formatAccessDate(access.access_expires_on)}. Você está no dia de carência. O acesso será bloqueado em ${formatAccessDate(access.blocked_on)} se a renovação não for registrada.`
+    };
+  }
+
+  if (access?.allowed) {
+    return {
+      ok: true,
+      status,
+      warning: status === "past_due",
+      message: customMessage || (status === "past_due"
+        ? "Seu pagamento está pendente. O uso continua liberado enquanto você regulariza o acesso."
+        : "")
+    };
+  }
+
+  const messages = {
+    pending: "Seu cadastro de personal está aguardando aprovação.",
+    suspended: "Seu acesso de personal está suspenso.",
+    cancelled: "Esta conta de personal foi cancelada.",
+    expired: `Seu plano venceu em ${formatAccessDate(access?.access_expires_on)} e o período de carência terminou. Regularize o acesso para voltar a usar o painel.`,
+    wrong_role: "Esta conta não é de professor. Use o app do aluno ou entre com outro email."
+  };
+  return {
+    ok: false,
+    status,
+    warning: false,
+    message: customMessage || messages[status] || "Seu acesso de personal não está ativo."
+  };
+};
+
+const scheduleCoachAccessCheck = (nextTransitionAt) => {
+  clearTimeout(coachAccessTimer);
+  coachAccessTimer = null;
+  if (!nextTransitionAt) return;
+  const delay = new Date(nextTransitionAt).getTime() - Date.now() + 1000;
+  if (!Number.isFinite(delay)) return;
+  coachAccessTimer = setTimeout(
+    () => revalidateCoachAccess(),
+    Math.max(1000, Math.min(delay, 2147483647))
+  );
 };
 
 const syncAuthMode = (mode = authAction, { preserveStatus = false } = {}) => {
@@ -2320,6 +2379,8 @@ authForm?.addEventListener("submit", async (event) => {
 });
 
 const signOutProfessor = async () => {
+  clearTimeout(coachAccessTimer);
+  coachAccessTimer = null;
   await authRepository.signOut();
   authenticatedSessionDetected = false;
   authContext = null;
@@ -2400,7 +2461,20 @@ const startAuthenticatedPanel = async () => {
 
   authContext = await authRepository.getAuthContext();
 
-  const coachAccess = authRepository.getCoachAccess(authContext?.profile);
+  const accessResult = await authRepository.getOwnCoachAccess();
+  if (!accessResult.ok) {
+    setAuthLocked(true);
+    setAuthChecking(false);
+    showAuthenticatedAccessState({
+      status: "error",
+      email: authContext?.email || session.user.email,
+      message: accessResult.message
+    });
+    return;
+  }
+
+  const coachAccess = coachAccessView(accessResult.access);
+  scheduleCoachAccessCheck(accessResult.access.next_transition_at);
   if (!coachAccess.ok) {
     setAuthLocked(true);
     setAuthChecking(false);
@@ -2517,6 +2591,19 @@ const initializeOptionalPwaFeatures = () => {
     warnOptionalFeature("inicialização PWA", error);
   }
 };
+
+const revalidateCoachAccess = () => {
+  if (coachAccessRevalidationPromise) return coachAccessRevalidationPromise;
+  coachAccessRevalidationPromise = startAuthenticatedPanel()
+    .catch((error) => rememberProfessorFailure("coach-access-revalidation", error))
+    .finally(() => { coachAccessRevalidationPromise = null; });
+  return coachAccessRevalidationPromise;
+};
+
+window.addEventListener("focus", () => revalidateCoachAccess());
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") revalidateCoachAccess();
+});
 
 initializeOptionalPwaFeatures();
 

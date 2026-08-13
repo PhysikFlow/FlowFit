@@ -227,7 +227,9 @@ tbody tr:focus-visible,
 .status-badge[data-status="active"],
 .status-badge[data-status="trial"] { color: var(--color-success); }
 .status-badge[data-status="past_due"],
+.status-badge[data-status="grace"],
 .status-badge[data-status="pending"] { color: var(--color-warning); }
+.status-badge[data-status="expired"],
 .status-badge[data-status="suspended"],
 .status-badge[data-status="cancelled"] { color: var(--color-danger); }
 

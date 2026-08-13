@@ -39,9 +39,9 @@ assert.match(professorApp, /O login do Google voltou ao FlowFit, mas nenhuma ses
 assert.match(professorApp, /url\.search = ""/);
 assert.match(professorCss, /data-account-state="blocked"/);
 assert.match(professorIndex, /app\.css\?v=build-20260812-3/);
-assert.match(professorIndex, /app\.js\?v=build-20260812-5/);
-assert.match(professorWorker, /flowfit-professor-v35/);
-assert.match(studentWorker, /flowfit-aluno-v58/);
+assert.match(professorIndex, /app\.js\?v=build-20260812-6/);
+assert.match(professorWorker, /flowfit-professor-v36/);
+assert.match(studentWorker, /flowfit-aluno-v59/);
 assert.match(supabaseClient, /storageKey: AUTH_STORAGE_KEY/);
 assert.match(supabaseClient, /LEGACY_AUTH_STORAGE_KEY/);
 assert.match(supabaseClient, /removeItem\(LEGACY_AUTH_STORAGE_KEY\)/);
@@ -52,5 +52,9 @@ assert.match(supabaseClient, /\/admin/);
 assert.match(authRepository, /exchangeCodeForSession\(params\.code\)/);
 assert.match(authRepository, /prompt: "select_account"/);
 assert.match(authRepository, /signOut\(\{ scope: "local" \}\)/);
+assert.match(authRepository, /client\.rpc\("get_own_coach_access"\)/);
+assert.match(professorApp, /effective_status/);
+assert.match(professorApp, /dia de carência/);
+assert.match(professorApp, /visibilitychange/);
 
 console.log("admin-auth-regression-smoke: RPC e feedback pending aprovados");

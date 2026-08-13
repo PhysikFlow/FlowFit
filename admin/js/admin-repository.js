@@ -50,12 +50,12 @@ export const adminRepository = {
     return rpc("admin_list_coach_history", { p_coach_id: coachId }, "Não foi possível carregar o histórico.");
   },
 
-  updateCoach({ coachId, status, plan, accessExpiresAt, adminNotes, statusNote } = {}) {
+  updateCoach({ coachId, status, plan, accessExpiresOn, adminNotes, statusNote } = {}) {
     return rpc("admin_update_coach", {
       p_coach_id: coachId,
       p_status: status,
       p_plan: plan,
-      p_access_expires_at: accessExpiresAt || null,
+      p_access_expires_on: accessExpiresOn || null,
       p_admin_notes: adminNotes,
       p_status_note: statusNote
     }, "Não foi possível salvar as alterações.");
