@@ -26,6 +26,7 @@ const professorApp = read("appProfessor/js/app.js");
 const professorCss = read("appProfessor/css/app.css");
 const professorIndex = read("appProfessor/index.html");
 const professorWorker = read("appProfessor/sw.js");
+const studentApp = read("appAluno/js/app.js");
 const studentWorker = read("appAluno/sw.js");
 const supabaseClient = read("appAluno/js/core/supabase.js");
 const authRepository = read("appAluno/js/data/repositories/auth-repository.js");
@@ -39,9 +40,18 @@ assert.match(professorApp, /O login do Google voltou ao FlowFit, mas nenhuma ses
 assert.match(professorApp, /url\.search = ""/);
 assert.match(professorCss, /data-account-state="blocked"/);
 assert.match(professorIndex, /app\.css\?v=build-20260812-3/);
-assert.match(professorIndex, /app\.js\?v=build-20260812-7/);
-assert.match(professorWorker, /flowfit-professor-v37/);
-assert.match(studentWorker, /flowfit-aluno-v59/);
+assert.match(professorIndex, /app\.js\?v=build-20260812-8/);
+assert.match(professorWorker, /flowfit-professor-v38/);
+assert.match(studentWorker, /flowfit-aluno-v61/);
+for (const worker of [professorWorker, studentWorker]) {
+  assert.match(worker, /fetch\(request, \{ cache: "no-store" \}\)/);
+  assert.match(worker, /new Request\(url, \{ cache: "reload" \}\)/);
+  assert.match(worker, /requestUrl\.origin !== self\.location\.origin/);
+  assert.match(worker, /url\.pathname\.endsWith\("\.html"\)/);
+  assert.match(worker, /url\.pathname\.endsWith\("\.css"\)/);
+}
+assert.match(professorApp, /updateViaCache: "none"/);
+assert.match(studentApp, /updateViaCache: "none"/);
 assert.match(supabaseClient, /storageKey: AUTH_STORAGE_KEY/);
 assert.match(supabaseClient, /LEGACY_AUTH_STORAGE_KEY/);
 assert.match(supabaseClient, /removeItem\(LEGACY_AUTH_STORAGE_KEY\)/);

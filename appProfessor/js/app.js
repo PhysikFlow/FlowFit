@@ -2554,7 +2554,17 @@ const boot = async () => {
 const initializeOptionalPwaFeatures = () => {
   try {
     if (Platform.canUseServiceWorker() && globalThis.navigator?.serviceWorker) {
-      const registerServiceWorker = () => navigator.serviceWorker.register("./sw.js")
+      if (navigator.serviceWorker.controller) {
+        let reloadingForServiceWorker = false;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (reloadingForServiceWorker) return;
+          reloadingForServiceWorker = true;
+          window.location.reload();
+        });
+      }
+      const registerServiceWorker = () => navigator.serviceWorker
+        .register("./sw.js", { updateViaCache: "none" })
+        .then((registration) => registration.update())
         .catch((error) => warnOptionalFeature("service worker", error));
       if (document.readyState === "complete") registerServiceWorker();
       else window.addEventListener("load", registerServiceWorker, { once: true });

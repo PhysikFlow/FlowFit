@@ -2264,9 +2264,20 @@ renderAll();
 navigate(location.hash.slice(1) || "home", false);
 
 if (Platform.canUseServiceWorker() && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch((error) => {
-    console.warn("[FlowFit][aluno][opcional] Service worker indisponível.", error);
-  }));
+  if (navigator.serviceWorker.controller) {
+    let reloadingForServiceWorker = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloadingForServiceWorker) return;
+      reloadingForServiceWorker = true;
+      window.location.reload();
+    });
+  }
+  window.addEventListener("load", () => navigator.serviceWorker
+    .register("./sw.js", { updateViaCache: "none" })
+    .then((registration) => registration.update())
+    .catch((error) => {
+      console.warn("[FlowFit][aluno][opcional] Service worker indisponível.", error);
+    }));
 }
 
 startAuthenticatedApp()
