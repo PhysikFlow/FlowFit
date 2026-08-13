@@ -1,8 +1,9 @@
-import { Platform } from "../../core/platform.js?v=build-20260809-6";
+import { Platform } from "../../core/platform.js?v=build-20260813-1";
 import { getSupabase } from "../../core/supabase.js?v=build-20260812-5";
 import { authRepository } from "./auth-repository.js?v=build-20260812-5";
 
 export const WORKOUT_SESSIONS_KEY = "flowfit.workout-sessions";
+const SCOPED_SESSIONS_PREFIX = `${WORKOUT_SESSIONS_KEY}:`;
 
 const SESSIONS_TABLE = "workout_sessions";
 const SET_LOGS_TABLE = "workout_set_logs";
@@ -23,12 +24,60 @@ const normalizeDate = (value, fallback = new Date().toISOString()) => {
   return Number.isNaN(date.getTime()) ? new Date(fallback).toISOString() : date.toISOString();
 };
 
-const readCachedSessions = () => {
+const encodeScopePart = (value) => encodeURIComponent(normalizeText(value, "unknown"));
+const scopedCacheKey = ({ studentId = "", coachId = "" } = {}) => (
+  `${SCOPED_SESSIONS_PREFIX}${encodeScopePart(coachId)}:${encodeScopePart(studentId)}`
+);
+
+const readLegacySessions = () => {
   const items = Platform.storage.get(WORKOUT_SESSIONS_KEY, []);
   return Array.isArray(items) ? items : [];
 };
 
-const writeCachedSessions = (sessions) => Platform.storage.set(WORKOUT_SESSIONS_KEY, sessions);
+const writeScopedSessions = (scope, sessions) => Platform.storage.set(scopedCacheKey(scope), sessions);
+
+const matchesScope = (session, { studentId = "", coachId = "" } = {}) => (
+  (!studentId || session.studentId === studentId)
+  && (!coachId || session.coachId === coachId)
+);
+
+const readCachedSessions = (scope = {}) => {
+  const studentId = normalizeText(scope.studentId);
+  const coachId = normalizeText(scope.coachId);
+  if (!studentId && !coachId) return [];
+
+  const keys = coachId
+    ? Platform.storage.keys(`${SCOPED_SESSIONS_PREFIX}${encodeScopePart(coachId)}:`)
+    : [];
+  const exactKey = studentId && coachId ? scopedCacheKey({ studentId, coachId }) : "";
+  const scopedItems = (exactKey ? [exactKey] : keys)
+    .flatMap((key) => {
+      const value = Platform.storage.get(key, []);
+      return Array.isArray(value) ? value : [];
+    })
+    .filter((session) => matchesScope(session, { studentId, coachId }));
+
+  // Migra somente os registros legados que pertencem ao escopo autenticado.
+  // O cache legado nunca é retornado sem um studentId/coachId explícito.
+  const legacyItems = readLegacySessions()
+    .filter((session) => matchesScope(session, { studentId, coachId }));
+  if (legacyItems.length) {
+    const grouped = new Map();
+    [...scopedItems, ...legacyItems].forEach((session) => {
+      const key = scopedCacheKey({ studentId: session.studentId, coachId: session.coachId });
+      const list = grouped.get(key) || [];
+      grouped.set(key, [session, ...list.filter((item) => item?.id !== session?.id)]);
+    });
+    grouped.forEach((sessions, key) => Platform.storage.set(key, sessions.slice(0, 80)));
+  }
+
+  return [...scopedItems, ...legacyItems]
+    .reduce((items, session) => items.some((item) => item?.id === session?.id)
+      ? items
+      : [...items, session], [])
+    .map(normalizeWorkoutSession)
+    .sort((a, b) => new Date(b.finishedAt || 0) - new Date(a.finishedAt || 0));
+};
 
 const normalizeSetLog = (log = {}, index = 0, sessionId = "session") => {
   const rawSetNumber = log.setNumber ?? log.set_number;
@@ -222,19 +271,25 @@ const fromRows = (row, setLogs = [], feedback = null) => normalizeWorkoutSession
 
 const upsertLocalSession = (session) => {
   const normalized = normalizeWorkoutSession(session);
+  if (!normalized.coachId || !normalized.studentId) {
+    const legacy = [normalized, ...readLegacySessions().filter((item) => item?.id !== normalized.id)]
+      .sort((a, b) => new Date(b.finishedAt || 0) - new Date(a.finishedAt || 0))
+      .slice(0, 80);
+    Platform.storage.set(WORKOUT_SESSIONS_KEY, legacy);
+    return normalized;
+  }
   const next = [
     normalized,
-    ...readCachedSessions().filter((item) => item?.id !== normalized.id)
-  ]
-    .sort((a, b) => new Date(b.finishedAt || 0) - new Date(a.finishedAt || 0))
-    .slice(0, 80);
-  writeCachedSessions(next);
+    ...readCachedSessions({ studentId: normalized.studentId, coachId: normalized.coachId })
+      .filter((item) => item?.id !== normalized.id)
+  ].slice(0, 80);
+  writeScopedSessions({ studentId: normalized.studentId, coachId: normalized.coachId }, next);
   return normalized;
 };
 
 export const sessionRepository = {
-  listCachedSessions() {
-    return readCachedSessions().map(normalizeWorkoutSession);
+  listCachedSessions(scope = {}) {
+    return readCachedSessions(scope);
   },
 
   saveLocalSession(session) {
@@ -290,7 +345,7 @@ export const sessionRepository = {
       return { syncedCount: 0, failedCount: 0, sessions: [] };
     }
 
-    const pending = this.listCachedSessions().filter((session) => (
+    const pending = this.listCachedSessions({ studentId: resolvedStudentId, coachId: resolvedCoachId }).filter((session) => (
       session.syncStatus !== "synced"
       && session.studentId === resolvedStudentId
       && session.coachId === resolvedCoachId
@@ -315,7 +370,7 @@ export const sessionRepository = {
     const resolvedStudentId = normalizeText(studentId);
     const resolvedCoachId = normalizeText(coachId);
     const resolvedWorkoutId = normalizeText(workoutId);
-    const localSessions = this.listCachedSessions().filter((session) => (
+    const localSessions = this.listCachedSessions({ studentId: resolvedStudentId, coachId: resolvedCoachId }).filter((session) => (
       (!resolvedStudentId || session.studentId === resolvedStudentId)
       && (!resolvedCoachId || session.coachId === resolvedCoachId)
       && (!resolvedWorkoutId || session.workoutId === resolvedWorkoutId)
@@ -381,7 +436,10 @@ export const sessionRepository = {
   async fetchCoachSessions({ studentId = "", limit = 80 } = {}) {
     const client = await getSupabase();
     const authContext = await authRepository.getAuthContext();
-    const localSessions = this.listCachedSessions();
+    const localSessions = this.listCachedSessions({
+      coachId: authContext?.coachId || "",
+      studentId: normalizeText(studentId)
+    });
     if (!client || !authContext?.user || !authRepository.canWriteAsCoach(authContext)) {
       return { synced: false, reason: "not-authenticated-as-coach", sessions: localSessions };
     }

@@ -1,10 +1,10 @@
-const CACHE_NAME = "flowfit-professor-v38";
+const CACHE_NAME = "flowfit-professor-v39";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./css/app.css?v=build-20260812-3",
-  "./js/app.js?v=build-20260812-8",
+  "./js/app.js?v=build-20260813-1",
   "../appAluno/assets/icons/apple-touch-icon.png",
   "../appAluno/assets/icons/icon-192.png",
   "../appAluno/assets/icons/icon-512.png",
@@ -14,15 +14,15 @@ const APP_SHELL = [
   "../appAluno/css/tokens.css?v=build-20260809-7",
   "../appAluno/css/components.css?v=build-20260811-9",
   "../appAluno/js/config.js?v=build-20260809-6",
-  "../appAluno/js/core/brand-theme.js?v=build-20260809-7",
+  "../appAluno/js/core/brand-theme.js?v=build-20260813-1",
   "../appAluno/js/core/icons.js?v=build-20260809-6",
-  "../appAluno/js/core/platform.js?v=build-20260809-6",
+  "../appAluno/js/core/platform.js?v=build-20260813-1",
   "../appAluno/js/core/supabase.js?v=build-20260812-5",
   "../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6",
-  "../appAluno/js/data/repositories/student-repository.js?v=build-20260812-5",
-  "../appAluno/js/data/repositories/theme-repository.js?v=build-20260812-5",
+  "../appAluno/js/data/repositories/student-repository.js?v=build-20260813-1",
+  "../appAluno/js/data/repositories/theme-repository.js?v=build-20260813-1",
   "../appAluno/js/data/repositories/workout-repository.js?v=build-20260812-1",
-  "../appAluno/js/data/repositories/session-repository.js?v=build-20260812-5"
+  "../appAluno/js/data/repositories/session-repository.js?v=build-20260813-1"
 ];
 
 self.addEventListener("install", (event) => {

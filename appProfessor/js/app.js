@@ -1,11 +1,11 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
-import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260809-6";
-import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260809-7";
-import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260812-5";
+import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260813-1";
+import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260813-1";
+import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260813-1";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6";
-import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260812-5";
+import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260813-1";
 import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260812-1";
-import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260812-5";
+import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260813-1";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -178,7 +178,7 @@ let toastTimer;
 let themeSaveTimer;
 let students = studentRepository.listStudents();
 let workouts = workoutRepository.listPublishedWorkouts();
-let workoutSessions = sessionRepository.listCachedSessions();
+let workoutSessions = [];
 let selectedStudentId = "";
 let dataStatus = "Local";
 let authContext = null;
@@ -1022,7 +1022,9 @@ const getSessionsForStudent = (studentId) => workoutSessions
   .filter((session) => session.studentId === studentId)
   .sort((a, b) => new Date(b.finishedAt || 0) - new Date(a.finishedAt || 0));
 
-const applyWorkoutSessions = (sessions = sessionRepository.listCachedSessions()) => {
+const applyWorkoutSessions = (sessions = sessionRepository.listCachedSessions({
+  coachId: authContext?.coachId || ""
+})) => {
   workoutSessions = [...sessions].sort((a, b) => new Date(b.finishedAt || 0) - new Date(a.finishedAt || 0));
   renderStudents();
   renderStudentSessionPanel();
@@ -2304,8 +2306,10 @@ window.addEventListener("storage", (event) => {
     applyStudents(studentRepository.listStudents());
     setStudentSyncStatus("Alunos atualizados por outra aba.", "synced");
   }
-  if (event.key === WORKOUT_SESSIONS_KEY) {
-    applyWorkoutSessions(sessionRepository.listCachedSessions());
+  if (event.key === WORKOUT_SESSIONS_KEY || event.key?.startsWith(`${WORKOUT_SESSIONS_KEY}:`)) {
+    applyWorkoutSessions(sessionRepository.listCachedSessions({
+      coachId: authContext?.coachId || ""
+    }));
     setStudentSyncStatus("Execuções atualizadas por outra aba.", "synced");
   }
 });

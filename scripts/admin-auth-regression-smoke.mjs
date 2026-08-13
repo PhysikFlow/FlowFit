@@ -40,9 +40,9 @@ assert.match(professorApp, /O login do Google voltou ao FlowFit, mas nenhuma ses
 assert.match(professorApp, /url\.search = ""/);
 assert.match(professorCss, /data-account-state="blocked"/);
 assert.match(professorIndex, /app\.css\?v=build-20260812-3/);
-assert.match(professorIndex, /app\.js\?v=build-20260812-8/);
-assert.match(professorWorker, /flowfit-professor-v38/);
-assert.match(studentWorker, /flowfit-aluno-v61/);
+assert.match(professorIndex, /app\.js\?v=build-20260813-1/);
+assert.match(professorWorker, /flowfit-professor-v39/);
+assert.match(studentWorker, /flowfit-aluno-v62/);
 for (const worker of [professorWorker, studentWorker]) {
   assert.match(worker, /fetch\(request, \{ cache: "no-store" \}\)/);
   assert.match(worker, /new Request\(url, \{ cache: "reload" \}\)/);

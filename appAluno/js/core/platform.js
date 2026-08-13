@@ -25,6 +25,14 @@ const browserStorage = {
     } catch {
       return false;
     }
+  },
+  keys(prefix = "") {
+    try {
+      if (!globalThis.localStorage) return [];
+      return Object.keys(localStorage).filter((key) => key.startsWith(String(prefix || "")));
+    } catch {
+      return [];
+    }
   }
 };
 
