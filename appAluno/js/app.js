@@ -1238,9 +1238,11 @@ const renderWorkoutRunner = () => {
     : previous ? formatSetPerformance(previous.loadKg, previous.reps) : "Sem histórico comparável";
   const loadInput = document.querySelector("[data-runner-load]");
   const repsInput = document.querySelector("[data-runner-reps]");
+  const completeButton = document.querySelector("[data-complete-runner-set]");
   const suggestedLoad = session.currentLoad ?? previous?.loadKg ?? parseLoadKg(exercise.load);
   loadInput.value = Number(suggestedLoad) > 0 ? suggestedLoad : "";
   repsInput.value = session.currentReps ?? previous?.reps ?? parseReps(exercise);
+  completeButton.disabled = false;
   document.querySelector("[data-correct-last-set]").hidden = getExerciseEntries(occurrenceId(exercise), session).length === 0;
   renderRunnerMedia(exercise);
   renderRunnerPerformanceHint(exercise, setNumber);
