@@ -186,6 +186,8 @@ let authAction = "signin";
 let authenticatedSessionDetected = false;
 let coachAccessTimer = null;
 let coachAccessRevalidationPromise = null;
+let authStateVersion = 0;
+let isSigningOut = false;
 let editingWorkoutId = "";
 let workoutDraftDetails = [];
 let deferredInstallPrompt = null;
@@ -2379,23 +2381,29 @@ authForm?.addEventListener("submit", async (event) => {
 });
 
 const signOutProfessor = async () => {
+  isSigningOut = true;
+  authStateVersion += 1;
   clearTimeout(coachAccessTimer);
   coachAccessTimer = null;
-  await authRepository.signOut();
-  authenticatedSessionDetected = false;
-  authContext = null;
-  students = [];
-  workouts = [];
-  workoutSessions = [];
-  selectedStudentId = "";
-  dataStatus = "Local";
-  renderAll();
-  setAuthLocked(true);
-  setAuthChecking(false);
-  syncAuthMode("signin");
-  setAuthStatus("Sessão encerrada.", "");
-  setAuthGateSignOutVisible(false);
-  if (coachAccessNotice) coachAccessNotice.hidden = true;
+  try {
+    await authRepository.signOut();
+  } finally {
+    authenticatedSessionDetected = false;
+    authContext = null;
+    students = [];
+    workouts = [];
+    workoutSessions = [];
+    selectedStudentId = "";
+    dataStatus = "Local";
+    renderAll();
+    syncAuthMode("signin");
+    setAuthLocked(true);
+    setAuthChecking(false);
+    setAuthStatus("Sessão encerrada.", "");
+    setAuthGateSignOutVisible(false);
+    if (coachAccessNotice) coachAccessNotice.hidden = true;
+    isSigningOut = false;
+  }
 };
 
 document.querySelector("[data-sign-out]")?.addEventListener("click", signOutProfessor);
@@ -2403,10 +2411,14 @@ document.querySelector("[data-profile-sign-out]")?.addEventListener("click", sig
 authGateSignOut?.addEventListener("click", signOutProfessor);
 
 const startAuthenticatedPanel = async () => {
+  if (isSigningOut) return false;
+  const stateVersion = authStateVersion;
+  const isStale = () => isSigningOut || stateVersion !== authStateVersion;
   setAuthChecking(true);
   let session = null;
   try {
     session = await getSessionAfterAuthReturn();
+    if (isStale()) return false;
   } catch (error) {
     rememberProfessorFailure("oauth-callback-session", error);
     setAuthLocked(true);
@@ -2435,6 +2447,7 @@ const startAuthenticatedPanel = async () => {
     name: session.user.user_metadata?.display_name || session.user.email,
     coachStatus: authRepository.coachStatus.PENDING
   });
+  if (isStale()) return false;
   if (profileResult.roleMismatch) {
     await authRepository.signOut();
     authenticatedSessionDetected = false;
@@ -2460,8 +2473,10 @@ const startAuthenticatedPanel = async () => {
   }
 
   authContext = await authRepository.getAuthContext();
+  if (isStale()) return false;
 
   const accessResult = await authRepository.getOwnCoachAccess();
+  if (isStale()) return false;
   if (!accessResult.ok) {
     setAuthLocked(true);
     setAuthChecking(false);
@@ -2593,6 +2608,7 @@ const initializeOptionalPwaFeatures = () => {
 };
 
 const revalidateCoachAccess = () => {
+  if (isSigningOut || !authenticatedSessionDetected) return Promise.resolve(false);
   if (coachAccessRevalidationPromise) return coachAccessRevalidationPromise;
   coachAccessRevalidationPromise = startAuthenticatedPanel()
     .catch((error) => rememberProfessorFailure("coach-access-revalidation", error))
