@@ -228,8 +228,6 @@ body.has-onboarding {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  touch-action: pan-y;
-  touch-action: pan-y pinch-zoom;
 }
 
 .topbar__actions {
@@ -299,17 +297,6 @@ body.has-onboarding {
   display: none;
   padding-top: var(--space-5);
   animation: page-in 260ms var(--ease-out);
-  touch-action: pan-y;
-  touch-action: pan-y pinch-zoom;
-}
-
-.page[data-page="schedule"] {
-  touch-action: auto;
-}
-
-.page[data-page="schedule"] > :not(.filter-row) {
-  touch-action: pan-y;
-  touch-action: pan-y pinch-zoom;
 }
 
 .page.is-active {

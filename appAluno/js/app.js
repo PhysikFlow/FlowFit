@@ -2023,29 +2023,29 @@ appShell?.addEventListener("click", (event) => {
   event.stopImmediatePropagation();
 }, true);
 
-appShell?.addEventListener("pointerdown", (event) => {
-  if (!event.isPrimary || event.pointerType === "mouse" || event.button > 0) return;
+const startAppNavSwipe = ({ identifier, clientX, clientY, target }) => {
   if (document.body.classList.contains("has-onboarding") || document.body.classList.contains("has-workout-runner")) return;
-  if (event.clientX <= 24 || event.clientX >= window.innerWidth - 24) return;
-  if (event.target.closest("button, a, input, textarea, select, label, summary, details, iframe, video, canvas, [contenteditable], [role='slider'], .filter-row, [data-swipe-nav-ignore]")) return;
+  if (clientX <= 24 || clientX >= window.innerWidth - 24) return;
+  const targetElement = target instanceof Element ? target : target?.parentElement;
+  if (targetElement?.closest("button, a, input, textarea, select, label, summary, iframe, video, canvas, [contenteditable], [role='slider'], .filter-row, [data-swipe-nav-ignore]")) return;
   const currentIndex = navItems.findIndex((item) => item.classList.contains("is-active"));
   if (currentIndex < 0) return;
   appNavSwipe = {
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
+    identifier,
+    startX: clientX,
+    startY: clientY,
     currentIndex,
     destinationIndex: -1,
     axis: "pending",
     armed: false,
     threshold: Math.min(120, Math.max(72, appShell.clientWidth * 0.2))
   };
-});
+};
 
-appShell?.addEventListener("pointermove", (event) => {
-  if (!appNavSwipe || event.pointerId !== appNavSwipe.pointerId) return;
-  const deltaX = event.clientX - appNavSwipe.startX;
-  const deltaY = event.clientY - appNavSwipe.startY;
+const updateAppNavSwipe = ({ identifier, clientX, clientY, preventDefault }) => {
+  if (!appNavSwipe || identifier !== appNavSwipe.identifier) return;
+  const deltaX = clientX - appNavSwipe.startX;
+  const deltaY = clientY - appNavSwipe.startY;
   const horizontalDistance = Math.abs(deltaX);
   const verticalDistance = Math.abs(deltaY);
 
@@ -2057,31 +2057,70 @@ appShell?.addEventListener("pointermove", (event) => {
     }
     if (horizontalDistance <= verticalDistance * 1.25) return;
     appNavSwipe.axis = "horizontal";
-    appShell.setPointerCapture?.(event.pointerId);
   }
 
   if (appNavSwipe.axis !== "horizontal") return;
-  event.preventDefault();
+  preventDefault();
   const direction = deltaX < 0 ? 1 : -1;
   const destinationIndex = appNavSwipe.currentIndex + direction;
   const canNavigate = destinationIndex >= 0 && destinationIndex < navItems.length;
   appNavSwipe.destinationIndex = canNavigate ? destinationIndex : -1;
   appNavSwipe.armed = canNavigate && horizontalDistance >= appNavSwipe.threshold;
-}, { passive: false });
+};
 
-const finishAppNavSwipe = (event) => {
-  if (!appNavSwipe || event.pointerId !== appNavSwipe.pointerId) return;
+const finishAppNavSwipe = (identifier) => {
+  if (!appNavSwipe || identifier !== appNavSwipe.identifier) return;
   const shouldSuppressClick = appNavSwipe.axis === "horizontal";
   const destinationIndex = appNavSwipe.armed ? appNavSwipe.destinationIndex : -1;
-  if (appShell.hasPointerCapture?.(event.pointerId)) appShell.releasePointerCapture?.(event.pointerId);
   appNavSwipe = null;
   if (shouldSuppressClick) suppressAppClickUntil = Date.now() + 500;
   const destination = navItems[destinationIndex]?.dataset.nav;
   if (destination) navigate(destination);
 };
 
-appShell?.addEventListener("pointerup", finishAppNavSwipe);
-appShell?.addEventListener("pointercancel", () => {
+const findTouchByIdentifier = (touches, identifier) => {
+  for (let index = 0; index < touches.length; index += 1) {
+    if (touches[index].identifier === identifier) return touches[index];
+  }
+  return null;
+};
+
+appShell?.addEventListener("touchstart", (event) => {
+  if (event.touches.length !== 1) {
+    appNavSwipe = null;
+    return;
+  }
+  const touch = event.touches[0];
+  startAppNavSwipe({
+    identifier: touch.identifier,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+    target: event.target
+  });
+}, { passive: true });
+
+appShell?.addEventListener("touchmove", (event) => {
+  if (!appNavSwipe || event.touches.length !== 1) {
+    appNavSwipe = null;
+    return;
+  }
+  const touch = findTouchByIdentifier(event.touches, appNavSwipe.identifier);
+  if (!touch) return;
+  updateAppNavSwipe({
+    identifier: touch.identifier,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+    preventDefault: () => event.preventDefault()
+  });
+}, { passive: false });
+
+appShell?.addEventListener("touchend", (event) => {
+  if (!appNavSwipe) return;
+  const touch = findTouchByIdentifier(event.changedTouches, appNavSwipe.identifier);
+  if (touch) finishAppNavSwipe(touch.identifier);
+});
+
+appShell?.addEventListener("touchcancel", () => {
   appNavSwipe = null;
 });
 
