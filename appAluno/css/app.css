@@ -1570,6 +1570,7 @@ body.has-workout-runner > .toast { visibility: hidden; }
 
 .bottom-nav a {
   position: relative;
+  z-index: 1;
   display: grid;
   gap: 0.22rem;
   place-items: center;
@@ -1597,15 +1598,27 @@ body.has-workout-runner > .toast { visibility: hidden; }
   color: var(--color-accent);
 }
 
-.bottom-nav a.is-active::after {
-  content: "";
+.bottom-nav__indicator {
   position: absolute;
-  right: 24%;
-  bottom: 0.05rem;
-  left: 24%;
+  z-index: 2;
+  bottom: calc(env(safe-area-inset-bottom) + 0.08rem);
   height: 0.18rem;
   border-radius: var(--radius-pill);
   background: var(--color-accent);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    left 280ms var(--ease-out),
+    width 220ms var(--ease-out),
+    opacity 160ms ease-out;
+}
+
+.bottom-nav__indicator.is-ready {
+  opacity: 1;
+}
+
+.bottom-nav__indicator.is-positioning {
+  transition: none;
 }
 
 @media (max-width: 480px) {
@@ -2441,6 +2454,7 @@ body.has-workout-runner > .toast { visibility: hidden; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .bottom-nav__indicator,
   .runner-action-content,
   .runner-swipe-feedback {
     transition: none;

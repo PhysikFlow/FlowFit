@@ -12,6 +12,8 @@ import { sessionRepository } from "./data/repositories/session-repository.js?v=b
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
 const appShell = document.querySelector(".app");
+const bottomNav = document.querySelector(".bottom-nav");
+const bottomNavIndicator = document.querySelector("[data-bottom-nav-indicator]");
 const onboarding = document.querySelector("[data-onboarding]");
 const onboardingForm = document.querySelector("[data-onboarding-form]");
 const authSessionCheck = document.querySelector("[data-auth-session-check]");
@@ -57,6 +59,7 @@ let suppressRunnerAdjustClickUntil = 0;
 let suppressRunnerClickUntil = 0;
 let appNavSwipe = null;
 let suppressAppClickUntil = 0;
+let bottomNavIndicatorFrame = 0;
 const compactWorkoutQuery = window.matchMedia("(max-width: 767px)");
 let focusedExerciseId = "";
 const emptyStudent = {
@@ -449,6 +452,33 @@ const effortLabelByValue = {
 
 const pageExists = (name) => pages.some((page) => page.dataset.page === name);
 
+const syncBottomNavIndicator = (activeItem, { animate = true } = {}) => {
+  if (!bottomNav || !bottomNavIndicator || !activeItem) {
+    if (bottomNavIndicator) {
+      bottomNavIndicator.hidden = true;
+      bottomNavIndicator.classList.remove("is-ready");
+    }
+    return;
+  }
+
+  cancelAnimationFrame(bottomNavIndicatorFrame);
+  bottomNavIndicatorFrame = requestAnimationFrame(() => {
+    bottomNavIndicator.hidden = false;
+    const navRect = bottomNav.getBoundingClientRect();
+    const itemRect = activeItem.getBoundingClientRect();
+    const indicatorWidth = Math.max(24, itemRect.width * 0.52);
+    const indicatorLeft = itemRect.left - navRect.left + ((itemRect.width - indicatorWidth) / 2);
+    const shouldPositionImmediately = !animate || !bottomNavIndicator.classList.contains("is-ready");
+    bottomNavIndicator.classList.toggle("is-positioning", shouldPositionImmediately);
+    bottomNavIndicator.style.left = `${indicatorLeft}px`;
+    bottomNavIndicator.style.width = `${indicatorWidth}px`;
+    bottomNavIndicator.classList.add("is-ready");
+    if (shouldPositionImmediately) {
+      requestAnimationFrame(() => bottomNavIndicator.classList.remove("is-positioning"));
+    }
+  });
+};
+
 const navigate = (name, updateHash = true) => {
   if (name === "workout/session" && getActiveSession()) {
     const session = getActiveSession();
@@ -482,6 +512,7 @@ const navigate = (name, updateHash = true) => {
     if (active) item.setAttribute("aria-current", "page");
     else item.removeAttribute("aria-current");
   });
+  syncBottomNavIndicator(navItems.find((item) => item.dataset.nav === destination));
   if (updateHash) history.replaceState(null, "", `#${destination}`);
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
@@ -2704,6 +2735,9 @@ document.querySelector("[data-theme-reset]")?.addEventListener("click", () => {
 });
 
 window.addEventListener("hashchange", () => navigate(location.hash.slice(1), false));
+window.addEventListener("resize", () => {
+  syncBottomNavIndicator(navItems.find((item) => item.classList.contains("is-active")), { animate: false });
+});
 window.addEventListener("app:notify", (event) => showToast(event.detail));
 window.addEventListener("app:theme", syncThemeControls);
 window.addEventListener("storage", (event) => {
