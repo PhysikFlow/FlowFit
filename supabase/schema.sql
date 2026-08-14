@@ -792,7 +792,7 @@ begin
   end loop;
 
   update public.students
-     set workout = 'Treino ' || trim(coalesce(p_workout ->> 'code', 'A')) || ' - ' || trim(coalesce(p_workout ->> 'title', 'Novo treino')),
+     set workout = trim(coalesce(p_workout ->> 'title', 'Novo treino')),
          next_action = 'Ver treino publicado',
          updated_at = now()
    where id = v_student_id and coach_id = v_coach_id;
@@ -2095,7 +2095,7 @@ begin
   end loop;
 
   update public.students
-  set workout = 'Treino ' || trim(coalesce(p_workout ->> 'code', 'A')) || ' - ' || trim(coalesce(p_workout ->> 'title', 'Novo treino')),
+  set workout = trim(coalesce(p_workout ->> 'title', 'Novo treino')),
       next_action = 'Ver treino publicado',
       updated_at = now()
   where id = v_student_id and coach_id = v_coach_id;

@@ -2,7 +2,7 @@ import { DEMO_COACH_ID } from "../../config.js?v=build-20260809-6";
 import { Platform } from "../../core/platform.js?v=build-20260813-1";
 import { getSupabase } from "../../core/supabase.js?v=build-20260812-5";
 import { authRepository } from "./auth-repository.js?v=build-20260812-5";
-import { studentKeyFromName } from "./workout-repository.js?v=build-20260813-1";
+import { studentKeyFromName } from "./workout-repository.js?v=build-20260813-2";
 
 export const STUDENTS_KEY = "flowfit.students";
 

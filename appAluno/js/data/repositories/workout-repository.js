@@ -273,7 +273,7 @@ export const createWorkoutFromProfessorForm = ({ student, studentName, studentId
     id,
     coachId: normalizeText(student?.coachId || coachId, DEMO_COACH_ID),
     code: workoutTitle.match(/\bTreino\s+([A-Z0-9])/i)?.[1]?.toUpperCase() || "A",
-    title: workoutTitle.replace(/^Treino\s+[A-Z0-9]\s*-\s*/i, ""),
+    title: workoutTitle,
     focus: normalizeText(template, "Prescrição personalizada"),
     estimatedMinutes: Math.max(28, exercises.length * 7),
     lastDoneLabel: "novo",
@@ -302,7 +302,7 @@ const toStudentRow = (workout, student = {}) => ({
   goal: student.goal || "Hipertrofia",
   status: student.status || "Ativo",
   plan: student.plan || "Atendimento",
-  workout: `Treino ${workout.code} - ${workout.title}`,
+  workout: workout.title,
   adherence: student.adherence || 0,
   next_action: "Ver treino publicado",
   updated_at: workout.updatedAt

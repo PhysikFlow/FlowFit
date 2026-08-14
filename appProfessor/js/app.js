@@ -1,10 +1,10 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260813-1";
 import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260813-1";
-import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260813-1";
+import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260813-2";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260813-1";
-import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260812-1";
+import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260813-2";
 import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260813-1";
 
 const pages = [...document.querySelectorAll("[data-page]")];
@@ -981,7 +981,7 @@ const syncStudentWorkout = (workout) => {
     if (!matchesStudent) return student;
     return {
       ...student,
-      workout: `Treino ${workout.code} - ${workout.title}`,
+      workout: workout.title,
       nextAction: "Ver treino publicado",
       updatedAt: workout.updatedAt
     };
@@ -1312,7 +1312,7 @@ const setWorkoutEditingMode = (workout = null) => {
   cancelWorkoutEditButton?.toggleAttribute("hidden", !workout);
 };
 
-const workoutToEditableTitle = (workout) => `Treino ${workout.code || "A"} - ${workout.title || "Novo treino"}`;
+const workoutToEditableTitle = (workout) => workout.title || "Novo treino";
 
 const workoutToEditableBlocks = (workout) => (workout.exercises || [])
   .map((exercise) => `${exercise.name} ${exercise.prescription}`)
@@ -1486,9 +1486,7 @@ const renderStudents = () => {
 
   const rows = visibleStudents.map((student) => {
     const publishedWorkout = getPublishedWorkoutForStudent(student);
-    const workoutLabel = publishedWorkout
-      ? `Treino ${publishedWorkout.code} - ${publishedWorkout.title}`
-      : "Sem treino publicado";
+    const workoutLabel = publishedWorkout?.title || "Sem treino publicado";
     const studentSessions = getSessionsForStudent(student.id);
     const latestSession = studentSessions[0] || null;
     const followupLabel = latestSession
@@ -1677,7 +1675,7 @@ const renderWorkouts = () => {
       <article class="entity-row workout-row">
         <div class="entity-row__identity">
           <span class="surface-icon">${svgIcon("dumbbell")}</span>
-          <div><h2>Treino ${escapeHtml(workout.code)} - ${escapeHtml(workout.title)}</h2><small>${escapeHtml(workout.focus || blocks[0] || "Treino")}</small></div>
+          <div><h2>${escapeHtml(workout.title)}</h2><small>${escapeHtml(workout.focus || blocks[0] || "Treino")}</small></div>
         </div>
         <div class="entity-row__field"><small>Aluno</small><span>${escapeHtml(workout.owner || "Aluno")}</span></div>
         <div class="entity-row__field"><small>Estágio</small><span class="status-text">${escapeHtml(stage.label)}</span><span>${escapeHtml(stage.detail)}</span></div>
@@ -1985,7 +1983,7 @@ workoutForm?.addEventListener("submit", async (event) => {
   if (linkedStudent) {
     studentRepository.saveStudent({
       ...linkedStudent,
-      workout: `Treino ${savedWorkout.code} - ${savedWorkout.title}`,
+      workout: savedWorkout.title,
       nextAction: "Ver treino publicado",
       updatedAt: savedWorkout.updatedAt
     });
@@ -2278,9 +2276,9 @@ document.addEventListener("click", async (event) => {
   if (workoutArchive) {
     const workout = workouts.find((item) => item.id === workoutArchive.dataset.workoutArchive);
     if (!workout) return;
-    if (!window.confirm(`Arquivar Treino ${workout.code} - ${workout.title}? O histórico do aluno será preservado.`)) return;
+    if (!window.confirm(`Arquivar “${workout.title}”? O histórico do aluno será preservado.`)) return;
     workoutArchive.disabled = true;
-    setWorkoutSyncStatus(`Arquivando Treino ${workout.code}...`, "");
+    setWorkoutSyncStatus(`Arquivando “${workout.title}”...`, "");
     const result = await workoutRepository.archivePublishedWorkout(workout.id);
     if (!result.archived) {
       workoutArchive.disabled = false;

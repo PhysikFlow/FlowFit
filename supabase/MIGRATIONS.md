@@ -34,3 +34,11 @@ sem `workout_id`, continuam aceitos para permitir reenvio compatível.
 O Supabase registrou essa migration com a versão `20260813223339`. O arquivo
 local usa exatamente essa versão para evitar drift entre o histórico remoto e
 `supabase/migrations/`.
+
+## Títulos literais dos treinos
+
+`migrations/20260813233000_preserve_workout_titles.sql` mantém o `id` como
+identidade do treino e deixa o campo alfabético `code` apenas para
+compatibilidade. A publicação passa a copiar somente o `title` para o resumo do
+aluno e a migration corrige os resumos existentes a partir do plano publicado
+mais recente de cada vínculo.

@@ -1744,3 +1744,499 @@ body.has-workout-runner > .toast { visibility: hidden; }
     padding-left: var(--space-2);
   }
 }
+
+/* Focused workout execution experience */
+.workout-runner {
+  --runner-footer-height: 8.75rem;
+  overscroll-behavior: contain;
+  padding-right: max(var(--space-3), env(safe-area-inset-right));
+  padding-bottom: calc(var(--runner-footer-height) + env(safe-area-inset-bottom));
+  padding-left: max(var(--space-3), env(safe-area-inset-left));
+  background:
+    radial-gradient(circle at 50% -12%, color-mix(in srgb, var(--color-accent) 14%, transparent), transparent 24rem),
+    var(--color-bg);
+}
+
+.runner-topbar {
+  position: sticky;
+  z-index: 8;
+  top: 0;
+  min-height: 3.55rem;
+  background: color-mix(in srgb, var(--color-bg) 88%, transparent);
+  backdrop-filter: blur(16px);
+}
+
+.runner-topbar strong {
+  font-size: var(--text-sm);
+}
+
+.runner-topbar .text-button {
+  min-height: 2.75rem;
+}
+
+.runner-progress {
+  grid-template-columns: minmax(0, 1fr) minmax(5rem, 0.42fr) auto;
+  margin-top: 0;
+  padding: 0.65rem 0;
+  border: 0;
+  border-block: 1px solid var(--color-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.runner-progress strong {
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.runner-progress small {
+  margin-top: 0.12rem;
+}
+
+.runner-progress .progress-track {
+  height: 0.32rem;
+}
+
+.runner-main {
+  min-height: calc(100dvh - 7.5rem - var(--runner-footer-height) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  align-items: start;
+  padding: clamp(1rem, 3vh, 2rem) 0 var(--space-4);
+}
+
+.runner-phase {
+  width: min(100%, 38rem);
+}
+
+.runner-exercise {
+  touch-action: pan-y;
+}
+
+.runner-exercise__head {
+  align-items: center;
+}
+
+.runner-exercise__head .eyebrow {
+  color: var(--color-accent);
+  letter-spacing: 0.09em;
+}
+
+.runner-exercise__head h1 {
+  margin-top: 0.25rem;
+  font-size: clamp(1.65rem, 5.5vw, 2.35rem);
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.runner-set-badge {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-base);
+  white-space: nowrap;
+}
+
+.runner-media {
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: 16 / 9;
+  margin-top: var(--space-3);
+  border-color: color-mix(in srgb, var(--color-line) 72%, transparent);
+  border-radius: var(--radius-md);
+  background: #050608;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.025);
+}
+
+.runner-media img,
+.runner-media video,
+.runner-media iframe {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+}
+
+.runner-media > .button {
+  justify-self: center;
+}
+
+.runner-prescription {
+  gap: 0.38rem;
+  margin-top: var(--space-3);
+  text-align: left;
+}
+
+.runner-prescription > strong {
+  font-size: clamp(1.45rem, 5vw, 1.85rem);
+  letter-spacing: -0.025em;
+}
+
+.runner-prescription__meta {
+  justify-content: flex-start;
+  gap: 0.42rem;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  font-weight: 780;
+}
+
+.runner-prescription__meta .runner-info-button {
+  display: inline-grid;
+  width: 1.45rem;
+  min-height: 1.45rem;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--color-line-strong, var(--color-line));
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-muted);
+  font-family: ui-serif, Georgia, serif;
+  font-size: 0.72rem;
+}
+
+.runner-instructions {
+  margin-top: var(--space-2);
+  color: var(--color-muted);
+}
+
+.runner-instructions > summary {
+  width: fit-content;
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: 800;
+}
+
+.runner-instructions p {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-accent-line);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.previous-set {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  margin-top: var(--space-3);
+  padding: var(--space-2) 0;
+  border-block: 1px solid var(--color-line);
+}
+
+.previous-set strong {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  font-weight: 750;
+}
+
+.runner-result-title {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.runner-log {
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.runner-log__field {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.runner-log__label {
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.runner-stepper {
+  display: grid;
+  grid-template-columns: 3.35rem minmax(0, 1fr) 3.35rem;
+  min-height: 4.25rem;
+  overflow: hidden;
+  border: 1px solid var(--color-line-strong, var(--color-line));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-bg-elevated) 88%, transparent);
+}
+
+.runner-stepper > button {
+  display: grid;
+  min-width: 3.35rem;
+  min-height: 4.25rem;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-size: 1.65rem;
+  font-weight: 500;
+}
+
+.runner-stepper > button:first-child {
+  border-right: 1px solid var(--color-line);
+}
+
+.runner-stepper > button:last-child {
+  border-left: 1px solid var(--color-line);
+}
+
+.runner-stepper > button:active {
+  background: var(--color-accent-soft);
+}
+
+.runner-input-shell {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.runner-input-shell input,
+.runner-log .runner-input-shell input {
+  width: 100%;
+  min-height: 4.1rem;
+  padding: 0.4rem 2.25rem 0.4rem 0.5rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text);
+  font-size: clamp(1.55rem, 6vw, 2.05rem);
+  font-weight: 900;
+  text-align: center;
+}
+
+.runner-log__field:last-child .runner-input-shell input {
+  padding-right: 0.5rem;
+}
+
+.runner-input-shell input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.runner-input-shell b {
+  position: absolute;
+  right: 0.6rem;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  pointer-events: none;
+}
+
+.runner-performance {
+  margin-top: var(--space-2);
+  text-align: left;
+}
+
+.runner-secondary-actions {
+  justify-content: flex-start;
+  margin-top: var(--space-3);
+  gap: var(--space-3);
+}
+
+.runner-action-bar {
+  --swipe-progress: 0;
+  position: fixed;
+  z-index: 112;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: min(100%, 46rem);
+  margin: auto;
+  overflow: hidden;
+  padding: var(--space-2) max(var(--space-3), env(safe-area-inset-right)) calc(var(--space-2) + env(safe-area-inset-bottom)) max(var(--space-3), env(safe-area-inset-left));
+  border-top: 1px solid var(--color-line);
+  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+  box-shadow: 0 -1rem 3rem rgb(0 0 0 / 0.26);
+  backdrop-filter: blur(20px);
+}
+
+.runner-action-bar[hidden] {
+  display: none;
+}
+
+.runner-action-content {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 0.3rem;
+  transform: translateX(calc(var(--swipe-progress) * -5.5rem));
+  transition: transform 180ms var(--ease-out);
+}
+
+.runner-action-bar.is-swiping .runner-action-content {
+  transition: none;
+}
+
+.runner-action-content > small {
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  font-weight: 750;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runner-complete-set,
+.runner-action-content .runner-complete-set {
+  width: 100%;
+  min-height: 4rem;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 72%, white 12%);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-on-accent, #fff);
+  box-shadow: 0 0.8rem 2rem color-mix(in srgb, var(--color-accent) 24%, transparent);
+  font-size: var(--text-base);
+  font-weight: 900;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.runner-complete-set > span {
+  margin-right: 0.35rem;
+}
+
+.runner-action-bar.is-armed .runner-complete-set {
+  border-color: color-mix(in srgb, var(--color-success) 55%, transparent);
+  background: var(--color-success);
+  color: #092114;
+}
+
+.runner-swipe-hint {
+  color: var(--color-subtle);
+  font-size: 0.65rem;
+  font-weight: 750;
+  text-align: center;
+}
+
+.runner-swipe-feedback {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: max(var(--space-3), env(safe-area-inset-right));
+  display: grid;
+  width: 5rem;
+  justify-items: center;
+  gap: 0.2rem;
+  color: var(--color-success);
+  opacity: var(--swipe-progress);
+  transform: translateY(-42%) scale(calc(0.82 + (var(--swipe-progress) * 0.18)));
+}
+
+.runner-swipe-feedback span {
+  font-size: 1.35rem;
+  font-weight: 950;
+}
+
+.runner-swipe-feedback strong {
+  font-size: 0.62rem;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.runner-transition {
+  min-height: 52dvh;
+  align-content: center;
+}
+
+.runner-transition__icon {
+  margin-bottom: var(--space-3);
+}
+
+.runner-rest {
+  min-height: 56dvh;
+  align-content: center;
+}
+
+.runner-rest__clock {
+  margin-top: var(--space-3);
+  font-size: clamp(4.8rem, 19vw, 7.5rem);
+}
+
+.runner-rest__next {
+  margin: var(--space-5) 0 var(--space-4);
+}
+
+@media (max-width: 520px) {
+  .workout-runner {
+    --runner-footer-height: 8.45rem;
+    padding-right: max(var(--space-2), env(safe-area-inset-right));
+    padding-left: max(var(--space-2), env(safe-area-inset-left));
+  }
+
+  .runner-exercise__head {
+    display: grid;
+    gap: 0.3rem;
+  }
+
+  .runner-set-badge {
+    justify-self: start;
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+  }
+
+  .runner-media {
+    height: auto;
+    max-height: none;
+  }
+
+  .runner-media img,
+  .runner-media video,
+  .runner-media iframe {
+    height: 100%;
+    max-height: none;
+  }
+
+  .runner-log {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .runner-stepper,
+  .runner-stepper > button {
+    min-height: 3.85rem;
+  }
+
+  .runner-input-shell input,
+  .runner-log .runner-input-shell input {
+    min-height: 3.75rem;
+  }
+
+  .runner-action-bar {
+    padding-right: max(var(--space-2), env(safe-area-inset-right));
+    padding-left: max(var(--space-2), env(safe-area-inset-left));
+  }
+}
+
+@media (max-height: 700px) and (max-width: 520px) {
+  .runner-main {
+    padding-top: var(--space-2);
+  }
+
+  .runner-media {
+    max-height: 28dvh;
+  }
+
+  .runner-prescription,
+  .previous-set,
+  .runner-result-title {
+    margin-top: var(--space-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runner-action-content,
+  .runner-swipe-feedback {
+    transition: none;
+  }
+}

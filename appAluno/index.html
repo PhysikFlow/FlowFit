@@ -16,8 +16,8 @@
     <link rel="preload" as="image" type="image/png" href="assets/icons/startup-logo-512.png" fetchpriority="high" />
     <link rel="stylesheet" href="css/tokens.css?v=build-20260809-7" />
     <link rel="stylesheet" href="css/components.css?v=build-20260811-9" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260812-1" />
-    <script type="module" src="js/app.js?v=build-20260813-1"></script>
+    <link rel="stylesheet" href="css/app.css?v=build-20260813-3" />
+    <script type="module" src="js/app.js?v=build-20260813-3"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title" aria-busy="true">
@@ -289,10 +289,15 @@
           <div class="runner-prescription">
             <strong data-runner-prescription>10 repetições</strong>
             <div class="runner-prescription__meta">
-              <button type="button" data-explain="rir"><span data-runner-rir>RIR 2</span></button>
-              <button type="button" data-explain="tempo"><span data-runner-tempo>Cadência 2-0-2</span></button>
+              <span data-runner-rir>RIR 2</span>
+              <span aria-hidden="true">·</span>
+              <span data-runner-tempo>2–0–2</span>
+              <button class="runner-info-button" type="button" data-explain="prescription" aria-label="Entender RIR e cadência">i</button>
             </div>
-            <p data-runner-instructions hidden></p>
+            <details class="runner-instructions" data-runner-instructions-details hidden>
+              <summary>Orientação do personal</summary>
+              <p data-runner-instructions></p>
+            </details>
           </div>
 
           <article class="previous-set" data-previous-set>
@@ -300,14 +305,27 @@
             <strong data-previous-set-value>Sem registro comparável</strong>
           </article>
 
-          <strong class="runner-result-title">Resultado de hoje</strong>
+          <strong class="runner-result-title">Registrar série</strong>
           <div class="runner-log" aria-label="Registro da série atual">
-            <label>Carga <span><input type="number" inputmode="decimal" min="0" step="0.5" placeholder="Ex.: 20" data-runner-load aria-label="Carga da série atual em quilos" /><b>kg</b></span></label>
-            <label>Repetições <input type="number" inputmode="numeric" min="1" step="1" data-runner-reps aria-label="Repetições da série atual" /></label>
+            <div class="runner-log__field" role="group" aria-labelledby="runner-load-label">
+              <span class="runner-log__label" id="runner-load-label">Carga</span>
+              <div class="runner-stepper">
+                <button type="button" data-adjust-runner="load" data-adjust-delta="-0.5" aria-label="Diminuir carga em meio quilo">−</button>
+                <span class="runner-input-shell"><input type="number" inputmode="decimal" min="0" step="0.5" placeholder="0" data-runner-load aria-label="Carga da série atual em quilos" /><b>kg</b></span>
+                <button type="button" data-adjust-runner="load" data-adjust-delta="0.5" aria-label="Aumentar carga em meio quilo">+</button>
+              </div>
+            </div>
+            <div class="runner-log__field" role="group" aria-labelledby="runner-reps-label">
+              <span class="runner-log__label" id="runner-reps-label">Repetições</span>
+              <div class="runner-stepper">
+                <button type="button" data-adjust-runner="reps" data-adjust-delta="-1" aria-label="Diminuir uma repetição">−</button>
+                <span class="runner-input-shell"><input type="number" inputmode="numeric" min="1" step="1" data-runner-reps aria-label="Repetições da série atual" /></span>
+                <button type="button" data-adjust-runner="reps" data-adjust-delta="1" aria-label="Aumentar uma repetição">+</button>
+              </div>
+            </div>
           </div>
           <p class="runner-performance" data-runner-performance hidden></p>
 
-          <button class="set-button runner-complete-set" type="button" data-complete-runner-set>Concluir série</button>
           <div class="runner-secondary-actions">
             <button class="text-button runner-correct" type="button" data-correct-last-set hidden>Corrigir última série</button>
             <button class="text-button" type="button" data-report-discomfort>Senti desconforto</button>
@@ -316,8 +334,8 @@
 
         <section class="runner-phase runner-transition" data-runner-phase="transition" hidden aria-live="assertive">
           <span class="runner-transition__icon" aria-hidden="true">✓</span>
-          <span class="eyebrow">Série concluída</span>
-          <h1 tabindex="-1" data-runner-phase-focus>Registro salvo</h1>
+          <span class="eyebrow">Registro salvo</span>
+          <h1 tabindex="-1" data-runner-phase-focus>Série concluída</h1>
           <p data-runner-transition-copy>Preparando o descanso.</p>
         </section>
 
@@ -382,6 +400,17 @@
           <button class="button button--block" type="button" data-close-success>Ver evolução</button>
         </section>
       </main>
+
+      <section class="runner-action-bar" data-runner-action-bar hidden aria-label="Concluir série atual">
+        <div class="runner-swipe-feedback" data-runner-swipe-feedback aria-hidden="true">
+          <span>✓</span><strong>Solte para concluir</strong>
+        </div>
+        <div class="runner-action-content" data-runner-action-content>
+          <small data-runner-complete-summary>Série 1/3 · 0 kg · 10 reps</small>
+          <button class="button runner-complete-set" type="button" data-complete-runner-set><span aria-hidden="true">✓</span> Concluir série</button>
+          <span class="runner-swipe-hint">ou deslize para a esquerda</span>
+        </div>
+      </section>
 
       <dialog class="runner-sheet" data-exercise-sheet aria-labelledby="exercise-sheet-title">
         <div class="runner-sheet__handle" aria-hidden="true"></div>

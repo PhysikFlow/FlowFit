@@ -4,9 +4,9 @@ import { Theme } from "./core/theme.js?v=build-20260813-1";
 import { svgIcon } from "./core/icons.js?v=build-20260810-7";
 import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260809-7";
 import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260812-6";
-import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260813-1";
+import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260813-2";
 import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260813-1";
-import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260812-1";
+import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260813-2";
 import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260813-1";
 
 const pages = [...document.querySelectorAll("[data-page]")];
@@ -28,6 +28,8 @@ const headerNotificationButton = document.querySelector(".notification-button");
 const homeWorkoutAction = document.querySelector("[data-home-workout-action]");
 const homeWorkoutLabel = document.querySelector("[data-home-workout-label]");
 const workoutRunner = document.querySelector("[data-workout-runner]");
+const runnerActionBar = document.querySelector("[data-runner-action-bar]");
+const runnerSwipeFeedback = document.querySelector("[data-runner-swipe-feedback]");
 const exerciseSheet = document.querySelector("[data-exercise-sheet]");
 const infoDialog = document.querySelector("[data-info-dialog]");
 const discomfortDialog = document.querySelector("[data-discomfort-dialog]");
@@ -45,6 +47,7 @@ let wakeLockSentinel = null;
 const SET_CLICK_DEBOUNCE_MS = 2000;
 const SET_TRANSITION_MS = 720;
 const setClickLocks = new Set();
+let runnerSwipe = null;
 const compactWorkoutQuery = window.matchMedia("(max-width: 767px)");
 let focusedExerciseId = "";
 const emptyStudent = {
@@ -696,8 +699,8 @@ const renderAccessSelectors = () => {
   if (options) {
     options.innerHTML = availableWorkouts.map((workout) => `
       <button class="workout-choice ${workout.id === currentWorkout.id ? "is-active" : ""}" type="button" data-select-workout="${escapeHtml(workout.id)}">
-        <strong>Treino ${escapeHtml(workout.code)}</strong>
-        <span>${escapeHtml(workout.title)}</span>
+        <strong>${escapeHtml(workout.title)}</strong>
+        <span>${escapeHtml(workout.focus)}</span>
         <small>${escapeHtml(workout.estimatedMinutes)} min - ${escapeHtml(workout.exercises.length)} exercícios</small>
       </button>
     `).join("");
@@ -709,15 +712,15 @@ const renderHome = () => {
   const hasWorkout = currentWorkout.id !== emptyWorkout.id;
   const availabilityLabel = upcomingWorkout ? formatWorkoutAvailability(upcomingWorkout.startsAt) : "";
   document.querySelector("[data-home-workout]").textContent = hasWorkout
-    ? `Treino ${currentWorkout.code}`
+    ? "Treino disponível"
     : upcomingWorkout ? `Agendado para ${availabilityLabel}` : "Sem treino ativo";
   document.querySelector("[data-home-title]").textContent = hasWorkout
     ? currentWorkout.title
-    : upcomingWorkout ? "Próximo treino agendado." : "Aguardando seu primeiro treino.";
+    : upcomingWorkout ? upcomingWorkout.title : "Aguardando seu primeiro treino.";
   document.querySelector("[data-home-summary]").textContent =
     !hasWorkout
       ? upcomingWorkout
-        ? `Treino ${upcomingWorkout.code} - ${upcomingWorkout.title} será liberado em ${availabilityLabel}.`
+        ? `${upcomingWorkout.title} será liberado em ${availabilityLabel}.`
         : "Seu personal ainda não publicou um treino para você."
       : `${currentWorkout.focus ? `${currentWorkout.focus} · ` : ""}${getCurrentExercises().length} exercícios · ~${currentWorkout.estimatedMinutes} min`;
   const sessions = Store.state.sessions || [];
@@ -743,8 +746,8 @@ const renderHome = () => {
       : upcomingWorkout ? `Disponível em ${availabilityLabel}` : "Aguardando treino";
   }
   document.querySelector("[data-workout-title]").textContent = hasWorkout
-    ? `Treino ${currentWorkout.code}`
-    : upcomingWorkout ? `Treino ${upcomingWorkout.code}` : "Treino";
+    ? currentWorkout.title
+    : upcomingWorkout ? upcomingWorkout.title : "Treino";
   document.querySelector("[data-workout-focus]").textContent = hasWorkout
     ? currentWorkout.focus
     : upcomingWorkout ? `Disponível em ${availabilityLabel}` : currentWorkout.focus;
@@ -1020,7 +1023,7 @@ const renderRunnerMedia = (exercise) => {
         : ["mp4", "webm", "ogv"].includes(extension) ? "video" : "external";
   if (mediaType === "youtube" && youtubeId && /^[a-zA-Z0-9_-]{6,20}$/.test(youtubeId)) {
     const iframe = document.createElement("iframe");
-    iframe.src = `https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0&playsinline=1&modestbranding=1`;
+    iframe.src = `https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0&playsinline=1&modestbranding=1&iv_load_policy=3`;
     iframe.title = `Demonstração de ${exercise.name}`;
     iframe.loading = "lazy";
     iframe.allow = "accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture";
@@ -1142,17 +1145,103 @@ const renderRunnerPerformanceHint = (exercise, setNumber) => {
   target.textContent = isBetter ? "↑ Melhor que o registro comparável da última sessão" : "";
 };
 
+const formatRunnerPrescription = (value) => String(value || "")
+  .replace(/\s*x\s*/gi, " × ")
+  .replace(/\s+/g, " ")
+  .trim();
+
+const formatRunnerTempo = (value) => String(value || "")
+  .replace(/-/g, "–")
+  .trim();
+
+const updateRunnerActionSummary = (session = getActiveSession()) => {
+  const target = document.querySelector("[data-runner-complete-summary]");
+  if (!target || !session) return;
+  const exercise = findSessionExercise(session.currentExerciseId, session);
+  const setNumber = Number(session.currentSetNumber || 1);
+  const loadValue = document.querySelector("[data-runner-load]")?.value;
+  const repsValue = document.querySelector("[data-runner-reps]")?.value;
+  const load = loadValue === "" ? 0 : Number(loadValue || 0);
+  const reps = repsValue === "" ? 0 : Number(repsValue || 0);
+  const formattedLoad = Number.isInteger(load) ? String(load) : String(Math.round(load * 10) / 10).replace(".", ",");
+  target.textContent = `Série ${setNumber}/${parseTotalSets(exercise || {})} · ${formattedLoad} kg · ${reps} reps`;
+};
+
+const resetRunnerSwipeVisual = () => {
+  runnerSwipe = null;
+  runnerActionBar?.classList.remove("is-swiping", "is-armed");
+  runnerActionBar?.style.setProperty("--swipe-progress", "0");
+  if (runnerSwipeFeedback) runnerSwipeFeedback.querySelector("strong").textContent = "Solte para concluir";
+};
+
+const completeCurrentRunnerSet = () => {
+  const session = getActiveSession();
+  if (!session || session.phase !== SESSION_PHASE.ACTIVE_SET) return false;
+  const exercise = findSessionExercise(session.currentExerciseId, session);
+  if (!exercise) return false;
+  const setNumber = Number(session.currentSetNumber || 1);
+  const workoutExerciseId = occurrenceId(exercise);
+  const lockKey = `${workoutExerciseId}:${setNumber}`;
+  if (setClickLocks.has(lockKey)) return false;
+
+  const loadKg = Number(document.querySelector("[data-runner-load]")?.value || 0);
+  const reps = Number(document.querySelector("[data-runner-reps]")?.value || 0);
+  if (loadKg < 0 || reps < 1) {
+    Platform.notify("Informe uma carga válida e pelo menos uma repetição.");
+    return false;
+  }
+
+  const completeButton = document.querySelector("[data-complete-runner-set]");
+  setClickLocks.add(lockKey);
+  if (completeButton) {
+    completeButton.disabled = true;
+    playSetFeedback(completeButton);
+  }
+  Store.addActiveSetEntry({
+    workoutExerciseId,
+    exerciseId: exercise.exerciseId || exercise.id,
+    exercisePosition: getSessionExercises(session).findIndex((item) => occurrenceId(item) === workoutExerciseId),
+    exerciseName: exercise.name,
+    setNumber,
+    setKind: "working",
+    loadKg,
+    reps,
+    completedAt: new Date().toISOString()
+  });
+  Platform.vibrate(25);
+  renderHome();
+  renderExercises();
+
+  const updated = getActiveSession();
+  const next = getNextIncompleteTarget(updated, workoutExerciseId);
+  const transitionEndsAt = Date.now() + SET_TRANSITION_MS;
+  Store.updateActiveSession({
+    phase: SESSION_PHASE.TRANSITIONING,
+    currentExerciseId: next ? occurrenceId(next.exercise) : workoutExerciseId,
+    currentSetNumber: next ? next.setNumber : setNumber,
+    currentLoad: null,
+    currentReps: null,
+    pendingExerciseId: next ? occurrenceId(next.exercise) : null,
+    pendingSetNumber: next?.setNumber || null,
+    transitionEndsAt: new Date(transitionEndsAt).toISOString(),
+    restEndsAt: next ? new Date(transitionEndsAt + (parseRestSeconds(exercise) * 1000)).toISOString() : null
+  });
+  resetRunnerSwipeVisual();
+  renderWorkoutRunner();
+  window.setTimeout(() => setClickLocks.delete(lockKey), SET_CLICK_DEBOUNCE_MS);
+  return true;
+};
+
 const renderWorkoutRunner = () => {
   const session = getActiveSession();
   if (!session) return;
   const total = getSessionTotalSets(session);
   const done = getCompletedSessionSets(session);
   const percent = total ? Math.round((done / total) * 100) : 0;
-  document.querySelector("[data-runner-workout-title]").textContent = `Treino ${session.workoutSnapshot?.code || ""}`.trim();
-  document.querySelector("[data-runner-progress-title]").textContent = session.workoutSnapshot?.title || "Treino";
+  document.querySelector("[data-runner-workout-title]").textContent = session.workoutSnapshot?.title || "Treino";
+  document.querySelector("[data-runner-progress-title]").textContent = "Progresso geral";
   const exercises = getSessionExercises(session);
-  const activeExerciseIndex = Math.max(0, exercises.findIndex((item) => occurrenceId(item) === session.currentExerciseId));
-  document.querySelector("[data-runner-progress-copy]").textContent = `${Math.min(activeExerciseIndex + 1, exercises.length)} de ${exercises.length} exercícios · ${done}/${total} séries`;
+  document.querySelector("[data-runner-progress-copy]").textContent = `${done}/${total} séries concluídas`;
   document.querySelector("[data-runner-progress]").style.setProperty("--progress", `${percent}%`);
   document.querySelector("[data-runner-progress-track]")?.setAttribute("aria-valuenow", String(percent));
   const visualPhase = {
@@ -1164,6 +1253,9 @@ const renderWorkoutRunner = () => {
     [SESSION_PHASE.PENDING_SYNC]: "review",
     [SESSION_PHASE.COMPLETED]: "success"
   }[session.phase] || "exercise";
+  workoutRunner.dataset.runnerVisualPhase = visualPhase;
+  if (runnerActionBar) runnerActionBar.hidden = session.phase !== SESSION_PHASE.ACTIVE_SET;
+  if (session.phase !== SESSION_PHASE.ACTIVE_SET) resetRunnerSwipeVisual();
   document.querySelectorAll("[data-runner-phase]").forEach((phase) => {
     phase.hidden = phase.dataset.runnerPhase !== visualPhase;
   });
@@ -1223,14 +1315,15 @@ const renderWorkoutRunner = () => {
   const previous = findPreviousSet(exercise, setNumber);
   const previousLogs = findPreviousExerciseLogs(exercise);
   const exerciseIndex = exercises.findIndex((item) => occurrenceId(item) === occurrenceId(exercise));
-  document.querySelector("[data-runner-exercise-position]").textContent = `Exercício ${exerciseIndex + 1} de ${exercises.length}`;
+  document.querySelector("[data-runner-exercise-position]").textContent = `Exercício ${exerciseIndex + 1}/${exercises.length}`;
   document.querySelector("[data-runner-exercise-name]").textContent = exercise.name;
-  document.querySelector("[data-runner-set-number]").textContent = `Série ${setNumber} de ${parseTotalSets(exercise)}`;
-  document.querySelector("[data-runner-prescription]").textContent = exercise.prescription;
+  document.querySelector("[data-runner-set-number]").textContent = `Série ${setNumber}/${parseTotalSets(exercise)}`;
+  document.querySelector("[data-runner-prescription]").textContent = formatRunnerPrescription(exercise.prescription);
   document.querySelector("[data-runner-rir]").textContent = `RIR ${exercise.rir}`;
-  document.querySelector("[data-runner-tempo]").textContent = `Cadência ${exercise.tempo}`;
+  document.querySelector("[data-runner-tempo]").textContent = formatRunnerTempo(exercise.tempo);
   const instructions = document.querySelector("[data-runner-instructions]");
-  instructions.hidden = !exercise.instructions;
+  const instructionsDetails = document.querySelector("[data-runner-instructions-details]");
+  if (instructionsDetails) instructionsDetails.hidden = !exercise.instructions;
   instructions.textContent = exercise.instructions || "";
   const comparableLogs = previousLogs.filter((log) => Number(log.setNumber || 0) > 0).slice(0, 4);
   document.querySelector("[data-previous-set-value]").textContent = comparableLogs.length
@@ -1246,6 +1339,7 @@ const renderWorkoutRunner = () => {
   document.querySelector("[data-correct-last-set]").hidden = getExerciseEntries(occurrenceId(exercise), session).length === 0;
   renderRunnerMedia(exercise);
   renderRunnerPerformanceHint(exercise, setNumber);
+  updateRunnerActionSummary(session);
   syncRunnerClock();
 };
 
@@ -1397,7 +1491,7 @@ const renderSchedule = () => {
   const workoutItems = upcomingWorkouts.map((workout) => ({
     id: `published-${workout.id}`,
     type: "Treino",
-    title: `Treino ${workout.code} - ${workout.title}`,
+    title: workout.title,
     detail: workout.focus,
     time: workout.startsAt,
     source: "personal"
@@ -1728,7 +1822,7 @@ const selectWorkout = (workoutId) => {
   focusedExerciseId = "";
   setClickLocks.clear();
   renderAll();
-  Platform.notify(`Treino ${workout.code} selecionado.`);
+  Platform.notify(`${workout.title} selecionado.`);
 };
 
 navItems.forEach((item) => item.addEventListener("click", (event) => {
@@ -1776,6 +1870,7 @@ document.addEventListener("input", (event) => {
       Store.updateActiveSession({ currentReps: event.target.value === "" ? null : Number(event.target.value) });
     }
     renderRunnerPerformanceHint(findSessionExercise(session.currentExerciseId, session), Number(session.currentSetNumber || 1));
+    updateRunnerActionSummary(getActiveSession());
   }
 });
 
@@ -1953,8 +2048,13 @@ workoutRunner?.addEventListener("click", (event) => {
   const explainButton = event.target.closest("[data-explain]");
   if (explainButton) {
     const isRir = explainButton.dataset.explain === "rir";
-    document.querySelector("[data-info-title]").textContent = isRir ? "O que significa RIR?" : "Como ler a cadência?";
-    document.querySelector("[data-info-copy]").textContent = isRir
+    const isPrescription = explainButton.dataset.explain === "prescription";
+    document.querySelector("[data-info-title]").textContent = isPrescription
+      ? "RIR e cadência"
+      : isRir ? "O que significa RIR?" : "Como ler a cadência?";
+    document.querySelector("[data-info-copy]").textContent = isPrescription
+      ? "RIR indica quantas repetições ainda seriam possíveis ao terminar a série. A cadência mostra o tempo de cada fase do movimento; em 2-0-2, são dois segundos na descida, sem pausa e dois na subida."
+      : isRir
       ? "RIR indica quantas repetições você ainda conseguiria fazer ao terminar a série. RIR 2 significa parar sentindo que conseguiria aproximadamente mais duas."
       : "A cadência mostra o tempo de cada fase do movimento. Em 2-0-2, faça dois segundos na descida, sem pausa e dois segundos na subida.";
     if (infoDialog && !infoDialog.open) infoDialog.showModal();
@@ -1999,53 +2099,26 @@ workoutRunner?.addEventListener("click", (event) => {
     return;
   }
 
+  const adjustButton = event.target.closest("[data-adjust-runner]");
+  if (adjustButton) {
+    const type = adjustButton.dataset.adjustRunner;
+    const input = document.querySelector(type === "load" ? "[data-runner-load]" : "[data-runner-reps]");
+    if (!input) return;
+    const delta = Number(adjustButton.dataset.adjustDelta || 0);
+    const minimum = type === "load" ? 0 : 1;
+    const current = input.value === "" ? (type === "load" ? 0 : 1) : Number(input.value);
+    const next = Math.max(minimum, type === "load"
+      ? Math.round((current + delta) * 2) / 2
+      : Math.round(current + delta));
+    input.value = String(next);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    Platform.vibrate(10);
+    return;
+  }
+
   const completeButton = event.target.closest("[data-complete-runner-set]");
   if (completeButton) {
-    const exercise = findSessionExercise(session.currentExerciseId, session);
-    const setNumber = Number(session.currentSetNumber || 1);
-    const workoutExerciseId = occurrenceId(exercise);
-    const lockKey = `${workoutExerciseId}:${setNumber}`;
-    if (!exercise || setClickLocks.has(lockKey)) return;
-    const loadKg = Number(document.querySelector("[data-runner-load]").value || 0);
-    const reps = Number(document.querySelector("[data-runner-reps]").value || 0);
-    if (loadKg < 0 || reps < 1) {
-      Platform.notify("Informe uma carga válida e pelo menos uma repetição.");
-      return;
-    }
-    setClickLocks.add(lockKey);
-    completeButton.disabled = true;
-    playSetFeedback(completeButton);
-    Store.addActiveSetEntry({
-      workoutExerciseId,
-      exerciseId: exercise.exerciseId || exercise.id,
-      exercisePosition: getSessionExercises(session).findIndex((item) => occurrenceId(item) === workoutExerciseId),
-      exerciseName: exercise.name,
-      setNumber,
-      setKind: "working",
-      loadKg,
-      reps,
-      completedAt: new Date().toISOString()
-    });
-    Platform.vibrate(25);
-    renderHome();
-    renderExercises();
-
-    const updated = getActiveSession();
-    const next = getNextIncompleteTarget(updated, workoutExerciseId);
-    const transitionEndsAt = Date.now() + SET_TRANSITION_MS;
-    Store.updateActiveSession({
-      phase: SESSION_PHASE.TRANSITIONING,
-      currentExerciseId: next ? occurrenceId(next.exercise) : workoutExerciseId,
-      currentSetNumber: next ? next.setNumber : setNumber,
-      currentLoad: null,
-      currentReps: null,
-      pendingExerciseId: next ? occurrenceId(next.exercise) : null,
-      pendingSetNumber: next?.setNumber || null,
-      transitionEndsAt: new Date(transitionEndsAt).toISOString(),
-      restEndsAt: next ? new Date(transitionEndsAt + (parseRestSeconds(exercise) * 1000)).toISOString() : null
-    });
-    renderWorkoutRunner();
-    window.setTimeout(() => setClickLocks.delete(lockKey), SET_CLICK_DEBOUNCE_MS);
+    completeCurrentRunnerSet();
     return;
   }
 
@@ -2136,6 +2209,63 @@ workoutRunner?.addEventListener("click", (event) => {
     navigate("progress");
   }
 });
+
+workoutRunner?.addEventListener("pointerdown", (event) => {
+  if (!event.isPrimary || event.pointerType === "mouse") return;
+  const session = getActiveSession();
+  if (!session || session.phase !== SESSION_PHASE.ACTIVE_SET) return;
+  if (event.target.closest("button, input, textarea, select, a, iframe, video, dialog, [contenteditable], .runner-media")) return;
+  runnerSwipe = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    axis: "pending",
+    armed: false,
+    threshold: Math.min(140, Math.max(88, workoutRunner.clientWidth * 0.22))
+  };
+});
+
+workoutRunner?.addEventListener("pointermove", (event) => {
+  if (!runnerSwipe || event.pointerId !== runnerSwipe.pointerId) return;
+  const deltaX = event.clientX - runnerSwipe.startX;
+  const deltaY = event.clientY - runnerSwipe.startY;
+  const horizontalDistance = Math.abs(deltaX);
+  const verticalDistance = Math.abs(deltaY);
+
+  if (runnerSwipe.axis === "pending") {
+    if (Math.hypot(deltaX, deltaY) < 12) return;
+    if (verticalDistance > horizontalDistance * 1.15 || deltaX > 0) {
+      resetRunnerSwipeVisual();
+      return;
+    }
+    if (horizontalDistance <= verticalDistance * 1.25) return;
+    runnerSwipe.axis = "horizontal";
+    workoutRunner.setPointerCapture?.(event.pointerId);
+  }
+
+  if (runnerSwipe.axis !== "horizontal") return;
+  event.preventDefault();
+  const progress = Math.min(1, Math.max(0, -deltaX / runnerSwipe.threshold));
+  const armed = progress >= 1;
+  if (armed && !runnerSwipe.armed) Platform.vibrate(12);
+  runnerSwipe.armed = armed;
+  runnerActionBar?.classList.add("is-swiping");
+  runnerActionBar?.classList.toggle("is-armed", armed);
+  runnerActionBar?.style.setProperty("--swipe-progress", String(progress));
+  const feedbackLabel = runnerSwipeFeedback?.querySelector("strong");
+  if (feedbackLabel) feedbackLabel.textContent = armed ? "Solte para concluir" : "Continue deslizando";
+}, { passive: false });
+
+const finishRunnerSwipe = (event) => {
+  if (!runnerSwipe || event.pointerId !== runnerSwipe.pointerId) return;
+  const shouldComplete = runnerSwipe.axis === "horizontal" && runnerSwipe.armed;
+  if (workoutRunner.hasPointerCapture?.(event.pointerId)) workoutRunner.releasePointerCapture?.(event.pointerId);
+  resetRunnerSwipeVisual();
+  if (shouldComplete) completeCurrentRunnerSet();
+};
+
+workoutRunner?.addEventListener("pointerup", finishRunnerSwipe);
+workoutRunner?.addEventListener("pointercancel", resetRunnerSwipeVisual);
 
 onboardingForm?.addEventListener("click", async (event) => {
   const oauthButton = event.target.closest("[data-oauth-provider]");
