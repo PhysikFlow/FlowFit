@@ -43,10 +43,14 @@ const previewList = document.querySelector("[data-preview-list]");
 const workoutSyncStatus = document.querySelector("[data-workout-sync-status]");
 const studentFormPanel = document.querySelector("[data-student-form-panel]");
 const studentSessionPanel = document.querySelector("[data-student-session-panel]");
-const studentSessionBackdrop = document.querySelector("[data-student-session-backdrop]");
+const studentListView = document.querySelector("[data-student-list-view]");
+const inviteDialog = document.querySelector("[data-invite-dialog]");
+const importDialog = document.querySelector("[data-import-dialog]");
 const workoutBuilder = document.querySelector("[data-workout-builder]");
 const studentSearchInput = document.querySelector("[data-student-search]");
+const studentFilterInput = document.querySelector("[data-student-filter]");
 const workoutSearchInput = document.querySelector("[data-workout-search]");
+const workoutFilterInput = document.querySelector("[data-workout-filter]");
 const authGate = document.querySelector("[data-auth-gate]");
 const authForm = document.querySelector("[data-auth-form]");
 const authSessionCheck = document.querySelector("[data-auth-session-check]");
@@ -72,7 +76,6 @@ const coachContactEmailInput = document.querySelector("[data-coach-contact-email
 const coachWhatsappInput = document.querySelector("[data-coach-whatsapp-input]");
 const coachPhoneInput = document.querySelector("[data-coach-phone-input]");
 const contrastStatus = document.querySelector("[data-contrast-status]");
-const saveThemeButton = document.querySelector("[data-save-theme]");
 const themePaletteList = document.querySelector("[data-theme-palette-list]");
 const themePaletteContext = document.querySelector("[data-theme-palette-context]");
 const themePaletteModeButtons = [...document.querySelectorAll("[data-theme-palette-mode]")];
@@ -192,11 +195,11 @@ let editingWorkoutId = "";
 let workoutDraftDetails = [];
 let deferredInstallPrompt = null;
 let studentSearchQuery = "";
+let studentFilter = "all";
 let workoutSearchQuery = "";
+let workoutFilter = "all";
 let studentSessionOpen = false;
 let themePaletteMode = inferModeFromColor(backgroundInput?.value || DEFAULT_BRAND_THEME.backgroundColor);
-
-const compactProfessorQuery = window.matchMedia("(max-width: 760px)");
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -328,7 +331,6 @@ const updateContrastStatus = () => {
     contrastStatus.classList.toggle("is-synced", isReadable);
   }
 
-  if (saveThemeButton) saveThemeButton.disabled = !isReadable;
   return isReadable;
 };
 
@@ -793,13 +795,13 @@ const saveThemeNow = async ({ silent = false } = {}) => {
     if (!silent) showToast("Contraste insuficiente para salvar o tema.");
     return { synced: false, blocked: true, theme: readTheme() };
   }
-  setThemeStatus("Publicando aparência...", "");
+  setThemeStatus("Salvando…", "");
   const result = await themeRepository.saveBrandTheme(readTheme());
   const message = result.synced && result.partial
-    ? "Aparência salva parcialmente. Recarregue e tente novamente."
+    ? "Salvo parcialmente. Recarregue e tente novamente."
     : result.synced
-    ? `Aparência publicada${result.updatedAt ? ` em ${formatUpdatedAt(result.updatedAt)}` : ""}.`
-    : "Não foi possível publicar a aparência. Verifique a conexão e tente novamente.";
+    ? "Salvo"
+    : "Não foi possível salvar. Verifique a conexão e tente novamente.";
   setThemeStatus(message, result.synced && !result.partial ? "synced" : "warning");
   if (!silent) showToast(result.synced && !result.partial ? "Aparência publicada." : "Aparência salva com aviso.");
   return result;
@@ -807,7 +809,7 @@ const saveThemeNow = async ({ silent = false } = {}) => {
 
 const queueThemeSave = () => {
   clearTimeout(themeSaveTimer);
-  setThemeStatus("Alteração pendente. Salvamento automático em instantes.", "");
+  setThemeStatus("Salvando…", "");
   themeSaveTimer = setTimeout(() => saveThemeNow({ silent: true }), 700);
 };
 
@@ -821,37 +823,21 @@ const showToast = (message) => {
 
 const syncStudentSessionPresentation = () => {
   if (!studentSessionPanel) return;
-  const isMobileSheet = compactProfessorQuery.matches && studentSessionOpen && !studentSessionPanel.hidden;
-  studentSessionPanel.classList.toggle("is-mobile-open", isMobileSheet);
-  studentSessionBackdrop?.toggleAttribute("hidden", !isMobileSheet);
-  document.body.classList.toggle("has-student-session-open", isMobileSheet);
-
-  if (compactProfessorQuery.matches) {
-    studentSessionPanel.setAttribute("role", "dialog");
-    studentSessionPanel.setAttribute("aria-modal", "true");
-    studentSessionPanel.setAttribute("aria-labelledby", "student-session-title");
-    studentSessionPanel.setAttribute("aria-hidden", String(!isMobileSheet));
-  } else {
-    studentSessionPanel.removeAttribute("role");
-    studentSessionPanel.removeAttribute("aria-modal");
-    studentSessionPanel.removeAttribute("aria-labelledby");
-    studentSessionPanel.removeAttribute("aria-hidden");
-  }
+  const hasSelection = Boolean(studentSessionOpen && selectedStudentId && !studentSessionPanel.hidden);
+  if (studentListView) studentListView.hidden = hasSelection;
+  studentSessionPanel.classList.toggle("is-detail-view", hasSelection);
 };
 
 const setStudentSessionOpen = (open, { focus = true } = {}) => {
   studentSessionOpen = Boolean(open && selectedStudentId && !studentSessionPanel?.hidden);
   syncStudentSessionPresentation();
-  if (studentSessionOpen && compactProfessorQuery.matches && focus) {
+  if (studentSessionOpen && focus) {
     window.setTimeout(() => studentSessionPanel?.querySelector("[data-student-session-close]")?.focus(), 80);
   }
 };
 
 const revealStudentSession = () => {
-  if (compactProfessorQuery.matches) {
-    setStudentSessionOpen(true);
-    return;
-  }
+  setStudentSessionOpen(true);
   studentSessionPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
@@ -874,10 +860,9 @@ const navigate = (name, updateHash = true) => {
 const setStudentFormOpen = (open, { focus = true } = {}) => {
   if (!studentFormPanel) return;
   if (open) setStudentSessionOpen(false, { focus: false });
-  studentFormPanel.hidden = !open;
-  if (!open) return;
-  studentFormPanel.scrollIntoView({ behavior: "smooth", block: "start" });
-  if (focus) window.setTimeout(() => studentFormPanel.querySelector("input, select, textarea")?.focus(), 260);
+  if (open && !studentFormPanel.open) studentFormPanel.showModal();
+  if (!open && studentFormPanel.open) studentFormPanel.close();
+  if (open && focus) window.setTimeout(() => studentFormPanel.querySelector("input, select, textarea")?.focus(), 80);
 };
 
 const setWorkoutBuilderOpen = (open, { focus = true } = {}) => {
@@ -1125,52 +1110,53 @@ const renderCoachProfile = () => {
   renderLocalBrandAssets();
 };
 
+const getStudentSituations = (student) => {
+  const publishedWorkout = getPublishedWorkoutForStudent(student);
+  const main = String(student.nextAction || "").trim()
+    || (!publishedWorkout ? "Criar primeiro treino" : "Acompanhar aluno");
+  const normalizedMain = normalizeSearch(main);
+  const secondary = [];
+
+  if (!publishedWorkout && !normalizedMain.includes("treino")) secondary.push("Sem treino publicado");
+  if (student.inviteStatus !== "accepted" && !/(convite|acesso)/.test(normalizedMain)) {
+    secondary.push(isInviteExpired(student) ? "Convite expirado" : "Convite pendente");
+  }
+  if (student.status && student.status !== "Ativo" && normalizeSearch(student.status) !== normalizedMain) {
+    secondary.push(student.status);
+  }
+
+  return { main, secondary, publishedWorkout };
+};
+
 const renderTasks = () => {
   const target = document.querySelector("[data-task-list]");
   if (!target) return;
-  const withoutWorkout = students.filter((student) => !getPublishedWorkoutForStudent(student));
-  const invitePending = students.filter((student) => student.inviteStatus !== "accepted");
-  const checkinPending = students.filter((student) => student.status === "Aguardando check-in");
-  const paymentPending = students.filter((student) => student.status === "Inadimplente");
-  const tasks = [];
-
   if (!students.length) {
-    tasks.push({ type: "Alunos", title: "Cadastre o primeiro aluno", detail: "Nome e contato bastam para começar.", go: "students", action: "new-student" });
-  }
-  if (withoutWorkout.length) {
-    tasks.push({ type: "Treinos", title: `${withoutWorkout.length} sem treino publicado`, detail: "Crie e publique a prescrição.", go: "workouts", action: "new-workout", studentId: withoutWorkout[0].id });
-  }
-  if (invitePending.length) {
-    const expiredInvite = invitePending.find(isInviteExpired);
-    const nextInvite = expiredInvite || invitePending[0];
-    tasks.push({
-      type: "Acesso",
-      title: `${invitePending.length} ${invitePending.length === 1 ? "convite aguardando" : "convites aguardando"}`,
-      detail: expiredInvite ? "Renove e envie o link de acesso." : "Envie o link para o aluno entrar.",
-      go: "students",
-      action: "invite-student",
-      studentId: nextInvite.id
-    });
-  }
-  if (checkinPending.length) {
-    tasks.push({ type: "Check-in", title: `${checkinPending.length} aguardando check-in`, detail: "Abra o acompanhamento do aluno.", go: "students", studentId: checkinPending[0].id });
-  }
-  if (paymentPending.length) {
-    tasks.push({ type: "Financeiro", title: `${paymentPending.length} com pagamento pendente`, detail: "Revise o cadastro do aluno.", go: "students", studentId: paymentPending[0].id });
-  }
-
-  if (!tasks.length) {
-    target.innerHTML = `<article class="empty-state"><strong>Tudo resolvido.</strong><small>Nenhuma pendência agora.</small></article>`;
+    target.innerHTML = `
+      <article class="empty-state empty-state--action">
+        <strong>Cadastre o primeiro aluno</strong>
+        <small>O acompanhamento e os treinos aparecerão aqui.</small>
+        <button class="button" type="button" data-task-go="students" data-task-action="new-student">Adicionar aluno</button>
+      </article>
+    `;
     return;
   }
 
-  target.innerHTML = tasks.map((task) => `
-    <button class="task-row" type="button" data-task-go="${escapeHtml(task.go)}" data-task-action="${escapeHtml(task.action || "open-student")}" ${task.studentId ? `data-task-student="${escapeHtml(task.studentId)}"` : ""}>
-      <span class="chip">${escapeHtml(task.type)}</span>
-      <div><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(task.detail)}</small></div>
+  target.innerHTML = students.map((student) => {
+    const situation = getStudentSituations(student);
+    const action = situation.publishedWorkout ? "open-student" : "new-workout";
+    const secondaryLabel = situation.secondary.length
+      ? `+${situation.secondary.length} ${situation.secondary.length === 1 ? "outra situação" : "outras situações"}`
+      : "";
+    return `
+    <button class="task-row" type="button" data-task-go="${action === "new-workout" ? "workouts" : "students"}" data-task-action="${action}" data-task-student="${escapeHtml(student.id)}">
+      <span class="avatar avatar--small">${escapeHtml(student.initials)}</span>
+      <div><strong>${escapeHtml(student.name)}</strong><small>${escapeHtml(situation.main)}</small></div>
+      ${secondaryLabel ? `<span class="task-row__secondary">${escapeHtml(secondaryLabel)}</span>` : ""}
       <span class="task-row__arrow">${svgIcon("chevron-right")}</span>
     </button>
-  `).join("");
+  `;
+  }).join("");
 };
 
 const renderActivities = () => {
@@ -1188,12 +1174,6 @@ const renderActivities = () => {
       title: `Treino publicado para ${workout.owner}`,
       detail: `${workout.title} - ${formatUpdatedAt(workout.updatedAt)}`,
       time: workout.updatedAt
-    })),
-    ...students.map((student) => ({
-      icon: "users",
-      title: `Aluno salvo: ${student.name}`,
-      detail: `${student.status} - ${formatUpdatedAt(student.updatedAt)}`,
-      time: student.updatedAt
     }))
   ]
     .sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0))
@@ -1213,28 +1193,13 @@ const renderActivities = () => {
 };
 
 const renderDashboard = () => {
-  const activeStudents = students.filter((student) => student.status !== "Inadimplente").length;
   const isEmpty = students.length === 0;
-  const pendingCount = (isEmpty ? 1 : 0)
-    + students.filter((student) => !getPublishedWorkoutForStudent(student)).length
-    + students.filter((student) => student.inviteStatus !== "accepted").length
-    + students.filter((student) => student.status === "Aguardando check-in").length
-    + students.filter((student) => student.status === "Inadimplente").length;
   const isOnline = dataStatus === "Online";
   const isSyncing = dataStatus === "Sincronizando";
-  setText("[data-kpi-students]", activeStudents);
-  setText("[data-kpi-workouts]", workouts.length);
-  setText("[data-hero-pending]", pendingCount);
-  setText("[data-dashboard-headline]", isEmpty
-    ? "Comece pelo primeiro aluno."
-    : pendingCount
-    ? `${pendingCount} ${pendingCount === 1 ? "item para resolver" : "itens para resolver"}.`
-    : "Tudo em dia.");
+  setText("[data-dashboard-headline]", isEmpty ? "Comece pelo primeiro aluno" : "Situações atuais");
   setText("[data-dashboard-summary]", isEmpty
-    ? "Cadastre o aluno e publique o primeiro treino."
-    : pendingCount
-      ? "Abra uma prioridade abaixo para continuar."
-      : "Sem pendências no momento.");
+    ? "Cadastre o aluno para iniciar o acompanhamento."
+    : `${students.length} ${students.length === 1 ? "aluno" : "alunos"} · ${workouts.length} ${workouts.length === 1 ? "treino publicado" : "treinos publicados"}`);
   setText("[data-sync-chip]", isOnline ? "Online" : isSyncing ? "Sincronizando" : "Local");
   setText("[data-sync-title]", isOnline ? "Sincronizado" : isSyncing ? "Sincronizando" : "Offline");
   setText("[data-sync-detail]", isOnline
@@ -1243,7 +1208,8 @@ const renderDashboard = () => {
       ? "Atualizando dados..."
       : "Conecte-se para enviar alterações.");
 
-  const syncStatus = document.querySelector("[data-sync-chip]")?.closest(".sync-status");
+  const syncStatus = document.querySelector("[data-sync-notice]");
+  syncStatus?.toggleAttribute("hidden", isOnline);
   syncStatus?.classList.toggle("is-online", isOnline);
   syncStatus?.classList.toggle("is-syncing", isSyncing);
   renderTasks();
@@ -1456,13 +1422,13 @@ const renderStudentSessionPanel = () => {
 
   target.innerHTML = `
     <div class="student-session-panel__head">
-      <div>
-        <span class="eyebrow">Aluno selecionado</span>
+      <div class="student-session-panel__title">
+        <button class="button button--quiet" type="button" data-student-session-close>${svgIcon("chevron-left")} Voltar para alunos</button>
+        <span class="eyebrow">Acompanhamento</span>
         <h2 id="student-session-title">${escapeHtml(selectedStudent.name)}</h2>
       </div>
       <div class="student-session-panel__actions">
         <button class="button button--quiet" type="button" data-refresh-sessions>Atualizar</button>
-        <button class="icon-button student-session-panel__close" type="button" data-student-session-close aria-label="Fechar acompanhamento">×</button>
       </div>
     </div>
     <div class="student-session-panel__metrics">
@@ -1484,10 +1450,16 @@ const renderStudents = () => {
     selectedStudentId = "";
   }
   const query = normalizeSearch(studentSearchQuery);
-  const visibleStudents = query
-    ? students.filter((student) => normalizeSearch([student.name, student.email, student.goal, student.status].join(" ")).includes(query))
-    : students;
-  setText("[data-student-count]", query
+  const visibleStudents = students.filter((student) => {
+    const matchesSearch = !query
+      || normalizeSearch([student.name, student.email, student.goal, student.status].join(" ")).includes(query);
+    const matchesFilter = studentFilter === "all"
+      || (studentFilter === "without-workout" && !getPublishedWorkoutForStudent(student))
+      || (studentFilter === "invite-pending" && student.inviteStatus !== "accepted" && !isInviteExpired(student))
+      || (studentFilter === "invite-expired" && isInviteExpired(student));
+    return matchesSearch && matchesFilter;
+  });
+  setText("[data-student-count]", query || studentFilter !== "all"
     ? `${visibleStudents.length} de ${students.length}`
     : `${students.length} ${students.length === 1 ? "cadastrado" : "cadastrados"}`);
   if (!target) {
@@ -1497,7 +1469,7 @@ const renderStudents = () => {
     return;
   }
   if (!students.length) {
-    target.innerHTML = `<article class="empty-state card"><strong>Nenhum aluno cadastrado.</strong><small>Toque em Novo aluno para começar.</small></article>`;
+    target.innerHTML = `<article class="empty-state empty-state--action"><strong>Nenhum aluno cadastrado</strong><small>Adicione o primeiro aluno para começar.</small><button class="button" type="button" data-toggle-student-form>Novo aluno</button></article>`;
     renderStudentOptions();
     renderWorkoutPreview();
     renderStudentSessionPanel();
@@ -1505,16 +1477,15 @@ const renderStudents = () => {
   }
 
   if (!visibleStudents.length) {
-    target.innerHTML = `<article class="empty-state card"><strong>Nenhum aluno encontrado.</strong><small>Tente outro nome, email ou objetivo.</small></article>`;
+    target.innerHTML = `<article class="empty-state"><strong>Nenhum aluno encontrado</strong><small>Ajuste a busca ou o filtro selecionado.</small></article>`;
     renderStudentOptions();
     renderWorkoutPreview();
     renderStudentSessionPanel();
     return;
   }
 
-  target.innerHTML = visibleStudents.map((student) => {
+  const rows = visibleStudents.map((student) => {
     const publishedWorkout = getPublishedWorkoutForStudent(student);
-    const actionLabel = publishedWorkout ? "Editar treino publicado" : "Criar primeiro treino";
     const workoutLabel = publishedWorkout
       ? `Treino ${publishedWorkout.code} - ${publishedWorkout.title}`
       : "Sem treino publicado";
@@ -1528,34 +1499,42 @@ const renderStudents = () => {
       : isInviteExpired(student) ? "expired" : "pending";
     const accessLabel = accessState === "active" ? "Acesso ativo" : accessState === "expired" ? "Convite expirado" : "Convite pendente";
     const accessEmail = student.email || "Sem email de acesso";
-    const isSelected = selectedStudentId === student.id;
-    const followupButtonClass = publishedWorkout ? "button" : "button button--quiet";
-    const workoutButtonClass = publishedWorkout ? "button button--quiet" : "button";
+    const statusIsException = student.status && student.status !== "Ativo";
     return `
-      <article class="student-card card${isSelected ? " is-selected" : ""}" data-student-card="${escapeHtml(student.id)}">
-        <span class="avatar">${escapeHtml(student.initials)}</span>
-        <div class="student-card__main">
-          <div>
-            <h2>${escapeHtml(student.name)}</h2>
-            <p>${escapeHtml(student.goal)}</p>
-            <small class="student-card__access">${escapeHtml(accessEmail)}</small>
-          </div>
-          <div class="student-card__states">
-            <span class="chip">${escapeHtml(student.status)}</span>
-            <span class="student-card__access-state" data-access-state="${accessState}">${escapeHtml(accessLabel)}</span>
-          </div>
+      <article class="entity-row student-row" data-student-card="${escapeHtml(student.id)}">
+        <div class="entity-row__identity">
+          <span class="avatar">${escapeHtml(student.initials)}</span>
+          <div><h2>${escapeHtml(student.name)}</h2><small>${escapeHtml(accessEmail)}</small></div>
         </div>
-        <div class="student-card__meta">
-          <span>${escapeHtml(workoutLabel)}</span>
-          <span>${escapeHtml(followupLabel)}</span>
+        <div class="entity-row__field"><small>Objetivo</small><span>${escapeHtml(student.goal)}</span></div>
+        <div class="entity-row__field"><small>Treino</small><span>${escapeHtml(workoutLabel)}</span></div>
+        <div class="entity-row__field entity-row__states">
+          <small>Status e acesso</small>
+          <span class="status-text${statusIsException ? " is-exception" : ""}">${escapeHtml(student.status)}</span>
+          <span class="status-text${accessState === "active" ? "" : " is-exception"}" data-access-state="${accessState}">${escapeHtml(accessLabel)}</span>
         </div>
-        <div class="student-card__actions">
-          <button class="${followupButtonClass}" type="button" data-student-detail="${escapeHtml(student.id)}" aria-pressed="${String(isSelected)}">Acompanhar</button>
-          <button class="${workoutButtonClass}" type="button" data-student-action="${escapeHtml(student.id)}">${escapeHtml(actionLabel)}</button>
+        <div class="entity-row__field"><small>Última sessão</small><span>${escapeHtml(followupLabel)}</span></div>
+        <div class="entity-row__actions">
+          ${publishedWorkout
+            ? `<button class="button" type="button" data-student-detail="${escapeHtml(student.id)}">Acompanhar</button>`
+            : `<button class="button" type="button" data-student-action="${escapeHtml(student.id)}">Criar treino</button>`}
+          <details class="action-menu entity-menu">
+            <summary class="icon-button" aria-label="Mais ações para ${escapeHtml(student.name)}">•••</summary>
+            <div class="action-menu__popover">
+              <button type="button" data-student-invite="${escapeHtml(student.id)}">Enviar convite</button>
+              ${publishedWorkout ? `<button type="button" data-student-action="${escapeHtml(student.id)}">Editar treino</button>` : ""}
+            </div>
+          </details>
         </div>
       </article>
     `;
   }).join("");
+  target.innerHTML = `
+    <div class="entity-list__header" aria-hidden="true">
+      <span>Aluno</span><span>Objetivo</span><span>Treino</span><span>Status e acesso</span><span>Última sessão</span><span>Ações</span>
+    </div>
+    ${rows}
+  `;
   renderStudentOptions();
   renderWorkoutPreview();
   renderStudentSessionPanel();
@@ -1665,56 +1644,63 @@ const isValidHttpsUrl = (value) => {
 const renderWorkouts = () => {
   const target = document.querySelector("[data-workout-list]");
   const query = normalizeSearch(workoutSearchQuery);
-  const visibleWorkouts = query
-    ? workouts.filter((workout) => normalizeSearch([workout.title, workout.owner, workout.focus, getWorkoutStage(workout).label].join(" ")).includes(query))
-    : workouts;
-  setText("[data-workout-count]", query
+  const visibleWorkouts = workouts.filter((workout) => {
+    const stage = getWorkoutStage(workout);
+    const matchesSearch = !query
+      || normalizeSearch([workout.title, workout.owner, workout.focus, stage.label].join(" ")).includes(query);
+    const matchesFilter = workoutFilter === "all"
+      || (workoutFilter === "active" && stage.label === "Ativo")
+      || (workoutFilter === "scheduled" && stage.label === "Agendado");
+    return matchesSearch && matchesFilter;
+  });
+  setText("[data-workout-count]", query || workoutFilter !== "all"
     ? `${visibleWorkouts.length} de ${workouts.length}`
     : `${workouts.length} ${workouts.length === 1 ? "publicado" : "publicados"}`);
   if (!target) return;
   if (!workouts.length) {
-    target.innerHTML = `<article class="empty-state card"><strong>Nenhum treino publicado.</strong><small>Toque em Novo treino para começar.</small></article>`;
+    target.innerHTML = `<article class="empty-state empty-state--action"><strong>Nenhum treino publicado</strong><small>Crie o primeiro treino para um aluno cadastrado.</small><button class="button" type="button" data-open-workout-form>Novo treino</button></article>`;
     return;
   }
 
   if (!visibleWorkouts.length) {
-    target.innerHTML = `<article class="empty-state card"><strong>Nenhum treino encontrado.</strong><small>Tente buscar pelo aluno ou nome do treino.</small></article>`;
+    target.innerHTML = `<article class="empty-state"><strong>Nenhum treino encontrado</strong><small>Ajuste a busca ou o filtro selecionado.</small></article>`;
     return;
   }
 
-  target.innerHTML = visibleWorkouts.map((workout) => {
+  const rows = visibleWorkouts.map((workout) => {
     const blocks = getWorkoutBlocks(workout);
-    const blockPreview = blocks.slice(0, 3).join(" · ");
-    const extraBlocks = blocks.length > 3 ? ` · +${blocks.length - 3}` : "";
     const exerciseCount = (workout.exercises || []).length;
     const totalSets = (workout.exercises || []).reduce((sum, exercise) => sum + parseSets(exercise.prescription), 0);
     const stage = getWorkoutStage(workout);
     const syncLabel = getWorkoutSyncLabel(workout);
     return `
-      <article class="workout-card card workout-card--published">
-        <span class="surface-icon">${svgIcon("dumbbell")}</span>
-        <div>
-          <div class="workout-card__meta-line">
-            <span class="eyebrow">${escapeHtml(workout.owner || "Aluno")}</span>
-            <span class="chip">${escapeHtml(stage.label)}</span>
-            <span class="chip">${escapeHtml(syncLabel)}</span>
-          </div>
-          <h2>Treino ${escapeHtml(workout.code)} - ${escapeHtml(workout.title)}</h2>
-          <p class="workout-card__exercise-preview">${escapeHtml(blockPreview || "Exercícios não informados")}${escapeHtml(extraBlocks)}</p>
-          <div class="workout-card__stats" aria-label="Resumo do treino">
-            <span><strong>${exerciseCount}</strong> exercícios</span>
-            <span><strong>${totalSets}</strong> séries</span>
-            <span><strong>${escapeHtml(workout.estimatedMinutes || 0)}</strong> min</span>
-          </div>
-          <small class="workout-card__timing">${escapeHtml(stage.detail)}</small>
+      <article class="entity-row workout-row">
+        <div class="entity-row__identity">
+          <span class="surface-icon">${svgIcon("dumbbell")}</span>
+          <div><h2>Treino ${escapeHtml(workout.code)} - ${escapeHtml(workout.title)}</h2><small>${escapeHtml(workout.focus || blocks[0] || "Treino")}</small></div>
         </div>
-        <div class="workout-card__actions">
-          <button class="button button--quiet" type="button" aria-label="Editar ${escapeHtml(workout.title)}" data-workout-action="${escapeHtml(workout.id)}">Editar</button>
-          <button class="button button--quiet" type="button" aria-label="Arquivar ${escapeHtml(workout.title)}" data-workout-archive="${escapeHtml(workout.id)}">Arquivar</button>
+        <div class="entity-row__field"><small>Aluno</small><span>${escapeHtml(workout.owner || "Aluno")}</span></div>
+        <div class="entity-row__field"><small>Estágio</small><span class="status-text">${escapeHtml(stage.label)}</span><span>${escapeHtml(stage.detail)}</span></div>
+        <div class="entity-row__field"><small>Resumo</small><span>${exerciseCount} exercícios · ${totalSets} séries · ${escapeHtml(workout.estimatedMinutes || 0)} min</span></div>
+        <div class="entity-row__field"><small>Atualização</small><span>${escapeHtml(formatUpdatedAt(workout.updatedAt))}</span><span class="status-text${syncLabel === "Publicado" ? "" : " is-exception"}">${escapeHtml(syncLabel)}</span></div>
+        <div class="entity-row__actions">
+          <button class="button" type="button" aria-label="Editar ${escapeHtml(workout.title)}" data-workout-action="${escapeHtml(workout.id)}">Editar</button>
+          <details class="action-menu entity-menu">
+            <summary class="icon-button" aria-label="Mais ações para ${escapeHtml(workout.title)}">•••</summary>
+            <div class="action-menu__popover action-menu__popover--end">
+              <button class="is-danger" type="button" data-workout-archive="${escapeHtml(workout.id)}">Arquivar</button>
+            </div>
+          </details>
         </div>
       </article>
     `;
   }).join("");
+  target.innerHTML = `
+    <div class="entity-list__header entity-list__header--workouts" aria-hidden="true">
+      <span>Treino</span><span>Aluno</span><span>Estágio</span><span>Resumo</span><span>Atualização</span><span>Ações</span>
+    </div>
+    ${rows}
+  `;
 };
 
 const applyTheme = (overrides = {}) => {
@@ -1772,12 +1758,18 @@ jumpButtons.forEach((button) => button.addEventListener("click", () => {
   if (button.hasAttribute("data-focus-workout-form")) focusWorkoutForm();
 }));
 
-document.querySelector("[data-toggle-student-form]")?.addEventListener("click", () => setStudentFormOpen(true));
 document.querySelector("[data-close-student-form]")?.addEventListener("click", () => setStudentFormOpen(false, { focus: false }));
-document.querySelector("[data-open-workout-form]")?.addEventListener("click", () => {
-  resetWorkoutFormMode({ resetForm: true });
-  focusWorkoutForm();
+document.querySelector("[data-open-invite-dialog]")?.addEventListener("click", () => {
+  document.querySelector(".page-actions-menu")?.removeAttribute("open");
+  renderInviteTools();
+  if (!inviteDialog?.open) inviteDialog?.showModal();
 });
+document.querySelector("[data-close-invite-dialog]")?.addEventListener("click", () => inviteDialog?.close());
+document.querySelector("[data-open-import-dialog]")?.addEventListener("click", () => {
+  document.querySelector(".page-actions-menu")?.removeAttribute("open");
+  if (!importDialog?.open) importDialog?.showModal();
+});
+document.querySelector("[data-close-import-dialog]")?.addEventListener("click", () => importDialog?.close());
 document.querySelector("[data-close-workout-form]")?.addEventListener("click", () => {
   resetWorkoutFormMode({ resetForm: true });
   setWorkoutBuilderOpen(false, { focus: false });
@@ -1788,8 +1780,18 @@ studentSearchInput?.addEventListener("input", () => {
   renderStudents();
 });
 
+studentFilterInput?.addEventListener("change", () => {
+  studentFilter = studentFilterInput.value;
+  renderStudents();
+});
+
 workoutSearchInput?.addEventListener("input", () => {
   workoutSearchQuery = workoutSearchInput.value;
+  renderWorkouts();
+});
+
+workoutFilterInput?.addEventListener("change", () => {
+  workoutFilter = workoutFilterInput.value;
   renderWorkouts();
 });
 
@@ -2099,14 +2101,6 @@ document.querySelector("[data-clear-brand-assets]")?.addEventListener("click", (
   setThemeStatus("Logo e foto locais removidos deste navegador.", "warning");
   showToast("Logo e foto removidos.");
 });
-saveThemeButton?.addEventListener("click", () => {
-  if (!updateContrastStatus()) {
-    setThemeStatus("Ajuste o contraste antes de salvar o tema.", "warning");
-    showToast("Contraste insuficiente para salvar.");
-    return;
-  }
-  saveThemeNow();
-});
 document.querySelector("[data-reset-theme]")?.addEventListener("click", async () => {
   Platform.storage.set(LOCAL_BRAND_ASSETS_KEY, {});
   if (logoInput) logoInput.value = "";
@@ -2175,6 +2169,19 @@ coachProfileForm?.addEventListener("submit", async (event) => {
 });
 
 document.addEventListener("click", async (event) => {
+  const addStudentButton = event.target.closest("[data-toggle-student-form]");
+  if (addStudentButton) {
+    setStudentFormOpen(true);
+    return;
+  }
+
+  const openWorkoutButton = event.target.closest("[data-open-workout-form]");
+  if (openWorkoutButton) {
+    resetWorkoutFormMode({ resetForm: true });
+    focusWorkoutForm();
+    return;
+  }
+
   const taskButton = event.target.closest("[data-task-go]");
   if (taskButton) {
     const action = taskButton.dataset.taskAction;
@@ -2196,13 +2203,9 @@ document.addEventListener("click", async (event) => {
     }
 
     if (action === "invite-student" && student) {
-      selectedStudentId = student.id;
-      renderStudents();
-      const tools = document.querySelector(".management-disclosure");
-      if (tools) tools.open = true;
       if (inviteStudentOptions) inviteStudentOptions.value = student.id;
       renderInviteTools();
-      tools?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (!inviteDialog?.open) inviteDialog?.showModal();
       return;
     }
 
@@ -2216,7 +2219,10 @@ document.addEventListener("click", async (event) => {
 
   const studentSessionClose = event.target.closest("[data-student-session-close]");
   if (studentSessionClose) {
+    selectedStudentId = "";
     setStudentSessionOpen(false, { focus: false });
+    renderStudents();
+    window.setTimeout(() => studentSearchInput?.focus(), 80);
     return;
   }
 
@@ -2263,6 +2269,7 @@ document.addEventListener("click", async (event) => {
   if (workoutArchive) {
     const workout = workouts.find((item) => item.id === workoutArchive.dataset.workoutArchive);
     if (!workout) return;
+    if (!window.confirm(`Arquivar Treino ${workout.code} - ${workout.title}? O histórico do aluno será preservado.`)) return;
     workoutArchive.disabled = true;
     setWorkoutSyncStatus(`Arquivando Treino ${workout.code}...`, "");
     const result = await workoutRepository.archivePublishedWorkout(workout.id);
@@ -2277,18 +2284,6 @@ document.addEventListener("click", async (event) => {
     showToast("Treino arquivado.");
   }
 });
-
-studentSessionBackdrop?.addEventListener("click", () => setStudentSessionOpen(false, { focus: false }));
-
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && studentSessionOpen) setStudentSessionOpen(false, { focus: false });
-});
-
-if (compactProfessorQuery.addEventListener) {
-  compactProfessorQuery.addEventListener("change", syncStudentSessionPresentation);
-} else {
-  compactProfessorQuery.addListener?.(syncStudentSessionPresentation);
-}
 
 cancelWorkoutEditButton?.addEventListener("click", () => {
   resetWorkoutFormMode({ resetForm: true });
@@ -2473,6 +2468,15 @@ const startAuthenticatedPanel = async () => {
       email: session.user.email,
       message: "Sua conta está autenticada, mas o perfil de professor não pôde ser concluído. Recarregue a página; se persistir, informe o suporte."
     });
+    return;
+  }
+
+  const studentInvite = event.target.closest("[data-student-invite]");
+  if (studentInvite) {
+    if (inviteStudentOptions) inviteStudentOptions.value = studentInvite.dataset.studentInvite;
+    renderInviteTools();
+    studentInvite.closest("details")?.removeAttribute("open");
+    if (!inviteDialog?.open) inviteDialog?.showModal();
     return;
   }
 

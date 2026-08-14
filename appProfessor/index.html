@@ -16,7 +16,7 @@
     <link rel="preload" as="image" type="image/png" href="../appAluno/assets/icons/startup-logo-512.png" fetchpriority="high" />
     <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260809-7" />
     <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260811-9" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260812-3" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260813-1" />
     <script type="module" src="js/app.js?v=build-20260813-1"></script>
   </head>
   <body>
@@ -104,35 +104,26 @@
       </aside>
 
       <section class="page is-active" data-page="dashboard" aria-labelledby="dashboard-title">
-        <div class="hero card">
+        <header class="page-heading dashboard-heading">
           <div>
-            <span class="eyebrow">Operação de hoje</span>
-            <h2 id="dashboard-title" data-dashboard-headline>Cadastre o primeiro aluno para iniciar.</h2>
-            <p data-dashboard-summary>Depois publique um treino para liberar o app do aluno.</p>
+            <span class="eyebrow">Visão geral</span>
+            <h2 id="dashboard-title" data-dashboard-headline>Situações atuais</h2>
+            <p data-dashboard-summary>Carregando alunos e treinos.</p>
           </div>
-          <div class="hero__stack">
-            <strong data-hero-pending>0</strong>
-            <small>pendências</small>
-          </div>
-        </div>
+        </header>
 
-        <section class="kpi-grid" aria-label="Indicadores principais">
-          <article class="kpi card"><span class="surface-icon" data-icon="users"></span><div><strong data-kpi-students>0</strong><small>alunos ativos</small></div></article>
-          <article class="kpi card"><span class="surface-icon" data-icon="dumbbell"></span><div><strong data-kpi-workouts>0</strong><small>treinos cadastrados</small></div></article>
-        </section>
-
-        <div class="sync-status">
+        <aside class="sync-status" data-sync-notice role="status" hidden>
           <span class="sync-status__dot" aria-hidden="true"></span>
           <div>
             <strong data-sync-title>Sincronizando</strong>
             <small data-sync-detail>Carregando dados.</small>
           </div>
           <span class="chip" data-sync-chip>Carregando</span>
-        </div>
+        </aside>
 
         <div class="dashboard-grid">
           <article class="card panel">
-            <div class="section-title section-title--inline"><h2>Para fazer</h2></div>
+            <div class="section-title section-title--inline"><h2>Situações atuais</h2></div>
             <section class="task-list" data-task-list></section>
           </article>
           <article class="card panel">
@@ -143,54 +134,70 @@
       </section>
 
       <section class="page" data-page="students" aria-label="Alunos e acompanhamento">
-        <div class="page-toolbar">
-          <div class="page-toolbar__summary"><h2 class="sr-only">Alunos</h2><span data-student-count>0 cadastrados</span></div>
-          <div class="page-toolbar__actions">
-            <input class="list-search" type="search" placeholder="Buscar aluno" aria-label="Buscar aluno" autocomplete="off" data-student-search />
-            <button class="button" type="button" data-toggle-student-form>Novo aluno</button>
+        <div data-student-list-view>
+          <div class="page-toolbar">
+            <div class="page-toolbar__summary"><h2 class="sr-only">Alunos</h2><span data-student-count>0 cadastrados</span></div>
+            <div class="page-toolbar__actions">
+              <input class="list-search" type="search" placeholder="Buscar aluno" aria-label="Buscar aluno" autocomplete="off" data-student-search />
+              <select class="list-filter" aria-label="Filtrar alunos" data-student-filter>
+                <option value="all">Todos</option>
+                <option value="without-workout">Sem treino</option>
+                <option value="invite-pending">Convite pendente</option>
+                <option value="invite-expired">Convite expirado</option>
+              </select>
+              <details class="action-menu page-actions-menu">
+                <summary class="button button--quiet">Mais ações</summary>
+                <div class="action-menu__popover">
+                  <button type="button" data-open-invite-dialog>Enviar convite</button>
+                  <button type="button" data-open-import-dialog>Importar CSV</button>
+                </div>
+              </details>
+              <button class="button" type="button" data-toggle-student-form>Novo aluno</button>
+            </div>
           </div>
+          <section class="student-list entity-list" data-student-list aria-label="Lista de alunos"></section>
         </div>
 
-        <section class="student-list" data-student-list aria-label="Lista de alunos"></section>
-        <section class="student-session-panel card" data-student-session-panel aria-label="Acompanhamento do aluno" hidden>
+        <section class="student-session-panel" data-student-session-panel aria-label="Acompanhamento do aluno" hidden>
           <article class="empty-state">
             <strong>Selecione um aluno</strong>
             <small>Veja treinos concluídos, cargas e feedback.</small>
           </article>
         </section>
 
-        <form class="quick-form quick-form--create card" data-student-form data-student-form-panel hidden>
-          <div class="form-heading">
-            <div><span class="eyebrow">Cadastro</span><h2>Novo aluno</h2></div>
-            <button class="icon-button" type="button" data-close-student-form aria-label="Fechar cadastro">×</button>
-          </div>
-          <label>Nome <input name="name" placeholder="Nome completo do aluno" autocomplete="name" required /></label>
-          <label>Email de acesso (opcional) <input type="email" name="email" placeholder="deixe vazio para convidar por link" autocomplete="email" /></label>
-          <label>Objetivo
-            <select name="goal">
-              <option>Hipertrofia</option>
-              <option>Emagrecimento</option>
-              <option>Condicionamento</option>
-              <option>Corrida</option>
-            </select>
-          </label>
-          <label>Status
-            <select name="status">
-              <option>Ativo</option>
-              <option>Aguardando check-in</option>
-              <option>Inadimplente</option>
-            </select>
-          </label>
-          <button class="button" type="submit">Salvar aluno</button>
-          <p class="form-status" data-student-sync-status>Mesmo email atualiza este vínculo; outros personais não são afetados.</p>
-        </form>
+        <dialog class="app-dialog" data-student-form-panel aria-labelledby="new-student-title">
+          <form class="quick-form dialog-form" data-student-form>
+            <div class="form-heading">
+              <div><span class="eyebrow">Cadastro</span><h2 id="new-student-title">Novo aluno</h2></div>
+              <button class="icon-button" type="button" data-close-student-form aria-label="Fechar cadastro">×</button>
+            </div>
+            <label>Nome <input name="name" placeholder="Nome completo do aluno" autocomplete="name" required /></label>
+            <label>Email de acesso (opcional) <input type="email" name="email" placeholder="deixe vazio para convidar por link" autocomplete="email" /></label>
+            <label>Objetivo
+              <select name="goal">
+                <option>Hipertrofia</option>
+                <option>Emagrecimento</option>
+                <option>Condicionamento</option>
+                <option>Corrida</option>
+              </select>
+            </label>
+            <label>Status
+              <select name="status">
+                <option>Ativo</option>
+                <option>Aguardando check-in</option>
+                <option>Inadimplente</option>
+              </select>
+            </label>
+            <button class="button" type="submit">Salvar aluno</button>
+            <p class="form-status" data-student-sync-status>Mesmo email atualiza este vínculo; outros personais não são afetados.</p>
+          </form>
+        </dialog>
 
-        <details class="management-disclosure">
-          <summary>Convites e importação</summary>
-          <section class="student-tools-grid">
-          <article class="student-invite card">
+        <dialog class="app-dialog" data-invite-dialog aria-labelledby="invite-dialog-title">
+          <article class="student-invite dialog-form">
+            <button class="icon-button dialog-form__close" type="button" data-close-invite-dialog aria-label="Fechar convite">×</button>
             <span class="eyebrow">Convite rápido</span>
-            <h2>Enviar acesso ao aluno</h2>
+            <h2 id="invite-dialog-title">Enviar acesso ao aluno</h2>
             <p>Envie o acesso em poucos toques.</p>
             <label>Aluno
               <select data-invite-student-options></select>
@@ -202,10 +209,13 @@
             </div>
             <p class="form-status" data-invite-status>Cadastre um aluno para gerar o primeiro convite.</p>
           </article>
+        </dialog>
 
-          <form class="student-import card" data-student-import-form>
+        <dialog class="app-dialog" data-import-dialog aria-labelledby="import-dialog-title">
+          <form class="student-import dialog-form" data-student-import-form>
+            <button class="icon-button dialog-form__close" type="button" data-close-import-dialog aria-label="Fechar importação">×</button>
             <span class="eyebrow">Importação simples</span>
-            <h2>Importar alunos por CSV</h2>
+            <h2 id="import-dialog-title">Importar alunos por CSV</h2>
             <p>Use CSV. Nome é obrigatório; os demais campos são opcionais.</p>
             <label class="file-picker">Arquivo CSV
               <input type="file" accept=".csv,text/csv" data-student-import-input />
@@ -214,8 +224,7 @@
             <button class="button button--block" type="submit">Importar alunos</button>
             <p class="form-status" data-student-import-status>Formato: nome,email,objetivo,status</p>
           </form>
-          </section>
-        </details>
+        </dialog>
       </section>
 
       <section class="page" data-page="workouts" aria-label="Treinos, modelos e ajustes">
@@ -223,10 +232,15 @@
           <div class="page-toolbar__summary"><h2 class="sr-only">Treinos</h2><span data-workout-count>0 publicados</span></div>
           <div class="page-toolbar__actions">
             <input class="list-search" type="search" placeholder="Buscar treino" aria-label="Buscar treino" autocomplete="off" data-workout-search />
+            <select class="list-filter" aria-label="Filtrar treinos" data-workout-filter>
+              <option value="all">Todos</option>
+              <option value="active">Ativos</option>
+              <option value="scheduled">Agendados</option>
+            </select>
             <button class="button" type="button" data-open-workout-form>Novo treino</button>
           </div>
         </div>
-        <section class="workout-list" data-workout-list aria-label="Treinos cadastrados"></section>
+        <section class="workout-list entity-list" data-workout-list aria-label="Treinos cadastrados"></section>
 
         <div class="workout-builder card" id="add-workout" data-workout-builder hidden>
           <button class="icon-button workout-builder__close" type="button" data-close-workout-form aria-label="Fechar editor de treino">×</button>
@@ -382,7 +396,6 @@
             </details>
 
             <p class="form-status" data-theme-status></p>
-            <button class="button button--block" type="button" data-save-theme>Publicar aparência</button>
             <button class="button button--quiet button--block reset-theme-button" type="button" data-reset-theme>Restaurar padrão FlowFit</button>
           </form>
 
@@ -486,7 +499,6 @@
       </section>
     </main>
 
-    <div class="student-session-backdrop" data-student-session-backdrop hidden></div>
     <div class="toast" role="status" aria-live="polite" data-toast></div>
     <script>
       (() => {
