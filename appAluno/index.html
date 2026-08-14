@@ -16,8 +16,8 @@
     <link rel="preload" as="image" type="image/png" href="assets/icons/startup-logo-512.png" fetchpriority="high" />
     <link rel="stylesheet" href="css/tokens.css?v=build-20260809-7" />
     <link rel="stylesheet" href="css/components.css?v=build-20260814-1" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260814-1" />
-    <script type="module" src="js/app.js?v=build-20260814-1"></script>
+    <link rel="stylesheet" href="css/app.css?v=build-20260814-2" />
+    <script type="module" src="js/app.js?v=build-20260814-2"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title" aria-busy="true">
@@ -269,19 +269,23 @@
       </header>
 
       <button class="runner-progress card" type="button" data-open-exercise-sheet aria-haspopup="dialog">
-        <span><strong data-runner-progress-title>Treino</strong><small data-runner-progress-copy>0/0 séries</small></span>
-        <span class="progress-track" role="progressbar" aria-label="Progresso da sessão" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-runner-progress-track><span data-runner-progress style="--progress: 0%"></span></span>
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+        <span class="runner-progress__summary">
+          <span><strong data-runner-progress-title>Exercício 1 de 1</strong><small data-runner-progress-copy>0 de 0 séries concluídas</small></span>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+        </span>
+        <span class="runner-exercise-track" data-runner-exercise-track aria-hidden="true"></span>
+        <span class="progress-track" role="progressbar" aria-label="Progresso geral das séries" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-runner-progress-track><span data-runner-progress style="--progress: 0%"></span></span>
       </button>
 
       <main class="runner-main">
         <section class="runner-phase runner-exercise" data-runner-phase="exercise">
           <header class="runner-exercise__head">
-            <div>
-              <span class="eyebrow" data-runner-exercise-position>Exercício 1 de 1</span>
-              <h1 id="runner-exercise-name" tabindex="-1" data-runner-exercise-name data-runner-phase-focus>Exercício</h1>
+            <span class="eyebrow" data-runner-exercise-position>Exercício 1 de 1</span>
+            <h1 id="runner-exercise-name" tabindex="-1" data-runner-exercise-name data-runner-phase-focus>Exercício</h1>
+            <div class="runner-set-progress" aria-label="Progresso das séries do exercício atual">
+              <span class="runner-set-track" data-runner-set-track aria-hidden="true"></span>
+              <span class="runner-set-badge" data-runner-set-number>Série 1 de 3</span>
             </div>
-            <span class="runner-set-badge" data-runner-set-number>Série 1 de 3</span>
           </header>
 
           <div class="runner-media" data-runner-media hidden></div>
@@ -300,12 +304,11 @@
             </details>
           </div>
 
-          <article class="previous-set" data-previous-set>
-            <span>Última vez</span>
-            <strong data-previous-set-value>Sem registro comparável</strong>
-          </article>
-
           <strong class="runner-result-title">Registrar série</strong>
+          <p class="previous-set" data-previous-set>
+            <span>Último treino</span>
+            <strong data-previous-set-value>Sem registro comparável</strong>
+          </p>
           <div class="runner-log" aria-label="Registro da série atual">
             <div class="runner-log__field" role="group" aria-labelledby="runner-load-label">
               <span class="runner-log__label" id="runner-load-label">Carga</span>
@@ -326,9 +329,15 @@
           </div>
           <p class="runner-performance" data-runner-performance hidden></p>
 
-          <div class="runner-secondary-actions">
-            <button class="text-button runner-correct" type="button" data-correct-last-set hidden>Corrigir última série</button>
-            <button class="text-button" type="button" data-report-discomfort>Senti desconforto</button>
+          <div class="runner-secondary-actions" aria-label="Ações secundárias da série">
+            <button class="runner-secondary-action runner-correct" type="button" data-correct-last-set hidden>
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8H5V4" /><path d="M5 8a8 8 0 1 1-1 8" /></svg>
+              <span>Corrigir última série</span>
+            </button>
+            <button class="runner-secondary-action" type="button" data-report-discomfort>
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v6" /><path d="M12 17h.01" /></svg>
+              <span>Senti desconforto</span>
+            </button>
           </div>
         </section>
 

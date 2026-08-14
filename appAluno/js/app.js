@@ -1328,6 +1328,45 @@ const stopRunnerAdjustHold = ({ suppressClick = false } = {}) => {
   runnerAdjustHold = null;
 };
 
+const renderRunnerExerciseTrack = (session, currentExerciseId) => {
+  const target = document.querySelector("[data-runner-exercise-track]");
+  if (!target) return;
+  const exercises = getSessionExercises(session);
+  const fragment = document.createDocumentFragment();
+  exercises.forEach((exercise, index) => {
+    const isComplete = getExerciseEntries(occurrenceId(exercise), session).length >= parseTotalSets(exercise);
+    const isCurrent = occurrenceId(exercise) === currentExerciseId && !isComplete;
+    const step = document.createElement("span");
+    step.className = `runner-exercise-step${isComplete ? " is-complete" : isCurrent ? " is-current" : ""}`;
+    const dot = document.createElement("span");
+    dot.className = "runner-exercise-step__dot";
+    step.append(dot);
+    if (index < exercises.length - 1) {
+      const line = document.createElement("span");
+      line.className = "runner-exercise-step__line";
+      step.append(line);
+    }
+    fragment.append(step);
+  });
+  target.replaceChildren(fragment);
+};
+
+const renderRunnerSetTrack = (exercise, setNumber, session = getActiveSession()) => {
+  const target = document.querySelector("[data-runner-set-track]");
+  if (!target || !exercise || !session) return;
+  const completedNumbers = new Set(
+    getExerciseEntries(occurrenceId(exercise), session).map((entry) => Number(entry.setNumber))
+  );
+  const total = parseTotalSets(exercise);
+  const fragment = document.createDocumentFragment();
+  for (let number = 1; number <= total; number += 1) {
+    const step = document.createElement("span");
+    step.className = `runner-set-step${completedNumbers.has(number) ? " is-complete" : number === setNumber ? " is-current" : ""}`;
+    fragment.append(step);
+  }
+  target.replaceChildren(fragment);
+};
+
 const renderWorkoutRunner = () => {
   const session = getActiveSession();
   if (!session) return;
@@ -1335,9 +1374,14 @@ const renderWorkoutRunner = () => {
   const done = getCompletedSessionSets(session);
   const percent = total ? Math.round((done / total) * 100) : 0;
   document.querySelector("[data-runner-workout-title]").textContent = session.workoutSnapshot?.title || "Treino";
-  document.querySelector("[data-runner-progress-title]").textContent = "Progresso geral";
   const exercises = getSessionExercises(session);
-  document.querySelector("[data-runner-progress-copy]").textContent = `${done}/${total} séries concluídas`;
+  const progressExerciseId = session.pendingExerciseId || session.currentExerciseId;
+  const progressExerciseIndex = exercises.findIndex((exercise) => occurrenceId(exercise) === progressExerciseId);
+  document.querySelector("[data-runner-progress-title]").textContent = exercises.length
+    ? `Exercício ${Math.max(0, progressExerciseIndex) + 1} de ${exercises.length}`
+    : "Nenhum exercício";
+  document.querySelector("[data-runner-progress-copy]").textContent = `${done} de ${total} séries concluídas`;
+  renderRunnerExerciseTrack(session, progressExerciseId);
   document.querySelector("[data-runner-progress]").style.setProperty("--progress", `${percent}%`);
   document.querySelector("[data-runner-progress-track]")?.setAttribute("aria-valuenow", String(percent));
   const visualPhase = {
@@ -1412,9 +1456,10 @@ const renderWorkoutRunner = () => {
   const previous = findPreviousSet(exercise, setNumber);
   const previousLogs = findPreviousExerciseLogs(exercise);
   const exerciseIndex = exercises.findIndex((item) => occurrenceId(item) === occurrenceId(exercise));
-  document.querySelector("[data-runner-exercise-position]").textContent = `Exercício ${exerciseIndex + 1}/${exercises.length}`;
+  document.querySelector("[data-runner-exercise-position]").textContent = `Exercício ${exerciseIndex + 1} de ${exercises.length}`;
   document.querySelector("[data-runner-exercise-name]").textContent = exercise.name;
-  document.querySelector("[data-runner-set-number]").textContent = `Série ${setNumber}/${parseTotalSets(exercise)}`;
+  document.querySelector("[data-runner-set-number]").textContent = `Série ${setNumber} de ${parseTotalSets(exercise)}`;
+  renderRunnerSetTrack(exercise, setNumber, session);
   document.querySelector("[data-runner-prescription]").textContent = formatRunnerPrescription(exercise.prescription);
   document.querySelector("[data-runner-rir]").textContent = `RIR ${exercise.rir}`;
   document.querySelector("[data-runner-tempo]").textContent = formatRunnerTempo(exercise.tempo);
