@@ -53,7 +53,7 @@ let runnerSwipe = null;
 let runnerAdjustHold = null;
 let suppressedRunnerAdjustButton = null;
 let suppressRunnerAdjustClickUntil = 0;
-let suppressRunnerPrimaryClickUntil = 0;
+let suppressRunnerClickUntil = 0;
 const compactWorkoutQuery = window.matchMedia("(max-width: 767px)");
 let focusedExerciseId = "";
 const emptyStudent = {
@@ -2116,6 +2116,12 @@ pauseDialog?.addEventListener("cancel", (event) => {
 });
 
 workoutRunner?.addEventListener("click", (event) => {
+  if (Date.now() >= suppressRunnerClickUntil) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}, true);
+
+workoutRunner?.addEventListener("click", (event) => {
   const session = getActiveSession();
   if (!session) return;
 
@@ -2256,10 +2262,6 @@ workoutRunner?.addEventListener("click", (event) => {
 
   const primaryButton = event.target.closest("[data-runner-primary-action]");
   if (primaryButton) {
-    if (Date.now() < suppressRunnerPrimaryClickUntil) {
-      event.preventDefault();
-      return;
-    }
     performRunnerPrimaryAction();
     return;
   }
@@ -2384,21 +2386,22 @@ workoutRunner?.addEventListener("contextmenu", (event) => {
   if (event.target.closest("[data-adjust-runner]")) event.preventDefault();
 });
 
-runnerActionBar?.addEventListener("pointerdown", (event) => {
+workoutRunner?.addEventListener("pointerdown", (event) => {
   if (!event.isPrimary || event.pointerType === "mouse") return;
   const session = getActiveSession();
   if (!session || !isRunnerPrimaryPhase(session.phase)) return;
+  if (event.target.closest("input, textarea, select, iframe, video, dialog, [contenteditable], [data-adjust-runner]")) return;
   runnerSwipe = {
     pointerId: event.pointerId,
     startX: event.clientX,
     startY: event.clientY,
     axis: "pending",
     armed: false,
-    threshold: Math.min(140, Math.max(88, runnerActionBar.clientWidth * 0.22))
+    threshold: Math.min(140, Math.max(88, workoutRunner.clientWidth * 0.22))
   };
 });
 
-runnerActionBar?.addEventListener("pointermove", (event) => {
+workoutRunner?.addEventListener("pointermove", (event) => {
   if (!runnerSwipe || event.pointerId !== runnerSwipe.pointerId) return;
   const deltaX = event.clientX - runnerSwipe.startX;
   const deltaY = event.clientY - runnerSwipe.startY;
@@ -2413,7 +2416,7 @@ runnerActionBar?.addEventListener("pointermove", (event) => {
     }
     if (horizontalDistance <= verticalDistance * 1.25) return;
     runnerSwipe.axis = "horizontal";
-    runnerActionBar.setPointerCapture?.(event.pointerId);
+    workoutRunner.setPointerCapture?.(event.pointerId);
   }
 
   if (runnerSwipe.axis !== "horizontal") return;
@@ -2433,17 +2436,18 @@ runnerActionBar?.addEventListener("pointermove", (event) => {
 
 const finishRunnerSwipe = (event) => {
   if (!runnerSwipe || event.pointerId !== runnerSwipe.pointerId) return;
+  const shouldSuppressClick = runnerSwipe.axis === "horizontal";
   const shouldPerform = runnerSwipe.axis === "horizontal" && runnerSwipe.armed;
-  if (runnerActionBar.hasPointerCapture?.(event.pointerId)) runnerActionBar.releasePointerCapture?.(event.pointerId);
+  if (workoutRunner.hasPointerCapture?.(event.pointerId)) workoutRunner.releasePointerCapture?.(event.pointerId);
   resetRunnerSwipeVisual();
+  if (shouldSuppressClick) suppressRunnerClickUntil = Date.now() + 600;
   if (shouldPerform) {
-    suppressRunnerPrimaryClickUntil = Date.now() + 600;
     performRunnerPrimaryAction();
   }
 };
 
-runnerActionBar?.addEventListener("pointerup", finishRunnerSwipe);
-runnerActionBar?.addEventListener("pointercancel", resetRunnerSwipeVisual);
+workoutRunner?.addEventListener("pointerup", finishRunnerSwipe);
+workoutRunner?.addEventListener("pointercancel", resetRunnerSwipeVisual);
 
 onboardingForm?.addEventListener("click", async (event) => {
   const oauthButton = event.target.closest("[data-oauth-provider]");
