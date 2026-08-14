@@ -1,4 +1,4 @@
-import { Platform } from "./platform.js?v=build-20260809-6";
+import { Platform } from "./platform.js?v=build-20260813-1";
 import { SessionDraftStorage } from "./session-draft-storage.js?v=build-20260811-2";
 
 const APP_STATE_KEY = "flowfit.aluno.state";

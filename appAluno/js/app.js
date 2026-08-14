@@ -1,13 +1,13 @@
-import { Platform } from "./core/platform.js?v=build-20260809-6";
-import { SESSION_PHASE, Store } from "./core/store.js?v=build-20260812-1";
-import { Theme } from "./core/theme.js?v=build-20260809-7";
+import { Platform } from "./core/platform.js?v=build-20260813-1";
+import { SESSION_PHASE, Store } from "./core/store.js?v=build-20260813-1";
+import { Theme } from "./core/theme.js?v=build-20260813-1";
 import { svgIcon } from "./core/icons.js?v=build-20260810-7";
 import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260809-7";
 import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260812-6";
-import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260812-5";
-import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260812-5";
+import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260813-1";
+import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260813-1";
 import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260812-1";
-import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260812-5";
+import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260813-1";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -1587,9 +1587,14 @@ const startAuthenticatedApp = async () => {
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
     setAuthChecking(false);
+    const requiresInvite = /student_invite_required_for_multiple_matches/i.test(
+      String(accessClaim.error?.message || "")
+    );
     setAuthStatus(
       accessToken
         ? "Este convite é inválido, expirou ou pertence a outro email. Peça um novo link ao personal."
+        : requiresInvite
+          ? "Encontramos mais de um cadastro com este email. Use o convite específico enviado pelo personal."
         : "Este email ainda não foi cadastrado por um personal. Nenhum acesso ao FlowFit foi criado.",
       "warning"
     );

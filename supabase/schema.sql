@@ -507,11 +507,17 @@ set search_path = pg_catalog, public
 as $$
 declare
   v_student public.students%rowtype;
+  v_token text := trim(coalesce(p_token, ''));
 begin
+  if v_token !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' then
+    return query select false, false, 'not-found'::text;
+    return;
+  end if;
+
   select s.*
     into v_student
     from public.students s
-   where s.invite_token::text = trim(coalesce(p_token, ''))
+   where s.invite_token::text = v_token
    limit 1;
 
   if not found then
@@ -555,7 +561,8 @@ declare
   v_token_student public.students%rowtype;
   v_profile_role text;
   v_profile_name text;
-  v_access_count integer := 0;
+  v_unclaimed_count integer := 0;
+  v_email_match_count integer := 0;
 begin
   if v_user_id is null or v_user_email = '' then
     raise exception 'student_access_requires_authenticated_email';
@@ -606,23 +613,30 @@ begin
            invite_claimed_at = coalesce(invite_claimed_at, now()),
            updated_at = now()
      where id = v_token_student.id;
+  else
+    select count(*) into v_email_match_count
+      from public.students s
+     where lower(trim(coalesce(s.email, ''))) = v_user_email;
+
+    select count(*) into v_unclaimed_count
+      from public.students s
+     where lower(trim(coalesce(s.email, ''))) = v_user_email
+       and s.student_user_id is null;
+
+    if v_unclaimed_count > 0 and v_email_match_count > 1 then
+      raise exception 'student_invite_required_for_multiple_matches';
+    end if;
+
+    update public.students
+       set student_user_id = v_user_id,
+           invite_status = 'accepted',
+           invite_claimed_at = coalesce(invite_claimed_at, now()),
+           updated_at = now()
+     where lower(trim(coalesce(email, ''))) = v_user_email
+       and student_user_id is null;
   end if;
 
-  -- Um unico login vincula todos os cadastros pendentes do mesmo email,
-  -- inclusive quando eles pertencem a personais diferentes.
-  update public.students
-     set student_user_id = v_user_id,
-         invite_status = 'accepted',
-         invite_claimed_at = coalesce(invite_claimed_at, now()),
-         updated_at = now()
-   where lower(trim(coalesce(email, ''))) = v_user_email
-     and (student_user_id is null or student_user_id = v_user_id);
-
-  select count(*) into v_access_count
-    from public.students s
-   where s.student_user_id = v_user_id;
-
-  if v_access_count = 0 then
+  if not exists (select 1 from public.students s where s.student_user_id = v_user_id) then
     raise exception 'student_access_not_authorized';
   end if;
 
