@@ -11,6 +11,7 @@ import { sessionRepository } from "./data/repositories/session-repository.js?v=b
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
+const appShell = document.querySelector(".app");
 const onboarding = document.querySelector("[data-onboarding]");
 const onboardingForm = document.querySelector("[data-onboarding-form]");
 const authSessionCheck = document.querySelector("[data-auth-session-check]");
@@ -54,6 +55,8 @@ let runnerAdjustHold = null;
 let suppressedRunnerAdjustButton = null;
 let suppressRunnerAdjustClickUntil = 0;
 let suppressRunnerClickUntil = 0;
+let appNavSwipe = null;
+let suppressAppClickUntil = 0;
 const compactWorkoutQuery = window.matchMedia("(max-width: 767px)");
 let focusedExerciseId = "";
 const emptyStudent = {
@@ -2013,6 +2016,74 @@ navItems.forEach((item) => item.addEventListener("click", (event) => {
   event.preventDefault();
   navigate(item.dataset.nav);
 }));
+
+appShell?.addEventListener("click", (event) => {
+  if (Date.now() >= suppressAppClickUntil) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}, true);
+
+appShell?.addEventListener("pointerdown", (event) => {
+  if (!event.isPrimary || event.pointerType === "mouse" || event.button > 0) return;
+  if (document.body.classList.contains("has-onboarding") || document.body.classList.contains("has-workout-runner")) return;
+  if (event.clientX <= 24 || event.clientX >= window.innerWidth - 24) return;
+  if (event.target.closest("button, a, input, textarea, select, label, summary, details, iframe, video, canvas, [contenteditable], [role='slider'], .filter-row, [data-swipe-nav-ignore]")) return;
+  const currentIndex = navItems.findIndex((item) => item.classList.contains("is-active"));
+  if (currentIndex < 0) return;
+  appNavSwipe = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    currentIndex,
+    destinationIndex: -1,
+    axis: "pending",
+    armed: false,
+    threshold: Math.min(120, Math.max(72, appShell.clientWidth * 0.2))
+  };
+});
+
+appShell?.addEventListener("pointermove", (event) => {
+  if (!appNavSwipe || event.pointerId !== appNavSwipe.pointerId) return;
+  const deltaX = event.clientX - appNavSwipe.startX;
+  const deltaY = event.clientY - appNavSwipe.startY;
+  const horizontalDistance = Math.abs(deltaX);
+  const verticalDistance = Math.abs(deltaY);
+
+  if (appNavSwipe.axis === "pending") {
+    if (Math.hypot(deltaX, deltaY) < 12) return;
+    if (verticalDistance > horizontalDistance * 1.15) {
+      appNavSwipe = null;
+      return;
+    }
+    if (horizontalDistance <= verticalDistance * 1.25) return;
+    appNavSwipe.axis = "horizontal";
+    appShell.setPointerCapture?.(event.pointerId);
+  }
+
+  if (appNavSwipe.axis !== "horizontal") return;
+  event.preventDefault();
+  const direction = deltaX < 0 ? 1 : -1;
+  const destinationIndex = appNavSwipe.currentIndex + direction;
+  const canNavigate = destinationIndex >= 0 && destinationIndex < navItems.length;
+  appNavSwipe.destinationIndex = canNavigate ? destinationIndex : -1;
+  appNavSwipe.armed = canNavigate && horizontalDistance >= appNavSwipe.threshold;
+}, { passive: false });
+
+const finishAppNavSwipe = (event) => {
+  if (!appNavSwipe || event.pointerId !== appNavSwipe.pointerId) return;
+  const shouldSuppressClick = appNavSwipe.axis === "horizontal";
+  const destinationIndex = appNavSwipe.armed ? appNavSwipe.destinationIndex : -1;
+  if (appShell.hasPointerCapture?.(event.pointerId)) appShell.releasePointerCapture?.(event.pointerId);
+  appNavSwipe = null;
+  if (shouldSuppressClick) suppressAppClickUntil = Date.now() + 500;
+  const destination = navItems[destinationIndex]?.dataset.nav;
+  if (destination) navigate(destination);
+};
+
+appShell?.addEventListener("pointerup", finishAppNavSwipe);
+appShell?.addEventListener("pointercancel", () => {
+  appNavSwipe = null;
+});
 
 document.querySelectorAll("[data-go]").forEach((item) => item.addEventListener("click", () => navigate(item.dataset.go)));
 
