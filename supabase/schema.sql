@@ -2,8 +2,13 @@
 -- Supabase: schema autenticado do FlowFit
 --
 -- Uso:
--- 1) Rode este arquivo no SQL Editor do projeto Supabase.
--- 2) Em Authentication > URL Configuration, configure:
+-- Este arquivo e um bootstrap/referencia para um banco novo. Para um projeto
+-- existente, NAO o reaplique por inteiro: use exclusivamente as migrations em
+-- supabase/migrations/ na ordem registrada pelo Supabase.
+-- Reaplicar este arquivo em um banco existente pode sobrescrever funcoes e
+-- divergir do historico incremental. Ele nao substitui uma migration.
+--
+-- Authentication > URL Configuration:
 --    - Site URL: URL do GitHub Pages
 --    - Redirect URLs: URL do GitHub Pages e subpastas appAluno/appProfessor
 --
@@ -330,7 +335,8 @@ create index if not exists workout_sessions_workout_finished_idx
 create index if not exists workout_set_logs_session_position_idx
   on public.workout_set_logs (session_id, position);
 
-drop index if exists public.workout_set_logs_session_exercise_set_idx;
+-- O indice legado workout_set_logs_session_exercise_set_idx e preservado.
+-- Nao remova indices legados durante o bootstrap de um banco existente.
 create unique index if not exists workout_set_logs_session_item_set_idx
   on public.workout_set_logs (session_id, workout_exercise_id, set_number)
   where set_number is not null and workout_exercise_id is not null;
@@ -1959,7 +1965,8 @@ begin
 end
 $$;
 
-drop index if exists public.workout_set_logs_session_exercise_set_idx;
+-- O indice legado workout_set_logs_session_exercise_set_idx e preservado.
+-- Nao remova indices legados durante o bootstrap de um banco existente.
 create unique index if not exists workout_set_logs_session_item_set_idx
   on public.workout_set_logs (session_id, workout_exercise_id, set_number)
   where set_number is not null and workout_exercise_id is not null;
@@ -2134,10 +2141,13 @@ declare
   v_volume numeric := 0;
   v_log jsonb;
   v_set_number integer;
+  v_raw_set_number text;
+  v_is_legacy_log boolean;
   v_load numeric;
   v_reps integer;
   v_log_id text;
   v_workout_exercise_id text;
+  v_legacy_exercise_id text;
   v_discomfort text;
   v_feedback_id text;
   v_effort text;
@@ -2211,14 +2221,30 @@ begin
 
   for v_log in select value from jsonb_array_elements(coalesce(p_set_logs, '[]'::jsonb))
   loop
-    v_set_number := greatest(1, coalesce(nullif(v_log ->> 'set_number', '')::integer, 1));
+    v_raw_set_number := nullif(trim(coalesce(v_log ->> 'set_number', '')), '');
+    v_is_legacy_log := v_raw_set_number is null;
+    v_set_number := greatest(1, coalesce(v_raw_set_number::integer, 1));
     v_load := greatest(0, coalesce(nullif(v_log ->> 'load_kg', '')::numeric, 0));
     v_reps := greatest(0, coalesce(nullif(v_log ->> 'reps', '')::integer, 0));
     v_log_id := trim(coalesce(v_log ->> 'id', ''));
-    v_workout_exercise_id := trim(coalesce(v_log ->> 'workout_exercise_id', v_log ->> 'exercise_id', ''));
+    v_legacy_exercise_id := trim(coalesce(v_log ->> 'exercise_id', ''));
+    v_workout_exercise_id := trim(coalesce(v_log ->> 'workout_exercise_id', v_legacy_exercise_id, ''));
     v_discomfort := lower(trim(coalesce(v_log ->> 'discomfort', 'none')));
     if v_log_id = '' or v_workout_exercise_id = '' or v_reps < 1 then
       raise exception 'invalid_individual_set_log';
+    end if;
+    if v_workout_id <> '' and not exists (
+      select 1
+        from public.workout_exercises we
+       where we.workout_id = v_workout_id
+         and (
+           we.id = v_workout_exercise_id
+           or we.id = regexp_replace(v_workout_exercise_id, '-occurrence-[0-9]+$', '')
+         )
+    ) then
+      if not (v_is_legacy_log and v_legacy_exercise_id <> '' and v_workout_exercise_id = v_legacy_exercise_id) then
+        raise exception 'exercise_not_in_workout';
+      end if;
     end if;
     if v_discomfort not in ('none', 'mild', 'pain') then
       raise exception 'invalid_set_discomfort';
@@ -2237,7 +2263,7 @@ begin
       set_kind, completed_at, discomfort, discomfort_note, created_at
     ) values (
       v_log_id, v_session_id, v_coach_id, nullif(v_workout_id, ''),
-      nullif(trim(coalesce(v_log ->> 'exercise_id', '')), ''), v_workout_exercise_id,
+      nullif(v_legacy_exercise_id, ''), v_workout_exercise_id,
       greatest(0, coalesce(nullif(v_log ->> 'position', '')::integer, 0)),
       trim(coalesce(v_log ->> 'exercise_name', 'Exercício')),
       trim(coalesce(v_log ->> 'target', 'Personalizado')),

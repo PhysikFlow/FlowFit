@@ -21,3 +21,16 @@ Os SQLs na raiz de `supabase/` (`update-student-access.sql`, `focused-workout-mo
 - mantém `SECURITY DEFINER`, `search_path` seguro e grants restritos.
 
 Antes de uma nova migration, confirme o estado remoto com consultas de catálogo e execute `node scripts/supabase-contract-smoke.mjs`.
+
+## Fase 4 — integridade das séries
+
+`migrations/20260813223339_flowfit_session_exercise_integrity.sql` substitui
+somente a definição da RPC `sync_workout_session`. Ela é aditiva e não remove
+dados nem índices. Séries individualizadas com `workout_id` precisam apontar
+para um exercício do treino; o sufixo local `-occurrence-N` é resolvido para o
+ID persistido. Payloads agregados legados sem `set_number`, e sessões antigas
+sem `workout_id`, continuam aceitos para permitir reenvio compatível.
+
+O Supabase registrou essa migration com a versão `20260813223339`. O arquivo
+local usa exatamente essa versão para evitar drift entre o histórico remoto e
+`supabase/migrations/`.
