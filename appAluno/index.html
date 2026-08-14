@@ -16,8 +16,8 @@
     <link rel="preload" as="image" type="image/png" href="assets/icons/startup-logo-512.png" fetchpriority="high" />
     <link rel="stylesheet" href="css/tokens.css?v=build-20260809-7" />
     <link rel="stylesheet" href="css/components.css?v=build-20260814-1" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260814-7" />
-    <script type="module" src="js/app.js?v=build-20260814-7"></script>
+    <link rel="stylesheet" href="css/app.css?v=build-20260814-8" />
+    <script type="module" src="js/app.js?v=build-20260814-8"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title" aria-busy="true">
@@ -224,15 +224,14 @@
         </section>
 
         <div class="section-title"><h2>Seu personal</h2></div>
-        <label class="coach-selector card" data-coach-selector-field hidden>
-          Personal ativo
-          <select data-coach-selector aria-label="Selecionar personal"></select>
-          <small>Ao trocar, o app carrega os treinos e o tema desse personal.</small>
-        </label>
-        <article class="setting-row card">
-          <span class="avatar coach-photo" data-coach-photo>PF</span>
-          <div><strong data-coach-name>Personal</strong><small>Prescrição e acompanhamento do seu treino.</small></div>
-        </article>
+        <button class="setting-row setting-row--button card coach-card" type="button" data-coach-card disabled>
+          <span class="avatar coach-photo" data-coach-photo aria-hidden="true">PF</span>
+          <span class="coach-card__copy"><strong data-coach-name>Personal</strong><small data-coach-headline>Prescrição e acompanhamento do seu treino.</small></span>
+          <span class="coach-card__affordance" data-coach-card-affordance hidden aria-hidden="true">
+            <small>Trocar</small>
+            <svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+          </span>
+        </button>
 
         <div class="section-title"><h2>Preferências</h2></div>
         <section class="profile-settings card" aria-label="Preferências e conta">
@@ -256,6 +255,21 @@
       <a href="#profile" data-nav="profile"><b aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="8" r="4" /><path d="M5 20a7 7 0 0 1 14 0" /></svg></b><span>Perfil</span></a>
       <span class="bottom-nav__indicator" data-bottom-nav-indicator hidden aria-hidden="true"></span>
     </nav>
+
+    <dialog class="coach-dialog" data-coach-dialog aria-labelledby="coach-dialog-title">
+      <section class="coach-dialog__panel">
+        <header class="coach-dialog__header">
+          <div>
+            <span class="eyebrow">Acompanhamento</span>
+            <h2 id="coach-dialog-title">Escolher personal</h2>
+            <p>Selecione qual perfil, treinos e aparência deseja acessar.</p>
+          </div>
+          <button class="icon-button" type="button" data-close-coach-dialog aria-label="Fechar seleção de personal">×</button>
+        </header>
+        <div class="coach-dialog__options" data-coach-options role="group" aria-label="Personais disponíveis"></div>
+        <p class="form-status coach-dialog__status" data-coach-dialog-status role="status" aria-live="polite"></p>
+      </section>
+    </dialog>
 
     <section class="workout-runner" data-workout-runner hidden aria-labelledby="runner-exercise-name">
       <header class="runner-topbar">

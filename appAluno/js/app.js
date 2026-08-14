@@ -40,6 +40,10 @@ const pauseDialog = document.querySelector("[data-pause-dialog]");
 const discomfortForm = document.querySelector("[data-discomfort-form]");
 const progressDisclosure = document.querySelector("[data-progress-disclosure]");
 const scheduleDisclosure = document.querySelector("[data-schedule-disclosure]");
+const coachCard = document.querySelector("[data-coach-card]");
+const coachDialog = document.querySelector("[data-coach-dialog]");
+const coachOptions = document.querySelector("[data-coach-options]");
+const coachDialogStatus = document.querySelector("[data-coach-dialog-status]");
 const accentInput = document.querySelector("[data-accent]");
 const brandInput = document.querySelector("[data-brand-input]");
 const taglineInput = document.querySelector("[data-tagline-input]");
@@ -602,6 +606,15 @@ const syncThemeControls = () => {
   syncBrandAssets();
 };
 
+const getCoachInitials = (name = "") => String(name || "Personal")
+  .trim()
+  .split(/\s+/)
+  .filter(Boolean)
+  .slice(0, 2)
+  .map((part) => part[0])
+  .join("")
+  .toUpperCase() || "PF";
+
 const setImageOrText = (target, dataUrl, fallback, alt) => {
   if (!target) return;
   if (!dataUrl) {
@@ -622,8 +635,13 @@ const syncBrandAssets = () => {
     setImageOrText(target, assets.logoDataUrl, logoFallback, "Logo local da marca");
   });
   document.querySelectorAll("[data-coach-photo]").forEach((target) => {
-    setImageOrText(target, assets.photoDataUrl, "PF", "Foto local do personal");
+    setImageOrText(target, assets.photoDataUrl, getCoachInitials(currentStudent?.coach), "Foto do personal ativo");
   });
+  const activeOptionPhoto = [...document.querySelectorAll("[data-coach-option-photo]")]
+    .find((target) => target.dataset.coachOptionPhoto === String(currentStudent?.id || ""));
+  if (activeOptionPhoto) {
+    setImageOrText(activeOptionPhoto, assets.photoDataUrl, getCoachInitials(currentStudent?.coach), `Foto de ${currentStudent?.coach || "Personal"}`);
+  }
 };
 
 const applyPublishedBrandTheme = async () => {
@@ -723,20 +741,45 @@ const renderStudent = () => {
   document.querySelector("[data-student-since]").textContent = `Aluno desde ${String(student.since || "hoje").toLowerCase()}`;
   document.querySelector("[data-student-plan]").textContent = student.plan || "Sem plano";
   document.querySelector("[data-coach-name]").textContent = student.coach;
+  document.querySelector("[data-coach-headline]").textContent = student.coachHeadline || "Prescrição e acompanhamento do seu treino.";
   document.querySelector("[data-profile-goal]").textContent = student.goal || "Não informado";
   document.querySelector("[data-profile-status]").textContent = student.status || "Não informado";
 };
 
 const renderAccessSelectors = () => {
-  const coachField = document.querySelector("[data-coach-selector-field]");
-  const coachSelect = document.querySelector("[data-coach-selector]");
-  if (coachField && coachSelect) {
-    coachField.hidden = studentAccesses.length <= 1;
-    coachSelect.innerHTML = studentAccesses.map((student) => `
-      <option value="${escapeHtml(student.id)}" ${student.id === currentStudent.id ? "selected" : ""}>
-        ${escapeHtml(student.coachName || "Personal")}
-      </option>
-    `).join("");
+  const hasMultipleCoaches = studentAccesses.length > 1;
+  const affordance = document.querySelector("[data-coach-card-affordance]");
+  if (coachCard) {
+    coachCard.disabled = !hasMultipleCoaches;
+    coachCard.setAttribute("aria-label", hasMultipleCoaches
+      ? `Personal ativo: ${currentStudent.coach}. Abrir seleção de personal.`
+      : `Personal: ${currentStudent.coach}`);
+  }
+  if (affordance) affordance.hidden = !hasMultipleCoaches;
+
+  if (coachOptions) {
+    coachOptions.innerHTML = studentAccesses.map((student) => {
+      const coachName = student.coachName || "Personal";
+      const isActive = student.id === currentStudent.id;
+      return `
+        <button class="coach-option ${isActive ? "is-active" : ""}" type="button"
+          data-select-coach="${escapeHtml(student.id)}" aria-pressed="${isActive}">
+          <span class="avatar coach-option__photo" data-coach-option-photo="${escapeHtml(student.id)}" aria-hidden="true">${escapeHtml(getCoachInitials(coachName))}</span>
+          <span class="coach-option__copy">
+            <strong>${escapeHtml(coachName)}</strong>
+            <small>${escapeHtml(student.coachHeadline || "Acompanhamento personalizado")}</small>
+          </span>
+          <span class="coach-option__check" aria-hidden="true">${isActive ? "✓" : ""}</span>
+        </button>
+      `;
+    }).join("");
+
+    const assets = Platform.storage.get(LOCAL_BRAND_ASSETS_KEY, {});
+    const activePhoto = [...coachOptions.querySelectorAll("[data-coach-option-photo]")]
+      .find((target) => target.dataset.coachOptionPhoto === String(currentStudent.id || ""));
+    if (activePhoto) {
+      setImageOrText(activePhoto, assets.photoDataUrl, getCoachInitials(currentStudent.coach), `Foto de ${currentStudent.coach}`);
+    }
   }
 
   const picker = document.querySelector("[data-workout-picker]");
@@ -1997,7 +2040,7 @@ const startAuthenticatedApp = async () => {
   navigate(location.hash.slice(1) || "home", false);
 
   if (studentResult.multiple) {
-    setAuthStatus("Acesso ativo. Use o seletor no perfil para alternar entre seus personais.", "synced");
+    setAuthStatus("Acesso ativo. No perfil, toque no card do personal para alternar.", "synced");
   } else {
     setAuthStatus("Acesso ativo. Treino carregado.", "synced");
   }
@@ -2058,7 +2101,7 @@ const startAppNavSwipe = ({ identifier, clientX, clientY, target }) => {
   if (document.body.classList.contains("has-onboarding") || document.body.classList.contains("has-workout-runner")) return;
   if (clientX <= 24 || clientX >= window.innerWidth - 24) return;
   const targetElement = target instanceof Element ? target : target?.parentElement;
-  if (targetElement?.closest("button, a, input, textarea, select, label, summary, iframe, video, canvas, [contenteditable], [role='slider'], .filter-row, [data-swipe-nav-ignore]")) return;
+  if (targetElement?.closest("button, a, input, textarea, select, label, summary, dialog, iframe, video, canvas, [contenteditable], [role='slider'], .filter-row, [data-swipe-nav-ignore]")) return;
   const currentIndex = navItems.findIndex((item) => item.classList.contains("is-active"));
   if (currentIndex < 0) return;
   appNavSwipe = {
@@ -2199,8 +2242,36 @@ document.addEventListener("input", (event) => {
   }
 });
 
-document.querySelector("[data-coach-selector]")?.addEventListener("change", (event) => {
-  switchStudentAccess(event.currentTarget.value);
+coachCard?.addEventListener("click", () => {
+  if (studentAccesses.length <= 1 || !coachDialog) return;
+  if (coachDialogStatus) coachDialogStatus.textContent = "";
+  coachDialog.showModal?.();
+});
+
+coachDialog?.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-close-coach-dialog]") || event.target === coachDialog) {
+    coachDialog.close?.();
+    return;
+  }
+
+  const option = event.target.closest("[data-select-coach]");
+  if (!option || coachDialog.getAttribute("aria-busy") === "true") return;
+  const student = studentAccesses.find((item) => item.id === option.dataset.selectCoach);
+  if (!student || student.id === currentStudent.id) {
+    coachDialog.close?.();
+    return;
+  }
+
+  coachDialog.setAttribute("aria-busy", "true");
+  if (coachDialogStatus) coachDialogStatus.textContent = `Carregando dados de ${student.coachName || "Personal"}…`;
+  try {
+    await switchStudentAccess(student.id);
+    coachDialog.close?.();
+  } catch {
+    if (coachDialogStatus) coachDialogStatus.textContent = "Não foi possível trocar de personal agora. Tente novamente.";
+  } finally {
+    coachDialog.removeAttribute("aria-busy");
+  }
 });
 
 document.querySelector("[data-progress-form]")?.addEventListener("submit", (event) => {
