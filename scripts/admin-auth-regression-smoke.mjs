@@ -39,7 +39,7 @@ assert.match(professorApp, /for \(const delay of \[150, 350, 700\]\)/);
 assert.match(professorApp, /O login do Google voltou ao FlowFit, mas nenhuma sessão válida foi criada/);
 assert.match(professorApp, /url\.search = ""/);
 assert.match(professorCss, /data-account-state="blocked"/);
-assert.match(professorIndex, /app\.css\?v=build-20260812-3/);
+assert.match(professorIndex, /app\.css\?v=build-20260813-1/);
 assert.match(professorIndex, /app\.js\?v=build-20260813-1/);
 assert.match(professorWorker, /flowfit-professor-v39/);
 assert.match(studentWorker, /flowfit-aluno-v62/);

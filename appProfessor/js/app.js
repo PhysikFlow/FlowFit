@@ -2175,6 +2175,15 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const studentInvite = event.target.closest("[data-student-invite]");
+  if (studentInvite) {
+    if (inviteStudentOptions) inviteStudentOptions.value = studentInvite.dataset.studentInvite;
+    renderInviteTools();
+    studentInvite.closest("details")?.removeAttribute("open");
+    if (!inviteDialog?.open) inviteDialog?.showModal();
+    return;
+  }
+
   const openWorkoutButton = event.target.closest("[data-open-workout-form]");
   if (openWorkoutButton) {
     resetWorkoutFormMode({ resetForm: true });
@@ -2468,15 +2477,6 @@ const startAuthenticatedPanel = async () => {
       email: session.user.email,
       message: "Sua conta está autenticada, mas o perfil de professor não pôde ser concluído. Recarregue a página; se persistir, informe o suporte."
     });
-    return;
-  }
-
-  const studentInvite = event.target.closest("[data-student-invite]");
-  if (studentInvite) {
-    if (inviteStudentOptions) inviteStudentOptions.value = studentInvite.dataset.studentInvite;
-    renderInviteTools();
-    studentInvite.closest("details")?.removeAttribute("open");
-    if (!inviteDialog?.open) inviteDialog?.showModal();
     return;
   }
 
