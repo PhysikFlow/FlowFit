@@ -2250,7 +2250,7 @@ body.has-workout-runner > .toast { visibility: hidden; }
   margin-inline: auto;
   padding: var(--space-2) env(safe-area-inset-right) calc(var(--space-2) + env(safe-area-inset-bottom)) env(safe-area-inset-left);
   gap: 0.3rem;
-  transform: translateX(calc(var(--swipe-progress) * -5.5rem));
+  transform: translateX(var(--swipe-translation, 0rem));
   transition: transform 180ms var(--ease-out);
 }
 
@@ -2294,6 +2294,12 @@ body.has-workout-runner > .toast { visibility: hidden; }
   color: #092114;
 }
 
+.runner-action-bar.is-correcting.is-armed .runner-complete-set {
+  border-color: color-mix(in srgb, var(--color-warning) 62%, transparent);
+  background: var(--color-warning);
+  color: #211805;
+}
+
 .runner-swipe-hint {
   color: var(--color-subtle);
   font-size: 0.65rem;
@@ -2313,6 +2319,12 @@ body.has-workout-runner > .toast { visibility: hidden; }
   color: var(--color-success);
   opacity: var(--swipe-progress);
   transform: translateY(-42%) scale(calc(0.82 + (var(--swipe-progress) * 0.18)));
+}
+
+.runner-action-bar.is-correcting .runner-swipe-feedback {
+  right: auto;
+  left: max(var(--space-3), env(safe-area-inset-left));
+  color: var(--color-warning);
 }
 
 .runner-swipe-feedback span {

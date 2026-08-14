@@ -170,6 +170,14 @@ const getSessionEntries = (session = getActiveSession()) => (
   Array.isArray(session?.setEntries) ? session.setEntries : []
 );
 
+const getLastSessionEntry = (session = getActiveSession()) => getSessionEntries(session)
+  .reduce((latest, entry) => {
+    if (!latest) return entry;
+    const latestTime = new Date(latest.completedAt || 0).getTime() || 0;
+    const entryTime = new Date(entry.completedAt || 0).getTime() || 0;
+    return entryTime >= latestTime ? entry : latest;
+  }, null);
+
 const occurrenceId = (exercise) => exercise?.workoutExerciseId || exercise?.id || "";
 
 const getExerciseEntries = (workoutExerciseId, session = getActiveSession()) => getSessionEntries(session)
@@ -1179,9 +1187,10 @@ const updateRunnerPrimaryAction = (session = getActiveSession()) => {
   runnerActionBar.setAttribute("aria-label", isResting ? "Pular descanso" : "Concluir série atual");
   button.textContent = isResting ? "Pular descanso" : "Concluir série";
   button.disabled = !isAvailable;
-  if (hint) hint.textContent = isResting
-    ? "ou deslize para a esquerda para pular"
-    : "ou deslize para a esquerda";
+  if (hint) {
+    const correctionHint = getSessionEntries(session).length ? " · corrigir →" : "";
+    hint.textContent = isResting ? `← pular${correctionHint}` : `← concluir${correctionHint}`;
+  }
 
   if (isResting) {
     const nextExercise = findSessionExercise(session.pendingExerciseId || session.currentExerciseId, session);
@@ -1204,10 +1213,14 @@ const updateRunnerPrimaryAction = (session = getActiveSession()) => {
 
 const resetRunnerSwipeVisual = () => {
   runnerSwipe = null;
-  runnerActionBar?.classList.remove("is-swiping", "is-armed");
+  runnerActionBar?.classList.remove("is-swiping", "is-armed", "is-correcting");
   runnerActionBar?.style.setProperty("--swipe-progress", "0");
+  runnerActionBar?.style.setProperty("--swipe-translation", "0rem");
+  const feedbackIcon = runnerSwipeFeedback?.querySelector("span");
+  if (feedbackIcon) feedbackIcon.textContent = "✓";
   const feedbackLabel = runnerSwipeFeedback?.querySelector("strong");
   if (feedbackLabel) feedbackLabel.textContent = `Solte para ${runnerPrimaryVerb()}`;
+  updateRunnerPrimaryAction(getActiveSession());
 };
 
 const completeCurrentRunnerSet = () => {
@@ -1281,6 +1294,35 @@ const skipCurrentRunnerRest = () => {
   });
   resetRunnerSwipeVisual();
   renderWorkoutRunner();
+  return true;
+};
+
+const correctLastRunnerSet = () => {
+  const session = getActiveSession();
+  if (!session || !isRunnerPrimaryPhase(session.phase)) return false;
+  const last = getLastSessionEntry(session);
+  if (!last) {
+    Platform.notify("Nenhuma série registrada para corrigir.");
+    return false;
+  }
+  const workoutExerciseId = last.workoutExerciseId || last.exerciseId;
+  const removed = Store.removeActiveSetEntry(workoutExerciseId, Number(last.setNumber));
+  if (!removed) return false;
+  Store.updateActiveSession({
+    phase: SESSION_PHASE.ACTIVE_SET,
+    currentExerciseId: workoutExerciseId,
+    currentSetNumber: Number(last.setNumber || 1),
+    currentLoad: removed.loadKg,
+    currentReps: removed.reps,
+    restEndsAt: null,
+    transitionEndsAt: null,
+    pendingExerciseId: null,
+    pendingSetNumber: null
+  });
+  resetRunnerSwipeVisual();
+  renderAll();
+  renderWorkoutRunner();
+  Platform.notify("Última série aberta para correção.");
   return true;
 };
 
@@ -1478,7 +1520,7 @@ const renderWorkoutRunner = () => {
   loadInput.value = Number(suggestedLoad) > 0 ? suggestedLoad : "";
   repsInput.value = session.currentReps ?? previous?.reps ?? parseReps(exercise);
   completeButton.disabled = false;
-  document.querySelector("[data-correct-last-set]").hidden = getExerciseEntries(occurrenceId(exercise), session).length === 0;
+  document.querySelector("[data-correct-last-set]").hidden = getSessionEntries(session).length === 0;
   renderRunnerMedia(exercise);
   renderRunnerPerformanceHint(exercise, setNumber);
   updateRunnerPrimaryAction(session);
@@ -2267,14 +2309,7 @@ workoutRunner?.addEventListener("click", (event) => {
   }
 
   if (event.target.closest("[data-correct-last-set]")) {
-    const entries = getExerciseEntries(session.currentExerciseId, session);
-    const last = entries.at(-1);
-    if (!last) return;
-    const removed = Store.removeActiveSetEntry(last.workoutExerciseId || last.exerciseId, last.setNumber);
-    if (removed) Store.updateActiveSession({ currentLoad: removed.loadKg, currentReps: removed.reps });
-    renderAll();
-    renderWorkoutRunner();
-    Platform.notify("Série aberta para correção.");
+    correctLastRunnerSet();
     return;
   }
 
@@ -2391,13 +2426,18 @@ workoutRunner?.addEventListener("pointerdown", (event) => {
   const session = getActiveSession();
   if (!session || !isRunnerPrimaryPhase(session.phase)) return;
   if (event.target.closest("input, textarea, select, iframe, video, dialog, [contenteditable], [data-adjust-runner]")) return;
+  const primaryThreshold = Math.min(140, Math.max(88, workoutRunner.clientWidth * 0.22));
   runnerSwipe = {
     pointerId: event.pointerId,
     startX: event.clientX,
     startY: event.clientY,
     axis: "pending",
+    direction: null,
     armed: false,
-    threshold: Math.min(140, Math.max(88, workoutRunner.clientWidth * 0.22))
+    canCorrect: getSessionEntries(session).length > 0,
+    primaryThreshold,
+    correctionThreshold: Math.min(168, Math.max(108, primaryThreshold * 1.2)),
+    threshold: primaryThreshold
   };
 });
 
@@ -2410,39 +2450,53 @@ workoutRunner?.addEventListener("pointermove", (event) => {
 
   if (runnerSwipe.axis === "pending") {
     if (Math.hypot(deltaX, deltaY) < 12) return;
-    if (verticalDistance > horizontalDistance * 1.15 || deltaX > 0) {
+    if (verticalDistance > horizontalDistance * 1.15) {
       resetRunnerSwipeVisual();
       return;
     }
     if (horizontalDistance <= verticalDistance * 1.25) return;
     runnerSwipe.axis = "horizontal";
+    runnerSwipe.direction = deltaX > 0 ? "correct" : "primary";
+    runnerSwipe.threshold = runnerSwipe.direction === "correct"
+      ? runnerSwipe.correctionThreshold
+      : runnerSwipe.primaryThreshold;
     workoutRunner.setPointerCapture?.(event.pointerId);
   }
 
   if (runnerSwipe.axis !== "horizontal") return;
   event.preventDefault();
-  const progress = Math.min(1, Math.max(0, -deltaX / runnerSwipe.threshold));
-  const armed = progress >= 1;
+  const isCorrection = runnerSwipe.direction === "correct";
+  const directedDistance = isCorrection ? deltaX : -deltaX;
+  const progress = Math.min(1, Math.max(0, directedDistance / runnerSwipe.threshold));
+  const armed = progress >= 1 && (!isCorrection || runnerSwipe.canCorrect);
   if (armed && !runnerSwipe.armed) Platform.vibrate(12);
   runnerSwipe.armed = armed;
   runnerActionBar?.classList.add("is-swiping");
   runnerActionBar?.classList.toggle("is-armed", armed);
+  runnerActionBar?.classList.toggle("is-correcting", isCorrection);
   runnerActionBar?.style.setProperty("--swipe-progress", String(progress));
+  runnerActionBar?.style.setProperty("--swipe-translation", `${(isCorrection ? 1 : -1) * progress * 5.5}rem`);
+  const feedbackIcon = runnerSwipeFeedback?.querySelector("span");
+  if (feedbackIcon) feedbackIcon.textContent = isCorrection ? "↶" : "✓";
   const feedbackLabel = runnerSwipeFeedback?.querySelector("strong");
-  if (feedbackLabel) feedbackLabel.textContent = armed
-    ? `Solte para ${runnerPrimaryVerb()}`
-    : "Continue deslizando";
+  if (feedbackLabel) {
+    if (isCorrection && !runnerSwipe.canCorrect) feedbackLabel.textContent = "Nenhuma série para corrigir";
+    else if (armed) feedbackLabel.textContent = isCorrection ? "Solte para corrigir" : `Solte para ${runnerPrimaryVerb()}`;
+    else feedbackLabel.textContent = "Continue deslizando";
+  }
 }, { passive: false });
 
 const finishRunnerSwipe = (event) => {
   if (!runnerSwipe || event.pointerId !== runnerSwipe.pointerId) return;
   const shouldSuppressClick = runnerSwipe.axis === "horizontal";
   const shouldPerform = runnerSwipe.axis === "horizontal" && runnerSwipe.armed;
+  const action = runnerSwipe.direction;
   if (workoutRunner.hasPointerCapture?.(event.pointerId)) workoutRunner.releasePointerCapture?.(event.pointerId);
   resetRunnerSwipeVisual();
   if (shouldSuppressClick) suppressRunnerClickUntil = Date.now() + 600;
   if (shouldPerform) {
-    performRunnerPrimaryAction();
+    if (action === "correct") correctLastRunnerSet();
+    else performRunnerPrimaryAction();
   }
 };
 
