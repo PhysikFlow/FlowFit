@@ -540,7 +540,7 @@ summary:focus-visible {
   position: fixed;
   z-index: 30;
   right: var(--space-4);
-  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + var(--space-4));
+  bottom: calc(var(--nav-height) + max(var(--bottom-nav-edge-y), env(safe-area-inset-bottom)) + var(--space-4));
   left: var(--space-4);
   max-width: 30rem;
   margin: auto;
