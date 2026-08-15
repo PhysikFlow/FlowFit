@@ -33,6 +33,17 @@
   --space-8: 1.7rem;
 }
 
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 @media (min-width: 768px) {
   :root {
     --content-max: 41.5rem;
