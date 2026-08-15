@@ -633,6 +633,7 @@ const syncBrandAssets = () => {
   const logoFallback = (Theme.value.brandName || "FlowFit").slice(0, 2).toUpperCase();
   document.querySelectorAll("[data-brand-logo]").forEach((target) => {
     setImageOrText(target, assets.logoDataUrl, logoFallback, "Logo local da marca");
+    target.classList.toggle("is-frameless", Boolean(assets.logoDataUrl) && assets.logoFrameEnabled === false);
   });
   document.querySelectorAll("[data-coach-photo]").forEach((target) => {
     setImageOrText(target, assets.photoDataUrl, getCoachInitials(currentStudent?.coach), "Foto do personal ativo");

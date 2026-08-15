@@ -316,6 +316,16 @@ body.has-onboarding {
   object-fit: cover;
 }
 
+.brand-logo.is-frameless {
+  overflow: visible;
+  border-color: transparent;
+  background: transparent;
+}
+
+.brand-logo.is-frameless img {
+  object-fit: contain;
+}
+
 .brand strong {
   display: block;
   overflow: hidden;

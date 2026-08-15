@@ -27,6 +27,7 @@ const fontInput = document.querySelector("[data-font-input]");
 const radiusInput = document.querySelector("[data-radius-input]");
 const backgroundStyleInput = document.querySelector("[data-background-style-input]");
 const logoInput = document.querySelector("[data-logo-input]");
+const logoFrameInput = document.querySelector("[data-logo-frame-input]");
 const photoInput = document.querySelector("[data-photo-input]");
 const assetCropDialog = document.querySelector("[data-asset-crop-dialog]");
 const assetCropForm = document.querySelector("[data-asset-crop-form]");
@@ -718,6 +719,7 @@ const writeLocalBrandAssets = (assets = {}) => {
 
 const renderLocalBrandAssets = () => {
   const assets = readLocalBrandAssets();
+  const logoFrameEnabled = assets.logoFrameEnabled !== false;
   const logoTarget = document.querySelector("[data-preview-logo]");
   if (logoTarget) {
     if (assets.logoDataUrl) {
@@ -726,6 +728,12 @@ const renderLocalBrandAssets = () => {
       const initials = (brandInput?.value || DEFAULT_BRAND_THEME.brandName).trim().slice(0, 2).toUpperCase() || "FF";
       logoTarget.textContent = initials;
     }
+    logoTarget.classList.toggle("is-frameless", Boolean(assets.logoDataUrl) && !logoFrameEnabled);
+  }
+
+  if (logoFrameInput) {
+    logoFrameInput.checked = logoFrameEnabled;
+    logoFrameInput.setAttribute("aria-checked", String(logoFrameEnabled));
   }
 
   const photoWrap = document.querySelector("[data-preview-photo-wrap]");
@@ -2274,6 +2282,17 @@ colorHexPairs.forEach(([color, hex]) => {
 });
 
 logoInput?.addEventListener("change", () => handleLocalAssetInput(logoInput, "logo"));
+logoFrameInput?.addEventListener("change", () => {
+  const enabled = logoFrameInput.checked;
+  const saved = writeLocalBrandAssets({ logoFrameEnabled: enabled });
+  logoFrameInput.setAttribute("aria-checked", String(enabled));
+  renderLocalBrandAssets();
+  if (!saved) {
+    setThemeStatus("Não foi possível salvar a exibição da logo neste navegador.", "warning");
+    return;
+  }
+  setThemeStatus(enabled ? "Fundo e borda da logo ativados neste navegador." : "Logo sem fundo e borda neste navegador.", "warning");
+});
 photoInput?.addEventListener("change", () => handleLocalAssetInput(photoInput, "photo"));
 assetCropForm?.addEventListener("submit", async (event) => {
   event.preventDefault();

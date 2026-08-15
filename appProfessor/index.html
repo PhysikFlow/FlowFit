@@ -17,9 +17,9 @@
     <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260814-1" />
     <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260814-2" />
     <link rel="stylesheet" href="vendor/cropperjs/cropper.min.css?v=1.6.2" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260814-2" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260814-3" />
     <script defer src="vendor/cropperjs/cropper.min.js?v=1.6.2"></script>
-    <script type="module" src="js/app.js?v=build-20260814-2"></script>
+    <script type="module" src="js/app.js?v=build-20260814-3"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title" aria-busy="true">
@@ -387,6 +387,13 @@
                 <label class="file-picker">Logo do app
                   <input type="file" accept="image/*" data-logo-input />
                   <small data-logo-file-name>Nenhum arquivo selecionado</small>
+                </label>
+                <label class="logo-frame-option">
+                  <span>
+                    <strong>Fundo e borda da logo</strong>
+                    <small>Desative para deixar a imagem solta.</small>
+                  </span>
+                  <input type="checkbox" role="switch" data-logo-frame-input checked />
                 </label>
                 <label class="file-picker">Foto do personal
                   <input type="file" accept="image/*" data-photo-input />
