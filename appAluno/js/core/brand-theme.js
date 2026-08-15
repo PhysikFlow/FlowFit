@@ -40,10 +40,22 @@ const FONT_STACKS = {
 };
 
 const RADIUS_PRESETS = {
-  sharp: { sm: "0.35rem", md: "0.55rem", lg: "0.8rem", pill: "999px" },
-  soft: { sm: "0.7rem", md: "1rem", lg: "1.35rem", pill: "999px" },
-  round: { sm: "1rem", md: "1.45rem", lg: "2rem", pill: "999px" },
-  pill: { sm: "1.2rem", md: "1.8rem", lg: "2.4rem", pill: "999px" }
+  sharp: {
+    xs: "0.18rem", sm: "0.28rem", md: "0.42rem", lg: "0.62rem", xl: "0.82rem",
+    control: "0.38rem", compact: "0.22rem", avatar: "0.45rem"
+  },
+  soft: {
+    xs: "0.25rem", sm: "0.48rem", md: "0.7rem", lg: "0.95rem", xl: "1.2rem",
+    control: "0.6rem", compact: "0.38rem", avatar: "0.75rem"
+  },
+  round: {
+    xs: "0.32rem", sm: "0.62rem", md: "0.88rem", lg: "1.2rem", xl: "1.5rem",
+    control: "0.8rem", compact: "0.55rem", avatar: "1.05rem"
+  },
+  pill: {
+    xs: "0.4rem", sm: "0.7rem", md: "1rem", lg: "1.35rem", xl: "1.7rem",
+    control: "999px", compact: "999px", avatar: "999px"
+  }
 };
 
 const FONT_ALIASES = {
@@ -180,10 +192,16 @@ export const applyThemeTokens = (theme) => {
   root.style.setProperty("--brand-bg-effect", backgroundEffects[normalized.backgroundStyle]);
 
   const radius = RADIUS_PRESETS[normalized.radiusPreset];
+  root.style.setProperty("--radius-xs", radius.xs);
   root.style.setProperty("--radius-sm", radius.sm);
   root.style.setProperty("--radius-md", radius.md);
   root.style.setProperty("--radius-lg", radius.lg);
-  root.style.setProperty("--radius-pill", radius.pill);
+  root.style.setProperty("--radius-xl", radius.xl);
+  root.style.setProperty("--radius-control", radius.control);
+  root.style.setProperty("--radius-compact", radius.compact);
+  root.style.setProperty("--radius-avatar", radius.avatar);
+  root.style.setProperty("--radius-pill", radius.compact);
+  root.style.setProperty("--radius-track", "999px");
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", normalized.accent);
 
   return normalized;

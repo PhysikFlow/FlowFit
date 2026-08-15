@@ -47,16 +47,22 @@
   --field-padding-x: var(--space-3);
   --field-bg: var(--color-bg-elevated);
   --field-border: var(--color-line);
-  --field-radius: var(--radius-sm);
+  --field-radius: var(--radius-control);
   --surface-icon-size: 2.45rem;
-  --surface-icon-radius: var(--radius-md);
+  --surface-icon-radius: var(--radius-control);
   --surface-icon-glyph: 1.2rem;
   --avatar-size: 3.15rem;
 
-  --radius-sm: 0.7rem;
-  --radius-md: 1rem;
-  --radius-lg: 1.35rem;
-  --radius-pill: 999px;
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.48rem;
+  --radius-md: 0.7rem;
+  --radius-lg: 0.95rem;
+  --radius-xl: 1.2rem;
+  --radius-control: 0.6rem;
+  --radius-compact: 0.38rem;
+  --radius-avatar: 0.75rem;
+  --radius-pill: var(--radius-compact);
+  --radius-track: 999px;
   --shadow-card: 0 1rem 3rem rgb(0 0 0 / 0.24);
   --shadow-accent: 0 0.8rem 2rem color-mix(in srgb, var(--color-accent) 22%, transparent);
   --nav-height: 5.25rem;
