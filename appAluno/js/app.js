@@ -36,7 +36,7 @@ const runnerSwipeFeedback = document.querySelector("[data-runner-swipe-feedback]
 const exerciseSheet = document.querySelector("[data-exercise-sheet]");
 const infoDialog = document.querySelector("[data-info-dialog]");
 const discomfortDialog = document.querySelector("[data-discomfort-dialog]");
-const pauseDialog = document.querySelector("[data-pause-dialog]");
+const runnerExitDialog = document.querySelector("[data-runner-exit-dialog]");
 const discomfortForm = document.querySelector("[data-discomfort-form]");
 const progressDisclosure = document.querySelector("[data-progress-disclosure]");
 const scheduleDisclosure = document.querySelector("[data-schedule-disclosure]");
@@ -55,12 +55,19 @@ const SET_CLICK_DEBOUNCE_MS = 2000;
 const SET_TRANSITION_MS = 720;
 const RUNNER_ADJUST_HOLD_DELAY_MS = 420;
 const RUNNER_ADJUST_REPEAT_MS = 110;
+const RUNNER_INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
+const RUNNER_ACTIVITY_PERSIST_INTERVAL_MS = 30 * 1000;
 const setClickLocks = new Set();
 let runnerSwipe = null;
 let runnerAdjustHold = null;
 let suppressedRunnerAdjustButton = null;
 let suppressRunnerAdjustClickUntil = 0;
 let suppressRunnerClickUntil = 0;
+let runnerInactivityTimer = null;
+let runnerLastActivityAt = 0;
+let runnerLastPersistedActivityAt = 0;
+let runnerActivitySessionId = "";
+let keepRunnerPausedAfterDialog = false;
 let appNavSwipe = null;
 let suppressAppClickUntil = 0;
 let bottomNavIndicatorFrame = 0;
@@ -262,12 +269,13 @@ const getElapsedSeconds = (session, now = Date.now()) => {
   return Math.max(0, Math.floor((activeUntil - startedAt) / 1000) - Number(session?.pausedDurationSeconds || 0));
 };
 
-const pauseActiveSession = (session = getActiveSession()) => {
+const pauseActiveSession = (session = getActiveSession(), { pausedAt = Date.now(), reason = "manual" } = {}) => {
   if (!session || session.phase === SESSION_PHASE.PAUSED) return session;
   return Store.updateActiveSession({
     phase: SESSION_PHASE.PAUSED,
     resumePhase: session.phase,
-    pausedAt: new Date().toISOString()
+    pausedAt: new Date(pausedAt).toISOString(),
+    pausedReason: reason
   });
 };
 
@@ -288,6 +296,8 @@ const resumeActiveSession = (session = getActiveSession()) => {
     phase,
     resumePhase: null,
     pausedAt: null,
+    pausedReason: null,
+    lastActivityAt: new Date().toISOString(),
     pausedDurationSeconds: Number(session.pausedDurationSeconds || 0) + pausedFor,
     transitionEndsAt: phase === SESSION_PHASE.TRANSITIONING ? session.transitionEndsAt : null,
     restEndsAt: phase === SESSION_PHASE.RESTING ? session.restEndsAt : null,
@@ -345,6 +355,8 @@ const createActiveSession = (workout) => {
     pendingExerciseId: null,
     pendingSetNumber: null,
     pausedAt: null,
+    pausedReason: null,
+    lastActivityAt: new Date().toISOString(),
     pausedDurationSeconds: 0,
     setEntries: []
   };
@@ -483,19 +495,97 @@ const syncBottomNavIndicator = (activeItem, { animate = true } = {}) => {
   });
 };
 
+const isRunnerCountingPhase = (phase) => [
+  SESSION_PHASE.ACTIVE_SET,
+  SESSION_PHASE.TRANSITIONING,
+  SESSION_PHASE.RESTING
+].includes(phase);
+
+const stopRunnerInactivityMonitor = () => {
+  window.clearTimeout(runnerInactivityTimer);
+  runnerInactivityTimer = null;
+};
+
+const getRunnerLastActivityAt = (session = getActiveSession()) => {
+  if (!session) return Date.now();
+  const stored = new Date(session.lastActivityAt || session.startedAt || Date.now()).getTime();
+  const safeStored = Number.isFinite(stored) ? stored : Date.now();
+  return runnerActivitySessionId === session.id
+    ? Math.max(safeStored, runnerLastActivityAt || 0)
+    : safeStored;
+};
+
+const pauseRunnerIfInactive = (session = getActiveSession(), now = Date.now()) => {
+  if (!session || !isRunnerCountingPhase(session.phase)) return false;
+  const lastActivityAt = getRunnerLastActivityAt(session);
+  const inactivityDeadline = lastActivityAt + RUNNER_INACTIVITY_TIMEOUT_MS;
+  if (now < inactivityDeadline) return false;
+  pauseActiveSession(session, { pausedAt: inactivityDeadline, reason: "inactivity" });
+  stopRunnerInactivityMonitor();
+  stopRunnerTicker();
+  releaseRunnerWakeLock();
+  return true;
+};
+
+const handleRunnerInactivity = () => {
+  runnerInactivityTimer = null;
+  if (pauseRunnerIfInactive()) {
+    navigate("workout");
+    showToast("Treino pausado por inatividade. Seu progresso foi preservado.");
+    return;
+  }
+  scheduleRunnerInactivityMonitor();
+};
+
+const scheduleRunnerInactivityMonitor = (session = getActiveSession()) => {
+  stopRunnerInactivityMonitor();
+  if (!session || !isRunnerCountingPhase(session.phase) || workoutRunner.hidden) return;
+  const remaining = Math.max(0, (getRunnerLastActivityAt(session) + RUNNER_INACTIVITY_TIMEOUT_MS) - Date.now());
+  runnerInactivityTimer = window.setTimeout(handleRunnerInactivity, remaining);
+};
+
+const markRunnerActivity = ({ forcePersist = false } = {}) => {
+  const session = getActiveSession();
+  if (!session || !isRunnerCountingPhase(session.phase) || workoutRunner.hidden) return;
+  const now = Date.now();
+  if (runnerActivitySessionId !== session.id) {
+    runnerActivitySessionId = session.id;
+    runnerLastPersistedActivityAt = 0;
+  }
+  runnerLastActivityAt = now;
+  if (forcePersist || now - runnerLastPersistedActivityAt >= RUNNER_ACTIVITY_PERSIST_INTERVAL_MS) {
+    Store.updateActiveSession({ lastActivityAt: new Date(now).toISOString() });
+    runnerLastPersistedActivityAt = now;
+  }
+  scheduleRunnerInactivityMonitor(getActiveSession());
+};
+
 const navigate = (name, updateHash = true) => {
   if (name === "workout/session" && getActiveSession()) {
-    const session = getActiveSession();
-    if (session.phase === SESSION_PHASE.PAUSED) resumeActiveSession(session);
-    document.body.classList.add("has-workout-runner");
-    workoutRunner.hidden = false;
-    workoutRunner.setAttribute("aria-hidden", "false");
-    if (updateHash) history.pushState(null, "", "#workout/session");
-    renderWorkoutRunner();
-    startRunnerTicker();
-    requestRunnerWakeLock();
-    window.scrollTo({ top: 0 });
-    return;
+    const pausedDuringNavigation = pauseRunnerIfInactive(getActiveSession());
+    let session = getActiveSession();
+    const keepInactiveSessionPaused = session?.phase === SESSION_PHASE.PAUSED
+      && session.pausedReason === "inactivity"
+      && !updateHash;
+    if (keepInactiveSessionPaused) {
+      name = "workout";
+      history.replaceState(null, "", "#workout");
+      if (pausedDuringNavigation) {
+        window.setTimeout(() => showToast("Treino pausado por inatividade. Seu progresso foi preservado."), 0);
+      }
+    } else {
+      if (session.phase === SESSION_PHASE.PAUSED) session = resumeActiveSession(session);
+      document.body.classList.add("has-workout-runner");
+      workoutRunner.hidden = false;
+      workoutRunner.setAttribute("aria-hidden", "false");
+      if (updateHash) history.pushState(null, "", "#workout/session");
+      renderWorkoutRunner();
+      startRunnerTicker();
+      markRunnerActivity({ forcePersist: true });
+      requestRunnerWakeLock();
+      window.scrollTo({ top: 0 });
+      return;
+    }
   }
   if (!workoutRunner.hidden) {
     const session = getActiveSession();
@@ -506,6 +596,7 @@ const navigate = (name, updateHash = true) => {
     workoutRunner.hidden = true;
     workoutRunner.setAttribute("aria-hidden", "true");
     stopRunnerTicker();
+    stopRunnerInactivityMonitor();
     releaseRunnerWakeLock();
   }
   const destination = pageExists(name) ? name : "home";
@@ -1070,6 +1161,24 @@ const formatClock = (seconds) => {
   return `${String(minutes).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
 };
 
+const formatWorkoutElapsed = (seconds) => {
+  const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+  if (safe < 3600) return formatClock(safe);
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  return `${hours}h ${String(minutes).padStart(2, "0")}min`;
+};
+
+const formatWorkoutDuration = (seconds) => {
+  const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+  if (safe < 60) return "<1 min";
+  if (safe < 3600) return `${Math.round(safe / 60)} min`;
+  const roundedMinutes = Math.round(safe / 60);
+  const hours = Math.floor(roundedMinutes / 60);
+  const minutes = roundedMinutes % 60;
+  return minutes ? `${hours}h ${minutes} min` : `${hours}h`;
+};
+
 const getYouTubeVideoId = (value) => {
   try {
     const url = new URL(value);
@@ -1198,7 +1307,7 @@ const renderRunnerReview = (session) => {
   const done = getCompletedSessionSets(session);
   const total = getSessionTotalSets(session);
   const duration = getElapsedSeconds(session);
-  document.querySelector("[data-review-duration]").textContent = duration < 60 ? "<1 min" : `${Math.round(duration / 60)} min`;
+  document.querySelector("[data-review-duration]").textContent = formatWorkoutDuration(duration);
   document.querySelector("[data-review-sets]").textContent = `${done}/${total}`;
   document.querySelector("[data-review-volume]").textContent = `${Math.round(getWorkoutVolume(session)).toLocaleString("pt-BR")} kg`;
   document.querySelector("[data-review-exercises]").textContent = new Set(getSessionEntries(session)
@@ -1237,20 +1346,27 @@ const renderRunnerPerformanceHint = (exercise, setNumber) => {
   target.textContent = isBetter ? "↑ Melhor que o registro comparável da última sessão" : "";
 };
 
-const formatRunnerPrescription = (value) => String(value || "")
-  .replace(/\s*x\s*/gi, " × ")
-  .replace(/\s+/g, " ")
-  .trim();
-
 const formatRunnerTempo = (value) => String(value || "")
   .replace(/-/g, "–")
   .trim();
 
 const isRunnerPrimaryPhase = (phase) => [SESSION_PHASE.ACTIVE_SET, SESSION_PHASE.RESTING].includes(phase);
 
-const runnerPrimaryVerb = (session = getActiveSession()) => (
-  session?.phase === SESSION_PHASE.RESTING ? "pular" : "concluir"
-);
+const getRunnerPrimaryCopy = (session = getActiveSession()) => session?.phase === SESSION_PHASE.RESTING
+  ? {
+      action: "skip-rest",
+      button: "Pular descanso",
+      aria: "Pular descanso atual",
+      swipeHint: "← pular descanso",
+      release: "Solte para pular o descanso"
+    }
+  : {
+      action: "complete-set",
+      button: "Concluir série",
+      aria: "Concluir série atual",
+      swipeHint: "← concluir série",
+      release: "Solte para concluir a série"
+    };
 
 const updateRunnerPrimaryAction = (session = getActiveSession()) => {
   const target = document.querySelector("[data-runner-primary-summary]");
@@ -1260,14 +1376,15 @@ const updateRunnerPrimaryAction = (session = getActiveSession()) => {
 
   const isResting = session.phase === SESSION_PHASE.RESTING;
   const isAvailable = isRunnerPrimaryPhase(session.phase);
+  const copy = getRunnerPrimaryCopy(session);
   runnerActionBar.hidden = !isAvailable;
-  runnerActionBar.dataset.runnerAction = isResting ? "skip-rest" : "complete-set";
-  runnerActionBar.setAttribute("aria-label", isResting ? "Pular descanso" : "Concluir série atual");
-  button.textContent = isResting ? "Pular descanso" : "Concluir série";
+  runnerActionBar.dataset.runnerAction = copy.action;
+  runnerActionBar.setAttribute("aria-label", copy.aria);
+  button.textContent = copy.button;
   button.disabled = !isAvailable;
   if (hint) {
     const correctionHint = getSessionEntries(session).length ? " · corrigir →" : "";
-    hint.textContent = isResting ? `← pular${correctionHint}` : `← concluir${correctionHint}`;
+    hint.textContent = `${copy.swipeHint}${correctionHint}`;
   }
 
   if (isResting) {
@@ -1297,7 +1414,7 @@ const resetRunnerSwipeVisual = () => {
   const feedbackIcon = runnerSwipeFeedback?.querySelector("span");
   if (feedbackIcon) feedbackIcon.textContent = "✓";
   const feedbackLabel = runnerSwipeFeedback?.querySelector("strong");
-  if (feedbackLabel) feedbackLabel.textContent = `Solte para ${runnerPrimaryVerb()}`;
+  if (feedbackLabel) feedbackLabel.textContent = getRunnerPrimaryCopy().release;
   updateRunnerPrimaryAction(getActiveSession());
 };
 
@@ -1575,12 +1692,9 @@ const renderWorkoutRunner = () => {
 
   const previous = findPreviousSet(exercise, setNumber);
   const previousLogs = findPreviousExerciseLogs(exercise);
-  const exerciseIndex = exercises.findIndex((item) => occurrenceId(item) === occurrenceId(exercise));
-  document.querySelector("[data-runner-exercise-position]").textContent = `Exercício ${exerciseIndex + 1} de ${exercises.length}`;
   document.querySelector("[data-runner-exercise-name]").textContent = exercise.name;
   document.querySelector("[data-runner-set-number]").textContent = `Série ${setNumber} de ${parseTotalSets(exercise)}`;
   renderRunnerSetTrack(exercise, setNumber, session);
-  document.querySelector("[data-runner-prescription]").textContent = formatRunnerPrescription(exercise.prescription);
   document.querySelector("[data-runner-rir]").textContent = `RIR ${exercise.rir}`;
   document.querySelector("[data-runner-tempo]").textContent = formatRunnerTempo(exercise.tempo);
   const instructions = document.querySelector("[data-runner-instructions]");
@@ -1609,7 +1723,7 @@ const syncRunnerClock = () => {
   const session = getActiveSession();
   if (!session) return;
   const elapsed = getElapsedSeconds(session);
-  document.querySelector("[data-runner-elapsed]").textContent = formatClock(elapsed);
+  document.querySelector("[data-runner-elapsed]").textContent = formatWorkoutElapsed(elapsed);
   if (session.phase === SESSION_PHASE.TRANSITIONING) {
     const transitionRemaining = new Date(session.transitionEndsAt || 0).getTime() - Date.now();
     if (transitionRemaining <= 0) {
@@ -1653,7 +1767,8 @@ const stopRunnerTicker = () => {
 };
 
 const requestRunnerWakeLock = async () => {
-  if (!navigator.wakeLock || document.visibilityState !== "visible" || workoutRunner.hidden) return;
+  if (!navigator.wakeLock || document.visibilityState !== "visible" || workoutRunner.hidden
+    || !isRunnerCountingPhase(getActiveSession()?.phase)) return;
   try {
     wakeLockSentinel = await navigator.wakeLock.request("screen");
     wakeLockSentinel.addEventListener("release", () => {
@@ -2362,12 +2477,88 @@ const startCurrentWorkoutSession = () => {
 
 document.querySelector("[data-start-workout]")?.addEventListener("click", startCurrentWorkoutSession);
 
-pauseDialog?.addEventListener("cancel", (event) => {
+const syncRunnerExitDialog = (session = getActiveSession()) => {
+  const done = getCompletedSessionSets(session);
+  const total = getSessionTotalSets(session);
+  const finishPartialButton = document.querySelector("[data-finish-partial-session]");
+  const partialNote = document.querySelector("[data-runner-partial-note]");
+  if (finishPartialButton) {
+    finishPartialButton.disabled = done === 0;
+    finishPartialButton.textContent = done >= total ? "Revisar e concluir" : "Encerrar treino parcial";
+  }
+  if (partialNote) partialNote.hidden = done > 0;
+};
+
+const openRunnerExitDialog = (session = getActiveSession()) => {
+  if (!session || runnerExitDialog?.open) return;
+  markRunnerActivity({ forcePersist: true });
+  pauseActiveSession(getActiveSession(), { reason: "exit-dialog" });
+  stopRunnerTicker();
+  stopRunnerInactivityMonitor();
+  releaseRunnerWakeLock();
+  syncRunnerClock();
+  syncRunnerExitDialog(getActiveSession());
+  runnerExitDialog?.showModal();
+  document.querySelector("[data-pause-and-exit]")?.focus({ preventScroll: true });
+};
+
+runnerExitDialog?.addEventListener("cancel", (event) => {
   event.preventDefault();
-  pauseDialog.close();
-  resumeActiveSession(getActiveSession());
+  runnerExitDialog.close();
+});
+
+runnerExitDialog?.addEventListener("click", (event) => {
+  if (event.target !== runnerExitDialog) return;
+  const bounds = runnerExitDialog.getBoundingClientRect();
+  const outside = event.clientX < bounds.left || event.clientX > bounds.right
+    || event.clientY < bounds.top || event.clientY > bounds.bottom;
+  if (outside) runnerExitDialog.close();
+});
+
+runnerExitDialog?.addEventListener("close", () => {
+  if (keepRunnerPausedAfterDialog) {
+    keepRunnerPausedAfterDialog = false;
+    return;
+  }
+  const session = getActiveSession();
+  if (session?.phase === SESSION_PHASE.PAUSED && session.pausedReason === "exit-dialog") {
+    resumeActiveSession(session);
+    renderWorkoutRunner();
+    startRunnerTicker();
+    markRunnerActivity({ forcePersist: true });
+    requestRunnerWakeLock();
+  }
+});
+
+document.querySelector("[data-close-runner-exit]")?.addEventListener("click", () => runnerExitDialog?.close());
+
+document.querySelector("[data-pause-and-exit]")?.addEventListener("click", () => {
+  keepRunnerPausedAfterDialog = true;
+  runnerExitDialog?.close();
+  navigate("workout");
+  showToast("Treino pausado. Você poderá continuar depois.");
+});
+
+document.querySelector("[data-finish-partial-session]")?.addEventListener("click", () => {
+  const pausedSession = getActiveSession();
+  if (!pausedSession || getCompletedSessionSets(pausedSession) === 0) return;
+  if (pausedSession.phase === SESSION_PHASE.PAUSED) resumeActiveSession(pausedSession);
+  keepRunnerPausedAfterDialog = true;
+  Store.updateActiveSession({
+    phase: SESSION_PHASE.AWAITING_SUMMARY,
+    resumePhase: null,
+    pausedAt: null,
+    pausedReason: null,
+    restEndsAt: null,
+    transitionEndsAt: null,
+    pendingExerciseId: null,
+    pendingSetNumber: null
+  });
+  runnerExitDialog?.close();
+  stopRunnerTicker();
+  stopRunnerInactivityMonitor();
+  releaseRunnerWakeLock();
   renderWorkoutRunner();
-  requestRunnerWakeLock();
 });
 
 workoutRunner?.addEventListener("click", (event) => {
@@ -2376,29 +2567,16 @@ workoutRunner?.addEventListener("click", (event) => {
   event.stopImmediatePropagation();
 }, true);
 
+workoutRunner?.addEventListener("pointerdown", () => markRunnerActivity(), { capture: true, passive: true });
+workoutRunner?.addEventListener("keydown", () => markRunnerActivity(), true);
+workoutRunner?.addEventListener("input", () => markRunnerActivity(), true);
+
 workoutRunner?.addEventListener("click", (event) => {
   const session = getActiveSession();
   if (!session) return;
 
-  if (event.target.closest("[data-pause-session]")) {
-    pauseActiveSession(session);
-    syncRunnerClock();
-    if (pauseDialog && !pauseDialog.open) pauseDialog.showModal();
-    return;
-  }
-
-  if (event.target.closest("[data-continue-session]")) {
-    pauseDialog.close?.();
-    resumeActiveSession(getActiveSession());
-    renderWorkoutRunner();
-    requestRunnerWakeLock();
-    return;
-  }
-
-  if (event.target.closest("[data-exit-session]")) {
-    pauseDialog.close?.();
-    navigate("workout");
-    showToast("Seu treino foi pausado. Você poderá continuar depois.");
+  if (event.target.closest("[data-open-runner-exit]")) {
+    openRunnerExitDialog(session);
     return;
   }
 
@@ -2533,28 +2711,6 @@ workoutRunner?.addEventListener("click", (event) => {
     return;
   }
 
-  if (event.target.closest("[data-request-finish]")) {
-    const done = getCompletedSessionSets(session);
-    const total = getSessionTotalSets(session);
-    if (!done) {
-      if (!window.confirm("Nenhuma série foi registrada. Descartar este treino?")) return;
-      Store.discardActiveSession();
-      renderAll();
-      navigate("workout");
-      return;
-    }
-    if (done < total && !window.confirm(`Encerrar como treino parcial? ${total - done} série(s) ficarão pendentes.`)) return;
-    Store.updateActiveSession({
-      phase: SESSION_PHASE.AWAITING_SUMMARY,
-      restEndsAt: null,
-      transitionEndsAt: null,
-      pendingExerciseId: null,
-      pendingSetNumber: null
-    });
-    renderWorkoutRunner();
-    return;
-  }
-
   if (event.target.closest("[data-return-to-session]")) {
     const next = getNextIncompleteTarget(session, session.currentExerciseId);
     if (!next) {
@@ -2570,15 +2726,6 @@ workoutRunner?.addEventListener("click", (event) => {
       currentReps: null
     });
     renderWorkoutRunner();
-    return;
-  }
-
-  if (event.target.closest("[data-discard-session]")) {
-    if (!window.confirm("Descartar todas as séries registradas neste treino?")) return;
-    exerciseSheet.close?.();
-    Store.discardActiveSession();
-    renderAll();
-    navigate("workout");
     return;
   }
 
@@ -2694,7 +2841,7 @@ workoutRunner?.addEventListener("pointermove", (event) => {
   const feedbackLabel = runnerSwipeFeedback?.querySelector("strong");
   if (feedbackLabel) {
     if (isCorrection && !runnerSwipe.canCorrect) feedbackLabel.textContent = "Nenhuma série para corrigir";
-    else if (armed) feedbackLabel.textContent = isCorrection ? "Solte para corrigir" : `Solte para ${runnerPrimaryVerb()}`;
+    else if (armed) feedbackLabel.textContent = isCorrection ? "Solte para corrigir" : getRunnerPrimaryCopy().release;
     else feedbackLabel.textContent = "Continue deslizando";
   }
 }, { passive: false });
@@ -2835,12 +2982,32 @@ const refreshOnForeground = async () => {
   }
 };
 
-window.addEventListener("pageshow", refreshOnForeground);
+const restoreRunnerOnForeground = () => {
+  if (workoutRunner.hidden) return;
+  if (pauseRunnerIfInactive()) {
+    navigate("workout");
+    showToast("Treino pausado por inatividade. Seu progresso foi preservado.");
+    return;
+  }
+  if (getActiveSession()?.phase !== SESSION_PHASE.PAUSED) {
+    startRunnerTicker();
+    scheduleRunnerInactivityMonitor();
+    requestRunnerWakeLock();
+  }
+};
+
+window.addEventListener("pageshow", () => {
+  refreshOnForeground();
+  restoreRunnerOnForeground();
+});
 window.addEventListener("focus", refreshOnForeground);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     refreshOnForeground();
-    if (!workoutRunner.hidden) requestRunnerWakeLock();
+    restoreRunnerOnForeground();
+  } else if (!workoutRunner.hidden) {
+    stopRunnerTicker();
+    releaseRunnerWakeLock();
   }
 });
 

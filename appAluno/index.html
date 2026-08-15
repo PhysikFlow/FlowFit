@@ -15,8 +15,8 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="css/tokens.css?v=build-20260814-1" />
     <link rel="stylesheet" href="css/components.css?v=build-20260814-2" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260814-12" />
-    <script type="module" src="js/app.js?v=build-20260814-10"></script>
+    <link rel="stylesheet" href="css/app.css?v=build-20260815-4" />
+    <script type="module" src="js/app.js?v=build-20260815-2"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title" aria-busy="true">
@@ -270,14 +270,14 @@
 
     <section class="workout-runner" data-workout-runner hidden aria-labelledby="runner-exercise-name">
       <header class="runner-topbar">
-        <button class="icon-button" type="button" data-pause-session aria-label="Pausar treino">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12" /><path d="M15 6v12" /></svg>
+        <button class="icon-button runner-exit-trigger" type="button" data-open-runner-exit aria-label="Opções para sair do treino" aria-haspopup="dialog" aria-controls="runner-exit-dialog">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
         </button>
         <div>
           <strong data-runner-workout-title>Treino</strong>
           <small data-runner-elapsed>00:00</small>
         </div>
-        <button class="text-button" type="button" data-request-finish>Encerrar</button>
+        <span class="runner-topbar__spacer" aria-hidden="true"></span>
       </header>
 
       <button class="runner-progress card" type="button" data-open-exercise-sheet aria-haspopup="dialog">
@@ -292,7 +292,6 @@
       <main class="runner-main">
         <section class="runner-phase runner-exercise" data-runner-phase="exercise">
           <header class="runner-exercise__head">
-            <span class="eyebrow" data-runner-exercise-position>Exercício 1 de 1</span>
             <h1 id="runner-exercise-name" tabindex="-1" data-runner-exercise-name data-runner-phase-focus>Exercício</h1>
             <div class="runner-set-progress" aria-label="Progresso das séries do exercício atual">
               <span class="runner-set-track" data-runner-set-track aria-hidden="true"></span>
@@ -303,7 +302,6 @@
           <div class="runner-media" data-runner-media hidden></div>
 
           <div class="runner-prescription">
-            <strong data-runner-prescription>10 repetições</strong>
             <div class="runner-prescription__meta">
               <span data-runner-rir>RIR 2</span>
               <span aria-hidden="true">·</span>
@@ -434,7 +432,6 @@
         <div class="runner-sheet__handle" aria-hidden="true"></div>
         <header><div><span class="eyebrow">Sessão atual</span><h2 id="exercise-sheet-title">Exercícios</h2></div><button class="icon-button" type="button" data-close-exercise-sheet aria-label="Fechar lista">×</button></header>
         <section data-runner-exercise-list></section>
-        <button class="text-button text-button--danger" type="button" data-discard-session>Descartar treino</button>
       </dialog>
 
       <dialog class="runner-info-dialog" data-info-dialog aria-labelledby="runner-info-title">
@@ -474,13 +471,19 @@
         </form>
       </dialog>
 
-      <dialog class="runner-info-dialog runner-pause-dialog" data-pause-dialog aria-labelledby="pause-title">
-        <span class="runner-pause-dialog__icon" aria-hidden="true">Ⅱ</span>
-        <h2 id="pause-title">Pausar treino?</h2>
-        <p>Seu progresso fica salvo neste aparelho. Você poderá continuar exatamente de onde parou.</p>
-        <div class="button-group button-group--stacked">
-          <button class="button" type="button" data-continue-session>Continuar treino</button>
-          <button class="button button--quiet" type="button" data-exit-session>Sair com treino pausado</button>
+      <dialog class="runner-info-dialog runner-exit-dialog" id="runner-exit-dialog" data-runner-exit-dialog aria-labelledby="runner-exit-title" aria-describedby="runner-exit-copy">
+        <header class="runner-exit-dialog__header">
+          <div>
+            <span class="eyebrow">Sessão atual</span>
+            <h2 id="runner-exit-title">Sair do treino?</h2>
+          </div>
+          <button class="runner-dialog-close" type="button" data-close-runner-exit aria-label="Fechar opções de saída">×</button>
+        </header>
+        <p id="runner-exit-copy">Pause para continuar depois ou encerre registrando o treino como parcial.</p>
+        <p class="runner-exit-dialog__note" data-runner-partial-note hidden>Conclua ao menos uma série para encerrar como treino parcial.</p>
+        <div class="button-group button-group--stacked runner-exit-dialog__actions">
+          <button class="button" type="button" data-pause-and-exit autofocus>Pausar treino</button>
+          <button class="button button--quiet" type="button" data-finish-partial-session>Encerrar treino parcial</button>
         </div>
       </dialog>
     </section>
