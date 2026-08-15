@@ -2816,7 +2816,7 @@ workoutRunner?.addEventListener("pointermove", (event) => {
     }
     if (horizontalDistance <= verticalDistance * 1.25) return;
     runnerSwipe.axis = "horizontal";
-    runnerSwipe.direction = deltaX < 0 ? "correct" : "primary";
+    runnerSwipe.direction = deltaX > 0 ? "correct" : "primary";
     runnerSwipe.threshold = runnerSwipe.direction === "correct"
       ? runnerSwipe.correctionThreshold
       : runnerSwipe.primaryThreshold;
@@ -2826,7 +2826,7 @@ workoutRunner?.addEventListener("pointermove", (event) => {
   if (runnerSwipe.axis !== "horizontal") return;
   event.preventDefault();
   const isCorrection = runnerSwipe.direction === "correct";
-  const directedDistance = isCorrection ? -deltaX : deltaX;
+  const directedDistance = isCorrection ? deltaX : -deltaX;
   const progress = Math.min(1, Math.max(0, directedDistance / runnerSwipe.threshold));
   const armed = progress >= 1 && (!isCorrection || runnerSwipe.canCorrect);
   if (armed && !runnerSwipe.armed) Platform.vibrate(12);
@@ -2835,7 +2835,7 @@ workoutRunner?.addEventListener("pointermove", (event) => {
   runnerActionBar?.classList.toggle("is-armed", armed);
   runnerActionBar?.classList.toggle("is-correcting", isCorrection);
   runnerActionBar?.style.setProperty("--swipe-progress", String(progress));
-  runnerActionBar?.style.setProperty("--swipe-translation", `${(isCorrection ? -1 : 1) * progress * 5.5}rem`);
+  runnerActionBar?.style.setProperty("--swipe-translation", `${(isCorrection ? 1 : -1) * progress * 5.5}rem`);
   const feedbackIcon = runnerSwipeFeedback?.querySelector("span");
   if (feedbackIcon) feedbackIcon.textContent = isCorrection ? "↶" : "✓";
   const feedbackLabel = runnerSwipeFeedback?.querySelector("strong");

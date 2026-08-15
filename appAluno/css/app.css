@@ -2604,8 +2604,8 @@ body.has-workout-runner > .toast { visibility: hidden; }
   position: absolute;
   z-index: 1;
   top: 50%;
-  right: auto;
-  left: max(var(--space-3), env(safe-area-inset-left));
+  right: max(var(--space-3), env(safe-area-inset-right));
+  left: auto;
   display: grid;
   width: 5rem;
   justify-items: center;
@@ -2616,8 +2616,8 @@ body.has-workout-runner > .toast { visibility: hidden; }
 }
 
 .runner-action-bar.is-correcting .runner-swipe-feedback {
-  right: max(var(--space-3), env(safe-area-inset-right));
-  left: auto;
+  right: auto;
+  left: max(var(--space-3), env(safe-area-inset-left));
   color: var(--color-warning);
 }
 
