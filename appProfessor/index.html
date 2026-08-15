@@ -17,9 +17,9 @@
     <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260814-1" />
     <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260814-2" />
     <link rel="stylesheet" href="vendor/cropperjs/cropper.min.css?v=1.6.2" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260814-3" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260815-1" />
     <script defer src="vendor/cropperjs/cropper.min.js?v=1.6.2"></script>
-    <script type="module" src="js/app.js?v=build-20260814-3"></script>
+    <script type="module" src="js/app.js?v=build-20260815-1"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title" aria-busy="true">
@@ -266,11 +266,12 @@
             <label>Disponível a partir
               <input type="date" name="startsAt" data-workout-starts-at />
             </label>
-            <label>Exercícios iniciais
+            <label>Exercícios
               <textarea name="blocks" placeholder="Supino reto 4x10&#10;Crucifixo 3x12&#10;Tríceps corda 3x15" required></textarea>
             </label>
             <div class="button-group workout-form-actions">
               <button class="button button--block" type="submit" data-workout-submit>Publicar treino para o aluno</button>
+              <button class="button button--quiet button--block" type="button" data-save-workout-draft>Salvar rascunho</button>
               <button class="button button--quiet button--block" type="button" data-cancel-workout-edit hidden>Cancelar edição</button>
             </div>
           </form>
@@ -291,6 +292,26 @@
             <p class="form-status" data-workout-sync-status>Pronto para publicar.</p>
           </aside>
         </div>
+
+        <dialog class="app-dialog" data-duplicate-workout-dialog aria-labelledby="duplicate-workout-title">
+          <form class="dialog-form" data-duplicate-workout-form>
+            <button class="icon-button dialog-form__close" type="button" data-close-duplicate-workout aria-label="Fechar duplicação">×</button>
+            <span class="eyebrow">Duplicar treino</span>
+            <h2 id="duplicate-workout-title">Criar uma cópia independente</h2>
+            <p>O treino original permanecerá inalterado.</p>
+            <label>Aluno de destino
+              <select name="student" data-duplicate-workout-students required></select>
+            </label>
+            <label>Nome
+              <input name="title" required />
+            </label>
+            <label>Disponível a partir
+              <input type="date" name="startsAt" required />
+            </label>
+            <button class="button button--block" type="submit">Criar cópia</button>
+            <p class="form-status" data-duplicate-workout-status></p>
+          </form>
+        </dialog>
 
       </section>
 

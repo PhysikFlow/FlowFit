@@ -49,6 +49,11 @@ const previewSets = document.querySelector("[data-preview-sets]");
 const previewMinutes = document.querySelector("[data-preview-minutes]");
 const previewList = document.querySelector("[data-preview-list]");
 const workoutSyncStatus = document.querySelector("[data-workout-sync-status]");
+const saveWorkoutDraftButton = document.querySelector("[data-save-workout-draft]");
+const duplicateWorkoutDialog = document.querySelector("[data-duplicate-workout-dialog]");
+const duplicateWorkoutForm = document.querySelector("[data-duplicate-workout-form]");
+const duplicateWorkoutStudents = document.querySelector("[data-duplicate-workout-students]");
+const duplicateWorkoutStatus = document.querySelector("[data-duplicate-workout-status]");
 const studentFormPanel = document.querySelector("[data-student-form-panel]");
 const studentSessionPanel = document.querySelector("[data-student-session-panel]");
 const studentListView = document.querySelector("[data-student-list-view]");
@@ -101,6 +106,20 @@ const ACCOUNT_PLAN = {
   name: "Plano inicial",
   activeStudentLimit: 20
 };
+
+const WORKOUT_DRAFT_STORAGE_PREFIX = "flowfit.professor.workout-draft";
+const WORKOUT_DRAFT_SAVE_DELAY_MS = 420;
+const DRAFT_EXERCISE_DETAIL_FIELDS = [
+  "target",
+  "load",
+  "rest",
+  "tempo",
+  "rir",
+  "notes",
+  "instructions",
+  "mediaUrl",
+  "mediaType"
+];
 
 const THEME_PALETTES = [
   {
@@ -200,7 +219,14 @@ let coachAccessRevalidationPromise = null;
 let authStateVersion = 0;
 let isSigningOut = false;
 let editingWorkoutId = "";
-let workoutDraftDetails = [];
+let workoutDraftExercises = [];
+let workoutDraftTextSignature = "";
+let workoutDraftDirty = false;
+let workoutDraftSaveTimer;
+let activeWorkoutDrag = null;
+let removedWorkoutExercise = null;
+let duplicateWorkoutSourceId = "";
+let restoredWorkoutDraftSavedAt = "";
 let deferredInstallPrompt = null;
 let studentSearchQuery = "";
 let studentFilter = "all";
@@ -1005,12 +1031,26 @@ const queueThemeSave = () => {
   themeSaveTimer = setTimeout(() => saveThemeNow({ silent: true }), 700);
 };
 
-const showToast = (message) => {
+const showToast = (message, { actionLabel = "", onAction = null, duration = 2600 } = {}) => {
   if (!toast) return;
   clearTimeout(toastTimer);
-  toast.textContent = message;
+  toast.replaceChildren();
+  const copy = document.createElement("span");
+  copy.textContent = message;
+  toast.append(copy);
+  if (actionLabel && typeof onAction === "function") {
+    const action = document.createElement("button");
+    action.type = "button";
+    action.textContent = actionLabel;
+    action.addEventListener("click", () => {
+      clearTimeout(toastTimer);
+      toast.classList.remove("is-visible");
+      onAction();
+    }, { once: true });
+    toast.append(action);
+  }
   toast.classList.add("is-visible");
-  toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 2600);
+  toastTimer = setTimeout(() => toast.classList.remove("is-visible"), duration);
 };
 
 const syncStudentSessionPresentation = () => {
@@ -1491,6 +1531,172 @@ const renderStudentOptions = () => {
   renderInviteTools();
 };
 
+const createDraftExerciseKey = () => globalThis.crypto?.randomUUID?.()
+  || `draft-exercise-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+const compactPrescription = (value) => String(value || "3 x 10")
+  .trim()
+  .replace(/\s*x\s*/i, "x");
+
+const exerciseToDraftLine = (exercise) => {
+  const canonical = `${String(exercise?.name || "Exercício").trim()} ${compactPrescription(exercise?.prescription)}`.trim();
+  const sourceLine = String(exercise?.sourceLine || "").trim();
+  if (!sourceLine) return canonical;
+  const parsedSource = parseExerciseLine(sourceLine, 0, "draft-source");
+  const sameName = normalizeSearch(parsedSource.name) === normalizeSearch(exercise.name);
+  const samePrescription = compactPrescription(parsedSource.prescription) === compactPrescription(exercise.prescription);
+  return sameName && samePrescription ? sourceLine : canonical;
+};
+
+const toDraftExercise = (exercise, index = 0, sourceLine = "") => ({
+  ...exercise,
+  draftKey: exercise?.draftKey || createDraftExerciseKey(),
+  sourceLine: String(sourceLine || exercise?.sourceLine || `${exercise?.name || `Exercício ${index + 1}`} ${compactPrescription(exercise?.prescription)}`).trim(),
+  parsed: exercise?.parsed !== false
+});
+
+const toPublishedExercise = ({ draftKey, sourceLine, parsed, ...exercise }) => ({ ...exercise });
+
+const getWorkoutBlocksInput = () => workoutForm?.querySelector("[name='blocks']") || null;
+
+const writeWorkoutDraftText = () => {
+  const blocksInput = getWorkoutBlocksInput();
+  if (!blocksInput) return;
+  const text = workoutDraftExercises.map(exerciseToDraftLine).join("\n");
+  blocksInput.value = text;
+  workoutDraftTextSignature = text;
+};
+
+const reconcileWorkoutDraftFromText = ({ force = false } = {}) => {
+  const blocksInput = getWorkoutBlocksInput();
+  if (!blocksInput) return workoutDraftExercises;
+  const rawText = String(blocksInput.value || "");
+  if (!force && rawText === workoutDraftTextSignature) return workoutDraftExercises;
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  const previous = workoutDraftExercises;
+  const usedKeys = new Set();
+  const findReusable = (line, parsed) => {
+    const exactLine = previous.find((exercise) => !usedKeys.has(exercise.draftKey)
+      && String(exercise.sourceLine || "").trim() === line);
+    if (exactLine) return exactLine;
+    const exactExercise = previous.find((exercise) => !usedKeys.has(exercise.draftKey)
+      && normalizeSearch(exercise.name) === normalizeSearch(parsed.name)
+      && compactPrescription(exercise.prescription) === compactPrescription(parsed.prescription));
+    if (exactExercise) return exactExercise;
+    return previous.find((exercise) => !usedKeys.has(exercise.draftKey)
+      && normalizeSearch(exercise.name) === normalizeSearch(parsed.name)) || null;
+  };
+
+  workoutDraftExercises = lines.map((line, index) => {
+    const parsed = parseExerciseLine(line, index, "draft");
+    const reusable = findReusable(line, parsed);
+    if (reusable) usedKeys.add(reusable.draftKey);
+    const preservedDetails = {};
+    DRAFT_EXERCISE_DETAIL_FIELDS.forEach((field) => {
+      if (reusable && reusable[field] !== undefined) preservedDetails[field] = reusable[field];
+    });
+    return toDraftExercise({
+      ...parsed,
+      ...preservedDetails,
+      id: reusable?.id || parsed.id,
+      draftKey: reusable?.draftKey,
+      parsed: /\d+\s*x\s*.+/i.test(line)
+    }, index, line);
+  });
+  workoutDraftTextSignature = rawText;
+  return workoutDraftExercises;
+};
+
+const getWorkoutDraftStorageKey = () => `${WORKOUT_DRAFT_STORAGE_PREFIX}:${authContext?.coachId || "local"}`;
+
+const setWorkoutDraftDirty = (dirty, message = "") => {
+  workoutDraftDirty = Boolean(dirty);
+  if (message) {
+    setWorkoutSyncStatus(message, dirty ? "warning" : "synced");
+    return;
+  }
+  setWorkoutSyncStatus(
+    dirty ? "● Alterações não publicadas" : "✓ Treino atualizado",
+    dirty ? "warning" : "synced"
+  );
+};
+
+const serializeWorkoutDraft = ({ builderOpen = !workoutBuilder?.hidden } = {}) => {
+  if (!workoutForm) return null;
+  reconcileWorkoutDraftFromText();
+  const fields = Object.fromEntries(new FormData(workoutForm));
+  return {
+    editingWorkoutId,
+    fields,
+    exercises: workoutDraftExercises.map((exercise) => ({ ...exercise })),
+    dirty: workoutDraftDirty,
+    builderOpen,
+    savedAt: new Date().toISOString()
+  };
+};
+
+const saveWorkoutDraftLocally = ({ builderOpen = !workoutBuilder?.hidden, notify = false } = {}) => {
+  clearTimeout(workoutDraftSaveTimer);
+  const draft = serializeWorkoutDraft({ builderOpen });
+  if (!draft) return false;
+  const hasContent = draft.exercises.length || String(draft.fields?.title || "").trim();
+  if (!hasContent) {
+    Platform.storage.remove(getWorkoutDraftStorageKey());
+    return false;
+  }
+  const saved = Platform.storage.set(getWorkoutDraftStorageKey(), draft);
+  if (saved) restoredWorkoutDraftSavedAt = draft.savedAt;
+  if (notify) showToast(saved ? "Rascunho salvo neste dispositivo." : "Não foi possível salvar o rascunho.");
+  return saved;
+};
+
+const scheduleWorkoutDraftSave = () => {
+  clearTimeout(workoutDraftSaveTimer);
+  workoutDraftSaveTimer = window.setTimeout(() => saveWorkoutDraftLocally(), WORKOUT_DRAFT_SAVE_DELAY_MS);
+};
+
+const clearStoredWorkoutDraft = () => {
+  clearTimeout(workoutDraftSaveTimer);
+  Platform.storage.remove(getWorkoutDraftStorageKey());
+  restoredWorkoutDraftSavedAt = "";
+};
+
+const markWorkoutDraftChanged = () => {
+  setWorkoutDraftDirty(true);
+  scheduleWorkoutDraftSave();
+};
+
+const restoreStoredWorkoutDraft = ({ open = false } = {}) => {
+  if (!workoutForm) return false;
+  const saved = Platform.storage.get(getWorkoutDraftStorageKey(), null);
+  if (!saved?.fields || !Array.isArray(saved.exercises)) return false;
+  if (saved.savedAt && saved.savedAt === restoredWorkoutDraftSavedAt && workoutDraftExercises.length) {
+    if (open) setWorkoutBuilderOpen(true, { focus: false });
+    return true;
+  }
+  Object.entries(saved.fields).forEach(([name, value]) => {
+    const field = workoutForm.elements.namedItem(name);
+    if (field && "value" in field) field.value = String(value ?? "");
+  });
+  workoutDraftExercises = saved.exercises.map((exercise, index) => toDraftExercise(exercise, index));
+  restoredWorkoutDraftSavedAt = saved.savedAt || "";
+  writeWorkoutDraftText();
+  const editingWorkout = workouts.find((workout) => workout.id === saved.editingWorkoutId) || null;
+  setWorkoutEditingMode(editingWorkout);
+  setWorkoutDraftDirty(true, "● Alterações não publicadas · rascunho recuperado");
+  renderWorkoutPreview();
+  if (open || saved.builderOpen) {
+    navigate("workouts");
+    setWorkoutBuilderOpen(true, { focus: false });
+    showToast("Rascunho de treino recuperado.");
+  }
+  return true;
+};
+
 const setWorkoutEditingMode = (workout = null) => {
   editingWorkoutId = workout?.id || "";
   if (workoutBuilderMode) workoutBuilderMode.textContent = workout ? "Editar treino publicado" : "Adicionar treino";
@@ -1512,6 +1718,7 @@ const workoutToEditableBlocks = (workout) => (workout.exercises || [])
 
 const loadWorkoutForEditing = (workout) => {
   if (!workoutForm || !workout) return;
+  clearStoredWorkoutDraft();
   const studentSelect = workoutForm.querySelector("[name='student']");
   const titleInput = workoutForm.querySelector("[name='title']");
   const templateInput = workoutForm.querySelector("[name='template']");
@@ -1522,18 +1729,22 @@ const loadWorkoutForEditing = (workout) => {
   if (titleInput) titleInput.value = workoutToEditableTitle(workout);
   if (templateInput) templateInput.value = workout.focus || templateInput.value;
   if (startsAtInput) startsAtInput.value = formatDateForInput(workout.startsAt || workout.updatedAt);
+  workoutDraftExercises = (workout.exercises || []).map((exercise, index) => toDraftExercise(exercise, index));
   if (blocksInput) blocksInput.value = workoutToEditableBlocks(workout);
-  workoutDraftDetails = (workout.exercises || []).map((exercise) => ({ ...exercise }));
+  workoutDraftTextSignature = blocksInput?.value || "";
 
   setWorkoutEditingMode(workout);
-  setWorkoutSyncStatus("Editando treino publicado. Salve para atualizar o app do aluno.", "");
+  setWorkoutDraftDirty(false);
   renderWorkoutPreview();
   focusWorkoutForm();
 };
 
-const resetWorkoutFormMode = ({ resetForm = false } = {}) => {
+const resetWorkoutFormMode = ({ resetForm = false, clearStored = false } = {}) => {
   if (resetForm) workoutForm?.reset();
-  workoutDraftDetails = [];
+  workoutDraftExercises = [];
+  workoutDraftTextSignature = getWorkoutBlocksInput()?.value || "";
+  workoutDraftDirty = false;
+  if (clearStored) clearStoredWorkoutDraft();
   setWorkoutEditingMode(null);
   renderWorkoutPreview();
 };
@@ -1732,36 +1943,7 @@ const renderStudents = () => {
 
 const getWorkoutDraft = () => {
   if (!workoutForm) return { exercises: [], totalSets: 0, estimatedMinutes: 0 };
-  const data = new FormData(workoutForm);
-  const lines = String(data.get("blocks") || "")
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 12);
-
-  const exercises = lines.map((line, index) => {
-    const parsedExercise = parseExerciseLine(line, index, "draft");
-    const normalizedName = parsedExercise.name.trim().toLocaleLowerCase("pt-BR");
-    const previous = workoutDraftDetails.find((exercise) => (
-      exercise.name.trim().toLocaleLowerCase("pt-BR") === normalizedName
-    ));
-    return {
-      ...parsedExercise,
-      ...(previous ? {
-        target: previous.target,
-        load: previous.load,
-        rest: previous.rest,
-        tempo: previous.tempo,
-        rir: previous.rir,
-        notes: previous.notes,
-        instructions: previous.instructions,
-        mediaUrl: previous.mediaUrl,
-        mediaType: previous.mediaType
-      } : {}),
-      parsed: /\d+\s*x\s*.+/i.test(line)
-    };
-  });
-  workoutDraftDetails = exercises.map((exercise) => ({ ...exercise }));
+  const exercises = reconcileWorkoutDraftFromText();
   const totalSets = exercises.reduce((sum, exercise) => sum + parseSets(exercise.prescription), 0);
 
   return {
@@ -1770,6 +1952,17 @@ const getWorkoutDraft = () => {
     estimatedMinutes: exercises.length ? Math.max(28, exercises.length * 7) : 0
   };
 };
+
+const renderWorkoutInsertSlot = (index) => `
+  <div class="workout-insert-slot" data-workout-insert-slot="${index}">
+    <button type="button" data-open-workout-insert="${index}">+ Adicionar exercício aqui</button>
+    <form class="workout-insert-form" data-workout-insert-form="${index}" hidden>
+      <input name="exercise" autocomplete="off" placeholder="Elevação lateral 3x12" aria-label="Novo exercício na posição ${index + 1}" required />
+      <button class="button" type="submit">Adicionar</button>
+      <button class="button button--quiet" type="button" data-cancel-workout-insert>Cancelar</button>
+    </form>
+  </div>
+`;
 
 const renderWorkoutPreview = () => {
   if (!previewList || !previewExercises || !previewSets || !previewMinutes) return;
@@ -1789,21 +1982,39 @@ const renderWorkoutPreview = () => {
   }
 
   previewList.innerHTML = draft.exercises.map((exercise, index) => `
+    <div class="workout-preview__entry" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}">
     <article class="workout-preview__item workout-preview__item--editable">
-      <span>${String(index + 1).padStart(2, "0")}</span>
+      <button class="workout-exercise-drag-handle" type="button" data-draft-drag-handle="${escapeHtml(exercise.draftKey)}" aria-label="Mover ${escapeHtml(exercise.name)}. Use as setas para reordenar." title="Arrastar para reordenar">⋮⋮</button>
+      <span class="workout-preview__number">${String(index + 1).padStart(2, "0")}</span>
       <div class="workout-preview__exercise-main">
-        <strong>${escapeHtml(exercise.name)}</strong>
-        <small>${escapeHtml(exercise.prescription)} - ${escapeHtml(exercise.rest)} descanso</small>
+        <div class="workout-preview__exercise-head">
+          <div>
+            <strong data-preview-exercise-name>${escapeHtml(exercise.name)}</strong>
+            <small data-preview-exercise-prescription>${escapeHtml(exercise.prescription)} - ${escapeHtml(exercise.rest)} descanso</small>
+          </div>
+          <details class="action-menu workout-exercise-menu">
+            <summary class="icon-button" aria-label="Ações para ${escapeHtml(exercise.name)}">•••</summary>
+            <div class="action-menu__popover action-menu__popover--end">
+              <button type="button" data-edit-draft-exercise="${escapeHtml(exercise.draftKey)}">Editar exercício</button>
+              <button type="button" data-duplicate-draft-exercise="${escapeHtml(exercise.draftKey)}">Duplicar exercício</button>
+              <button class="is-danger" type="button" data-delete-draft-exercise="${escapeHtml(exercise.draftKey)}">Excluir exercício</button>
+            </div>
+          </details>
+        </div>
         <details class="exercise-detail-editor">
           <summary>Detalhes para o aluno</summary>
-          <div class="exercise-detail-editor__grid">
-            <label>Descanso<input name="draft-rest-${index}" value="${escapeHtml(exercise.rest)}" data-draft-exercise-field="rest" data-draft-exercise-index="${index}" placeholder="60s" /></label>
-            <label>RIR<input name="draft-rir-${index}" value="${escapeHtml(exercise.rir)}" data-draft-exercise-field="rir" data-draft-exercise-index="${index}" placeholder="2" /></label>
-            <label>Cadência<input name="draft-tempo-${index}" value="${escapeHtml(exercise.tempo)}" data-draft-exercise-field="tempo" data-draft-exercise-index="${index}" placeholder="2-0-2" /></label>
+          <div class="exercise-detail-editor__grid exercise-detail-editor__grid--identity">
+            <label>Nome<input name="draft-name-${index}" value="${escapeHtml(exercise.name)}" data-draft-exercise-field="name" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" /></label>
+            <label>Séries e repetições<input name="draft-prescription-${index}" value="${escapeHtml(exercise.prescription)}" data-draft-exercise-field="prescription" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="4 x 10" /></label>
           </div>
-          <label>Instrução curta<textarea name="draft-instructions-${index}" rows="2" maxlength="240" data-draft-exercise-field="instructions" data-draft-exercise-index="${index}" placeholder="Ex: mantenha as escápulas apoiadas">${escapeHtml(exercise.instructions || "")}</textarea></label>
+          <div class="exercise-detail-editor__grid">
+            <label>Descanso<input name="draft-rest-${index}" value="${escapeHtml(exercise.rest)}" data-draft-exercise-field="rest" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="60s" /></label>
+            <label>RIR<input name="draft-rir-${index}" value="${escapeHtml(exercise.rir)}" data-draft-exercise-field="rir" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="2" /></label>
+            <label>Cadência<input name="draft-tempo-${index}" value="${escapeHtml(exercise.tempo)}" data-draft-exercise-field="tempo" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="2-0-2" /></label>
+          </div>
+          <label>Instrução curta<textarea name="draft-instructions-${index}" rows="2" maxlength="240" data-draft-exercise-field="instructions" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="Ex: mantenha as escápulas apoiadas">${escapeHtml(exercise.instructions || "")}</textarea></label>
           <label>Tipo da demonstração
-            <select name="draft-media-type-${index}" data-draft-exercise-field="mediaType" data-draft-exercise-index="${index}">
+            <select name="draft-media-type-${index}" data-draft-exercise-field="mediaType" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}">
               <option value="none" ${!exercise.mediaType || exercise.mediaType === "none" ? "selected" : ""}>Sem mídia</option>
               <option value="image" ${exercise.mediaType === "image" ? "selected" : ""}>Imagem</option>
               <option value="gif" ${exercise.mediaType === "gif" ? "selected" : ""}>GIF</option>
@@ -1812,14 +2023,253 @@ const renderWorkoutPreview = () => {
               <option value="external" ${exercise.mediaType === "external" ? "selected" : ""}>Link externo</option>
             </select>
           </label>
-          <label>URL da demonstração<input type="url" name="draft-media-${index}" value="${escapeHtml(exercise.mediaUrl || "")}" data-draft-exercise-field="mediaUrl" data-draft-exercise-index="${index}" placeholder="https://..." /></label>
+          <label>URL da demonstração<input type="url" name="draft-media-${index}" value="${escapeHtml(exercise.mediaUrl || "")}" data-draft-exercise-field="mediaUrl" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="https://..." /></label>
           <small class="field-help">Aceita HTTPS, incluindo YouTube, imagem, GIF ou vídeo direto.</small>
         </details>
       </div>
       <em>${exercise.parsed ? "ok" : "estimado"}</em>
     </article>
+    ${renderWorkoutInsertSlot(index + 1)}
+    </div>
   `).join("");
 };
+
+const findDraftExerciseIndex = (draftKey) => workoutDraftExercises
+  .findIndex((exercise) => exercise.draftKey === draftKey);
+
+const findDraftExerciseHandle = (draftKey) => [...(previewList?.querySelectorAll("[data-draft-drag-handle]") || [])]
+  .find((handle) => handle.dataset.draftDragHandle === draftKey) || null;
+
+const commitWorkoutDraftMutation = ({ focusKey = "", announce = "" } = {}) => {
+  writeWorkoutDraftText();
+  markWorkoutDraftChanged();
+  renderWorkoutPreview();
+  if (announce) showToast(announce);
+  if (focusKey) {
+    window.setTimeout(() => findDraftExerciseHandle(focusKey)?.focus(), 0);
+  }
+};
+
+const moveDraftExercise = (draftKey, nextIndex) => {
+  const currentIndex = findDraftExerciseIndex(draftKey);
+  if (currentIndex < 0 || workoutDraftExercises.length < 2) return false;
+  const boundedIndex = Math.max(0, Math.min(nextIndex, workoutDraftExercises.length - 1));
+  if (boundedIndex === currentIndex) return false;
+  const [exercise] = workoutDraftExercises.splice(currentIndex, 1);
+  workoutDraftExercises.splice(boundedIndex, 0, exercise);
+  commitWorkoutDraftMutation({ focusKey: draftKey });
+  return true;
+};
+
+const duplicateDraftExercise = (draftKey) => {
+  const index = findDraftExerciseIndex(draftKey);
+  if (index < 0 || workoutDraftExercises.length >= 12) {
+    showToast(index < 0 ? "Exercício não encontrado." : "O treino aceita até 12 exercícios.");
+    return;
+  }
+  const source = workoutDraftExercises[index];
+  const copy = toDraftExercise({
+    ...source,
+    id: `draft-copy-${Date.now()}`,
+    draftKey: createDraftExerciseKey(),
+    sourceLine: exerciseToDraftLine(source)
+  }, index + 1);
+  workoutDraftExercises.splice(index + 1, 0, copy);
+  commitWorkoutDraftMutation({ focusKey: copy.draftKey, announce: "Exercício duplicado." });
+};
+
+const deleteDraftExercise = (draftKey) => {
+  const index = findDraftExerciseIndex(draftKey);
+  if (index < 0) return;
+  const [exercise] = workoutDraftExercises.splice(index, 1);
+  removedWorkoutExercise = { exercise, index };
+  writeWorkoutDraftText();
+  markWorkoutDraftChanged();
+  renderWorkoutPreview();
+  showToast("Exercício removido.", {
+    actionLabel: "Desfazer",
+    duration: 5200,
+    onAction: () => {
+      if (!removedWorkoutExercise) return;
+      const restored = removedWorkoutExercise;
+      removedWorkoutExercise = null;
+      workoutDraftExercises.splice(Math.min(restored.index, workoutDraftExercises.length), 0, restored.exercise);
+      commitWorkoutDraftMutation({ focusKey: restored.exercise.draftKey, announce: "Exercício restaurado." });
+    }
+  });
+};
+
+const insertDraftExercise = (line, index) => {
+  const normalizedLine = String(line || "").trim();
+  if (!normalizedLine) {
+    showToast("Digite o exercício antes de adicionar.");
+    return false;
+  }
+  if (workoutDraftExercises.length >= 12) {
+    showToast("O treino aceita até 12 exercícios.");
+    return false;
+  }
+  const parsed = parseExerciseLine(normalizedLine, index, "draft");
+  const exercise = toDraftExercise({
+    ...parsed,
+    draftKey: createDraftExerciseKey(),
+    parsed: /\d+\s*x\s*.+/i.test(normalizedLine)
+  }, index, normalizedLine);
+  workoutDraftExercises.splice(Math.max(0, Math.min(index, workoutDraftExercises.length)), 0, exercise);
+  commitWorkoutDraftMutation({ focusKey: exercise.draftKey, announce: "Exercício adicionado." });
+  return true;
+};
+
+const updateDraftExerciseField = (input) => {
+  const draftKey = input.dataset.draftExerciseKey;
+  const field = input.dataset.draftExerciseField;
+  const exercise = workoutDraftExercises.find((item) => item.draftKey === draftKey);
+  if (!exercise || !field) return;
+  exercise[field] = input.value;
+  if (field === "name" || field === "prescription") {
+    exercise.sourceLine = "";
+    writeWorkoutDraftText();
+    const card = input.closest(".workout-preview__item");
+    const nameTarget = card?.querySelector("[data-preview-exercise-name]");
+    if (field === "name" && nameTarget) nameTarget.textContent = exercise.name;
+    const prescription = card?.querySelector("[data-preview-exercise-prescription]");
+    if (prescription) prescription.textContent = `${exercise.prescription} - ${exercise.rest} descanso`;
+  } else if (field === "rest") {
+    const prescription = input.closest(".workout-preview__item")?.querySelector("[data-preview-exercise-prescription]");
+    if (prescription) prescription.textContent = `${exercise.prescription} - ${exercise.rest} descanso`;
+  }
+  markWorkoutDraftChanged();
+};
+
+const clearWorkoutDragVisuals = () => {
+  previewList?.querySelectorAll(".is-dragging, .is-drop-before, .is-drop-after")
+    .forEach((element) => element.classList.remove("is-dragging", "is-drop-before", "is-drop-after"));
+  document.body.classList.remove("is-reordering-workout");
+};
+
+const finishWorkoutDrag = ({ cancel = false } = {}) => {
+  if (!activeWorkoutDrag) return;
+  const { key, moved } = activeWorkoutDrag;
+  if (moved && !cancel) {
+    const order = [...previewList.querySelectorAll(".workout-preview__entry[data-draft-exercise-key]")]
+      .map((entry) => entry.dataset.draftExerciseKey);
+    const byKey = new Map(workoutDraftExercises.map((exercise) => [exercise.draftKey, exercise]));
+    workoutDraftExercises = order.map((draftKey) => byKey.get(draftKey)).filter(Boolean);
+    writeWorkoutDraftText();
+    markWorkoutDraftChanged();
+  }
+  activeWorkoutDrag = null;
+  clearWorkoutDragVisuals();
+  if (moved) {
+    renderWorkoutPreview();
+    window.setTimeout(() => findDraftExerciseHandle(key)?.focus(), 0);
+  }
+};
+
+previewList?.addEventListener("pointerdown", (event) => {
+  const handle = event.target.closest("[data-draft-drag-handle]");
+  if (!handle || !event.isPrimary || event.button !== 0) return;
+  const entry = handle.closest(".workout-preview__entry");
+  if (!entry) return;
+  activeWorkoutDrag = {
+    pointerId: event.pointerId,
+    key: handle.dataset.draftDragHandle,
+    entry,
+    startY: event.clientY,
+    moved: false
+  };
+  handle.setPointerCapture?.(event.pointerId);
+});
+
+previewList?.addEventListener("pointermove", (event) => {
+  if (!activeWorkoutDrag || activeWorkoutDrag.pointerId !== event.pointerId) return;
+  if (!activeWorkoutDrag.moved && Math.abs(event.clientY - activeWorkoutDrag.startY) < 6) return;
+  event.preventDefault();
+  activeWorkoutDrag.moved = true;
+  activeWorkoutDrag.entry.classList.add("is-dragging");
+  document.body.classList.add("is-reordering-workout");
+  const listRect = previewList.getBoundingClientRect();
+  const autoScrollEdge = 52;
+  if (event.clientY < listRect.top + autoScrollEdge) previewList.scrollBy({ top: -14, behavior: "auto" });
+  else if (event.clientY > listRect.bottom - autoScrollEdge) previewList.scrollBy({ top: 14, behavior: "auto" });
+  const targetEntry = document.elementFromPoint(event.clientX, event.clientY)
+    ?.closest(".workout-preview__entry");
+  previewList.querySelectorAll(".is-drop-before, .is-drop-after")
+    .forEach((entry) => entry.classList.remove("is-drop-before", "is-drop-after"));
+  if (!targetEntry || targetEntry === activeWorkoutDrag.entry) return;
+  const rect = targetEntry.getBoundingClientRect();
+  const placeBefore = event.clientY < rect.top + (rect.height / 2);
+  targetEntry.classList.add(placeBefore ? "is-drop-before" : "is-drop-after");
+  previewList.insertBefore(activeWorkoutDrag.entry, placeBefore ? targetEntry : targetEntry.nextElementSibling);
+});
+
+previewList?.addEventListener("pointerup", (event) => {
+  if (activeWorkoutDrag?.pointerId === event.pointerId) finishWorkoutDrag();
+});
+
+previewList?.addEventListener("pointercancel", (event) => {
+  if (activeWorkoutDrag?.pointerId === event.pointerId) finishWorkoutDrag({ cancel: true });
+});
+
+previewList?.addEventListener("keydown", (event) => {
+  const handle = event.target.closest("[data-draft-drag-handle]");
+  if (!handle || !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  const index = findDraftExerciseIndex(handle.dataset.draftDragHandle);
+  const nextIndex = event.key === "Home"
+    ? 0
+    : event.key === "End"
+      ? workoutDraftExercises.length - 1
+      : index + (event.key === "ArrowUp" ? -1 : 1);
+  moveDraftExercise(handle.dataset.draftDragHandle, nextIndex);
+});
+
+previewList?.addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-edit-draft-exercise]");
+  if (editButton) {
+    const entry = editButton.closest(".workout-preview__entry");
+    editButton.closest(".action-menu")?.removeAttribute("open");
+    const details = entry?.querySelector(".exercise-detail-editor");
+    if (details) details.open = true;
+    window.setTimeout(() => details?.querySelector("[data-draft-exercise-field='name']")?.focus(), 0);
+    return;
+  }
+  const duplicateButton = event.target.closest("[data-duplicate-draft-exercise]");
+  if (duplicateButton) {
+    duplicateDraftExercise(duplicateButton.dataset.duplicateDraftExercise);
+    return;
+  }
+  const deleteButton = event.target.closest("[data-delete-draft-exercise]");
+  if (deleteButton) {
+    deleteDraftExercise(deleteButton.dataset.deleteDraftExercise);
+    return;
+  }
+  const openInsert = event.target.closest("[data-open-workout-insert]");
+  if (openInsert) {
+    const slot = openInsert.closest(".workout-insert-slot");
+    openInsert.hidden = true;
+    const form = slot?.querySelector("[data-workout-insert-form]");
+    if (form) form.hidden = false;
+    window.setTimeout(() => form?.querySelector("input")?.focus(), 0);
+    return;
+  }
+  const cancelInsert = event.target.closest("[data-cancel-workout-insert]");
+  if (cancelInsert) {
+    const slot = cancelInsert.closest(".workout-insert-slot");
+    const form = cancelInsert.closest("form");
+    if (form) form.hidden = true;
+    const button = slot?.querySelector("[data-open-workout-insert]");
+    if (button) button.hidden = false;
+  }
+});
+
+previewList?.addEventListener("submit", (event) => {
+  const form = event.target.closest("[data-workout-insert-form]");
+  if (!form) return;
+  event.preventDefault();
+  const index = Number(form.dataset.workoutInsertForm);
+  insertDraftExercise(new FormData(form).get("exercise"), index);
+});
 
 const isValidHttpsUrl = (value) => {
   if (!value) return true;
@@ -1878,6 +2328,7 @@ const renderWorkouts = () => {
           <details class="action-menu entity-menu">
             <summary class="icon-button" aria-label="Mais ações para ${escapeHtml(workout.title)}">•••</summary>
             <div class="action-menu__popover action-menu__popover--end">
+              <button type="button" data-workout-duplicate="${escapeHtml(workout.id)}">Duplicar treino</button>
               <button class="is-danger" type="button" data-workout-archive="${escapeHtml(workout.id)}">Arquivar</button>
             </div>
           </details>
@@ -1891,6 +2342,29 @@ const renderWorkouts = () => {
     </div>
     ${rows}
   `;
+};
+
+const renderDuplicateWorkoutStudents = (selectedStudentId = "") => {
+  if (!duplicateWorkoutStudents) return;
+  duplicateWorkoutStudents.innerHTML = students.map((student) => `
+    <option value="${escapeHtml(student.id)}" ${student.id === selectedStudentId ? "selected" : ""}>${escapeHtml(student.name)}${student.email ? ` · ${escapeHtml(student.email)}` : ""}</option>
+  `).join("");
+};
+
+const openDuplicateWorkoutDialog = (workout) => {
+  if (!duplicateWorkoutDialog || !duplicateWorkoutForm || !workout) return;
+  duplicateWorkoutSourceId = workout.id;
+  renderDuplicateWorkoutStudents(workout.studentId);
+  duplicateWorkoutForm.elements.namedItem("title").value = `${workout.title} - cópia`;
+  duplicateWorkoutForm.elements.namedItem("startsAt").value = workoutDateInputValue(new Date());
+  setStatus(duplicateWorkoutStatus, "Escolha o destino e confirme a nova cópia.", "");
+  if (!duplicateWorkoutDialog.open) duplicateWorkoutDialog.showModal();
+  window.setTimeout(() => duplicateWorkoutForm.elements.namedItem("title")?.focus(), 80);
+};
+
+const closeDuplicateWorkoutDialog = () => {
+  duplicateWorkoutSourceId = "";
+  if (duplicateWorkoutDialog?.open) duplicateWorkoutDialog.close();
 };
 
 const applyTheme = (overrides = {}) => {
@@ -1945,7 +2419,12 @@ navItems.forEach((item) => item.addEventListener("click", (event) => {
 jumpButtons.forEach((button) => button.addEventListener("click", () => {
   navigate(button.dataset.navJump);
   if (button.hasAttribute("data-open-student-form")) setStudentFormOpen(true);
-  if (button.hasAttribute("data-focus-workout-form")) focusWorkoutForm();
+  if (button.hasAttribute("data-focus-workout-form")) {
+    if (!restoreStoredWorkoutDraft({ open: true })) {
+      resetWorkoutFormMode({ resetForm: true });
+      focusWorkoutForm();
+    }
+  }
 }));
 
 document.querySelector("[data-close-student-form]")?.addEventListener("click", () => setStudentFormOpen(false, { focus: false }));
@@ -1961,7 +2440,7 @@ document.querySelector("[data-open-import-dialog]")?.addEventListener("click", (
 });
 document.querySelector("[data-close-import-dialog]")?.addEventListener("click", () => importDialog?.close());
 document.querySelector("[data-close-workout-form]")?.addEventListener("click", () => {
-  resetWorkoutFormMode({ resetForm: true });
+  if (workoutDraftDirty) saveWorkoutDraftLocally({ builderOpen: false });
   setWorkoutBuilderOpen(false, { focus: false });
 });
 
@@ -2130,6 +2609,76 @@ studentImportForm?.addEventListener("submit", async (event) => {
   setText("[data-student-import-file]", "Nenhum arquivo selecionado");
 });
 
+const saveAndPublishWorkout = async (workout, { pendingMessage = "Publicando treino..." } = {}) => {
+  const savedWorkout = workoutRepository.savePublishedWorkout(workout);
+  const linkedStudent = students.find((student) => student.id === savedWorkout.studentId);
+  if (linkedStudent) {
+    studentRepository.saveStudent({
+      ...linkedStudent,
+      workout: savedWorkout.title,
+      nextAction: "Ver treino publicado",
+      updatedAt: savedWorkout.updatedAt
+    });
+  }
+  applyPublishedWorkouts([savedWorkout, ...workouts.filter((item) => item.id !== savedWorkout.id)]);
+  setWorkoutSyncStatus(pendingMessage, "");
+  const result = await workoutRepository.syncPublishedWorkout(savedWorkout, linkedStudent);
+  setWorkoutSyncStatus(
+    describeWorkoutSyncResult(result),
+    result.synced && !result.partial ? "synced" : "warning"
+  );
+  if (result.workout) {
+    applyPublishedWorkouts([result.workout, ...workouts.filter((item) => item.id !== result.workout.id)]);
+  }
+  return { ...result, savedWorkout: result.workout || savedWorkout };
+};
+
+duplicateWorkoutForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const sourceWorkout = workouts.find((workout) => workout.id === duplicateWorkoutSourceId);
+  const data = new FormData(event.currentTarget);
+  const destinationStudent = students.find((student) => student.id === data.get("student"));
+  if (!authContext?.user || !sourceWorkout || !destinationStudent) {
+    setStatus(duplicateWorkoutStatus, "Não foi possível identificar o treino ou aluno de destino.", "warning");
+    return;
+  }
+  const submitButton = event.currentTarget.querySelector("button[type='submit']");
+  submitButton.disabled = true;
+  setStatus(duplicateWorkoutStatus, "Criando uma cópia independente...", "");
+  try {
+    const copy = createWorkoutFromProfessorForm({
+      student: destinationStudent,
+      coachId: authContext.coachId,
+      title: data.get("title"),
+      template: sourceWorkout.focus,
+      blocks: workoutToEditableBlocks(sourceWorkout),
+      exercises: (sourceWorkout.exercises || []).map((exercise) => ({ ...exercise })),
+      startsAt: data.get("startsAt"),
+      version: 1
+    });
+    const result = await saveAndPublishWorkout(copy, { pendingMessage: "Criando e publicando a cópia..." });
+    closeDuplicateWorkoutDialog();
+    loadWorkoutForEditing(result.savedWorkout);
+    setWorkoutSyncStatus(
+      result.synced ? "✓ Cópia criada e publicada" : "● Cópia criada localmente · publicação pendente",
+      result.synced ? "synced" : "warning"
+    );
+    showToast(result.synced ? "Cópia criada sem alterar o treino original." : "Cópia criada; publicação ainda pendente.");
+  } catch (error) {
+    console.error("[FlowFit][professor] Falha ao duplicar treino.", error);
+    setStatus(duplicateWorkoutStatus, error?.message || "Não foi possível criar a cópia.", "warning");
+    showToast("A cópia não foi criada.");
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+
+document.querySelector("[data-close-duplicate-workout]")?.addEventListener("click", closeDuplicateWorkoutDialog);
+duplicateWorkoutDialog?.addEventListener("close", () => { duplicateWorkoutSourceId = ""; });
+duplicateWorkoutDialog?.addEventListener("click", (event) => {
+  if (event.target === duplicateWorkoutDialog) closeDuplicateWorkoutDialog();
+});
+
 workoutForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!authContext?.user) {
@@ -2165,33 +2714,18 @@ workoutForm?.addEventListener("submit", async (event) => {
     title: data.get("title"),
     template: data.get("template"),
     blocks: data.get("blocks"),
-    exercises: workoutDraft.exercises,
+    exercises: workoutDraft.exercises.map(toPublishedExercise),
     workoutId: editingWorkout?.id,
     startsAt: data.get("startsAt"),
     version: editingWorkout ? Number(editingWorkout.version || 1) + 1 : 1
   });
-  const savedWorkout = workoutRepository.savePublishedWorkout(workout);
-  const linkedStudent = students.find((student) => student.id === savedWorkout.studentId);
-  if (linkedStudent) {
-    studentRepository.saveStudent({
-      ...linkedStudent,
-      workout: savedWorkout.title,
-      nextAction: "Ver treino publicado",
-      updatedAt: savedWorkout.updatedAt
-    });
-  }
-
-  applyPublishedWorkouts([savedWorkout, ...workouts.filter((item) => item.id !== savedWorkout.id)]);
-  setWorkoutSyncStatus(editingWorkout ? "Salvando atualização do treino..." : "Publicando treino...", "");
-
-  const result = await workoutRepository.syncPublishedWorkout(savedWorkout, linkedStudent);
-  setWorkoutSyncStatus(
-    describeWorkoutSyncResult(result),
-    result.synced && !result.partial ? "synced" : "warning"
-  );
-  if (result.workout) applyPublishedWorkouts([result.workout, ...workouts.filter((item) => item.id !== result.workout.id)]);
+  const result = await saveAndPublishWorkout(workout, {
+    pendingMessage: editingWorkout ? "Salvando atualização do treino..." : "Publicando treino..."
+  });
   if (result.synced) {
     showToast(editingWorkout ? "Treino republicado e confirmado." : "Treino publicado e confirmado.");
+    setWorkoutDraftDirty(false);
+    clearStoredWorkoutDraft();
     resetWorkoutFormMode({ resetForm: true });
     setWorkoutBuilderOpen(false, { focus: false });
   } else {
@@ -2202,23 +2736,38 @@ workoutForm?.addEventListener("submit", async (event) => {
 workoutForm?.addEventListener("input", (event) => {
   const detailInput = event.target.closest("[data-draft-exercise-field]");
   if (detailInput) {
-    const index = Number(detailInput.dataset.draftExerciseIndex);
-    const field = detailInput.dataset.draftExerciseField;
-    if (workoutDraftDetails[index] && field) workoutDraftDetails[index][field] = detailInput.value.trim();
+    updateDraftExerciseField(detailInput);
     return;
   }
-  renderWorkoutPreview();
+  if (event.target.matches("[name='blocks']")) {
+    reconcileWorkoutDraftFromText({ force: true });
+    renderWorkoutPreview();
+  }
+  markWorkoutDraftChanged();
 });
 workoutForm?.addEventListener("change", (event) => {
-  if (!event.target.closest("[data-draft-exercise-field]")) renderWorkoutPreview();
+  const detailInput = event.target.closest("[data-draft-exercise-field]");
+  if (detailInput) updateDraftExerciseField(detailInput);
+  else markWorkoutDraftChanged();
 });
 
 previewList?.addEventListener("input", (event) => {
   const detailInput = event.target.closest("[data-draft-exercise-field]");
   if (!detailInput) return;
-  const index = Number(detailInput.dataset.draftExerciseIndex);
-  const field = detailInput.dataset.draftExerciseField;
-  if (workoutDraftDetails[index] && field) workoutDraftDetails[index][field] = detailInput.value.trim();
+  updateDraftExerciseField(detailInput);
+});
+
+previewList?.addEventListener("change", (event) => {
+  const detailInput = event.target.closest("[data-draft-exercise-field]");
+  if (detailInput) updateDraftExerciseField(detailInput);
+});
+
+saveWorkoutDraftButton?.addEventListener("click", () => {
+  const saved = saveWorkoutDraftLocally({ notify: true });
+  setWorkoutSyncStatus(
+    saved ? "● Alterações não publicadas · rascunho salvo localmente" : "Não foi possível salvar o rascunho.",
+    "warning"
+  );
 });
 
 const handleThemeControlChange = () => {
@@ -2405,8 +2954,10 @@ document.addEventListener("click", async (event) => {
 
   const openWorkoutButton = event.target.closest("[data-open-workout-form]");
   if (openWorkoutButton) {
-    resetWorkoutFormMode({ resetForm: true });
-    focusWorkoutForm();
+    if (!restoreStoredWorkoutDraft({ open: true })) {
+      resetWorkoutFormMode({ resetForm: true });
+      focusWorkoutForm();
+    }
     return;
   }
 
@@ -2422,7 +2973,7 @@ document.addEventListener("click", async (event) => {
     }
 
     if (action === "new-workout") {
-      resetWorkoutFormMode({ resetForm: true });
+      resetWorkoutFormMode({ resetForm: true, clearStored: true });
       const studentSelect = document.querySelector("[data-student-options]");
       if (studentSelect && student) studentSelect.value = student.id;
       renderWorkoutPreview();
@@ -2481,7 +3032,7 @@ document.addEventListener("click", async (event) => {
       }
       const studentSelect = document.querySelector("[data-student-options]");
       if (studentSelect) studentSelect.value = student.id;
-      resetWorkoutFormMode();
+      resetWorkoutFormMode({ clearStored: true });
       renderWorkoutPreview();
     }
     focusWorkoutForm();
@@ -2491,6 +3042,15 @@ document.addEventListener("click", async (event) => {
   if (workoutAction) {
     const workout = workouts.find((item) => item.id === workoutAction.dataset.workoutAction);
     if (workout) loadWorkoutForEditing(workout);
+    return;
+  }
+
+  const workoutDuplicate = event.target.closest("[data-workout-duplicate]");
+  if (workoutDuplicate) {
+    const workout = workouts.find((item) => item.id === workoutDuplicate.dataset.workoutDuplicate);
+    workoutDuplicate.closest("details")?.removeAttribute("open");
+    if (workout) openDuplicateWorkoutDialog(workout);
+    return;
   }
 
   const workoutArchive = event.target.closest("[data-workout-archive]");
@@ -2514,7 +3074,7 @@ document.addEventListener("click", async (event) => {
 });
 
 cancelWorkoutEditButton?.addEventListener("click", () => {
-  resetWorkoutFormMode({ resetForm: true });
+  resetWorkoutFormMode({ resetForm: true, clearStored: true });
   setWorkoutSyncStatus("Edição cancelada. Pronto para publicar novo treino.", "");
   setWorkoutBuilderOpen(false, { focus: false });
 });
@@ -2753,6 +3313,11 @@ const startAuthenticatedPanel = async () => {
     }
   });
 
+  const pendingWorkoutDraft = Platform.storage.get(getWorkoutDraftStorageKey(), null);
+  if (pendingWorkoutDraft?.builderOpen && pendingWorkoutDraft.savedAt !== restoredWorkoutDraftSavedAt) {
+    restoreStoredWorkoutDraft({ open: true });
+  }
+
   let remote = null;
   try {
     remote = await themeRepository.fetchBrandTheme();
@@ -2856,6 +3421,12 @@ const revalidateCoachAccess = () => {
 window.addEventListener("focus", () => revalidateCoachAccess());
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") revalidateCoachAccess();
+});
+
+window.addEventListener("beforeunload", () => {
+  if (workoutDraftDirty) {
+    saveWorkoutDraftLocally({ builderOpen: !workoutBuilder?.hidden });
+  }
 });
 
 initializeOptionalPwaFeatures();
