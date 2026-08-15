@@ -63,6 +63,60 @@ body.has-onboarding {
   overflow: hidden;
 }
 
+.auth-session-check--minimal {
+  width: auto;
+  gap: 0;
+  padding: var(--space-4);
+}
+
+.auth-session-spinner--orbit {
+  position: relative;
+  width: 3.4rem;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 24%, var(--color-line));
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-accent) 5%, transparent), transparent 68%);
+  box-shadow:
+    inset 0 0 1rem color-mix(in srgb, var(--color-accent) 7%, transparent),
+    0 0 1.5rem color-mix(in srgb, var(--color-accent) 6%, transparent);
+  animation: auth-session-orbit 2.2s cubic-bezier(0.82, 0, 0.18, 1) infinite;
+  will-change: transform;
+}
+
+.auth-session-spinner--orbit::after {
+  content: "";
+  position: absolute;
+  top: -0.28rem;
+  left: 50%;
+  width: 0.56rem;
+  aspect-ratio: 1;
+  border: 0.1rem solid var(--color-bg);
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow:
+    0 0 0.45rem color-mix(in srgb, var(--color-accent) 75%, transparent),
+    0 0 1rem color-mix(in srgb, var(--color-accent) 38%, transparent);
+  transform: translateX(-50%);
+}
+
+@keyframes auth-session-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-session-spinner--orbit {
+    animation: none;
+  }
+
+  .auth-session-spinner--orbit::after {
+    animation: auth-session-orbit-pulse 1.8s ease-in-out infinite;
+  }
+}
+
+@keyframes auth-session-orbit-pulse {
+  50% { opacity: 0.38; }
+}
+
 .onboarding {
   position: fixed;
   z-index: 50;

@@ -13,19 +13,16 @@
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="preload" as="image" type="image/png" href="assets/icons/startup-logo-512.png" fetchpriority="high" />
     <link rel="stylesheet" href="css/tokens.css?v=build-20260814-1" />
     <link rel="stylesheet" href="css/components.css?v=build-20260814-2" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260814-9" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260814-10" />
     <script type="module" src="js/app.js?v=build-20260814-9"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title" aria-busy="true">
-      <div class="auth-session-check card" data-auth-session-check role="status" aria-live="polite">
-        <img class="app-startup-logo" src="assets/icons/startup-logo-512.png" width="512" height="512" alt="" aria-hidden="true" fetchpriority="high" />
-        <span class="auth-session-spinner" aria-hidden="true"></span>
-        <strong>Verificando seu acesso</strong>
-        <small>Procurando uma sessão salva neste aparelho.</small>
+      <div class="auth-session-check auth-session-check--minimal" data-auth-session-check role="status" aria-live="polite">
+        <span class="auth-session-spinner auth-session-spinner--orbit" aria-hidden="true"></span>
+        <span class="sr-only">Verificando sua sessão.</span>
       </div>
       <div class="onboarding__panel card" data-auth-content hidden>
         <span class="eyebrow"><span data-brand-name>FlowFit</span> aluno</span>
