@@ -1116,7 +1116,7 @@ const renderLegacyExercises = () => {
           ${exercise.notes ? `<small>${escapeHtml(exercise.notes)}</small>` : ""}
         </div>
         <div class="exercise__actions" ${isExpanded ? "" : "hidden"}>
-          <button class="set-button ${isComplete ? "is-done" : ""} ${locked ? "is-locked" : ""}" type="button" data-set="${escapeHtml(exercise.id)}" data-total="${total}" aria-label="Registrar série de ${escapeHtml(exercise.name)}" ${locked ? "disabled" : ""}>
+          <button class="set-button ${isComplete ? "is-done" : ""} ${locked ? "is-locked" : ""}" type="button" data-set="${escapeHtml(exercise.id)}" data-total="${total}" aria-label="Concluir série de ${escapeHtml(exercise.name)}" ${locked ? "disabled" : ""}>
             ${label}
           </button>
           <button class="exercise__undo" type="button" data-undo-set="${escapeHtml(exercise.id)}" aria-label="Corrigir última série de ${escapeHtml(exercise.name)}" ${done === 0 || locked ? "disabled" : ""}>Corrigir</button>
@@ -1567,25 +1567,23 @@ const stopRunnerAdjustHold = ({ suppressClick = false } = {}) => {
 
 const renderRunnerExerciseTrack = (session, currentExerciseId) => {
   const target = document.querySelector("[data-runner-exercise-track]");
-  if (!target) return;
+  const markers = target?.querySelector("[data-runner-exercise-markers]");
+  if (!target || !markers) return;
   const exercises = getSessionExercises(session);
+  target.classList.toggle("is-empty", exercises.length === 0);
   const fragment = document.createDocumentFragment();
-  exercises.forEach((exercise, index) => {
+  exercises.forEach((exercise) => {
     const isComplete = getExerciseEntries(occurrenceId(exercise), session).length >= parseTotalSets(exercise);
     const isCurrent = occurrenceId(exercise) === currentExerciseId && !isComplete;
     const step = document.createElement("span");
+    step.setAttribute("aria-hidden", "true");
     step.className = `runner-exercise-step${isComplete ? " is-complete" : isCurrent ? " is-current" : ""}`;
     const dot = document.createElement("span");
     dot.className = "runner-exercise-step__dot";
     step.append(dot);
-    if (index < exercises.length - 1) {
-      const line = document.createElement("span");
-      line.className = "runner-exercise-step__line";
-      step.append(line);
-    }
     fragment.append(step);
   });
-  target.replaceChildren(fragment);
+  markers.replaceChildren(fragment);
 };
 
 const renderRunnerSetTrack = (exercise, setNumber, session = getActiveSession()) => {
@@ -1619,7 +1617,7 @@ const renderWorkoutRunner = () => {
     : "Nenhum exercício";
   document.querySelector("[data-runner-progress-copy]").textContent = `${done} de ${total} séries concluídas`;
   renderRunnerExerciseTrack(session, progressExerciseId);
-  document.querySelector("[data-runner-progress]").style.setProperty("--progress", `${percent}%`);
+  document.querySelector("[data-runner-progress-track]")?.style.setProperty("--progress", `${percent}%`);
   document.querySelector("[data-runner-progress-track]")?.setAttribute("aria-valuenow", String(percent));
   const visualPhase = {
     [SESSION_PHASE.ACTIVE_SET]: "exercise",
