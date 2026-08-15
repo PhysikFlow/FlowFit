@@ -2855,6 +2855,138 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   font-size: var(--text-xl);
 }
 
+.asset-crop-dialog {
+  width: min(calc(100% - 1rem), 40rem);
+  max-height: min(94dvh, 52rem);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-surface) 92%, #050608);
+}
+
+.asset-crop-form {
+  gap: var(--space-3);
+  padding: clamp(0.85rem, 2.5vw, 1.25rem);
+}
+
+.asset-crop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.asset-crop-header h2 {
+  margin-top: var(--space-1);
+  padding: 0;
+}
+
+.asset-crop-stage {
+  position: relative;
+  height: min(60dvh, 31rem);
+  min-height: 18rem;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: #050608;
+}
+
+.asset-crop-stage > img {
+  display: block;
+  max-width: 100%;
+}
+
+.asset-crop-stage .cropper-container {
+  width: 100% !important;
+  height: 100% !important;
+  background: #050608;
+}
+
+.asset-crop-stage .cropper-modal {
+  background: #020304;
+  opacity: 0.76;
+}
+
+.asset-crop-stage .cropper-view-box {
+  outline: 2px solid var(--color-accent);
+  outline-color: var(--color-accent);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.22), 0 0 1.25rem color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+.asset-crop-stage .cropper-face {
+  background: transparent;
+}
+
+.asset-crop-stage .cropper-line,
+.asset-crop-stage .cropper-point {
+  display: none;
+}
+
+.asset-crop-stage .cropper-dashed {
+  border-color: rgb(255 255 255 / 0.38);
+}
+
+.asset-crop-zoom {
+  display: grid;
+  grid-template-columns: var(--control-height) minmax(0, 1fr) var(--control-height);
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.asset-crop-zoom label {
+  display: grid;
+  min-width: 0;
+}
+
+.asset-crop-zoom input[type="range"] {
+  width: 100%;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.asset-crop-help {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  text-align: center;
+}
+
+.asset-crop-form > .form-status {
+  min-height: 1.15rem;
+  text-align: center;
+}
+
+.asset-crop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.asset-crop-actions .button {
+  min-width: 8rem;
+}
+
+@media (max-width: 600px) {
+  .asset-crop-dialog {
+    width: calc(100% - 0.75rem);
+    max-height: calc(100dvh - 0.75rem);
+  }
+
+  .asset-crop-stage {
+    height: min(56dvh, 27rem);
+    min-height: 15rem;
+  }
+
+  .asset-crop-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .asset-crop-actions .button {
+    min-width: 0;
+    padding-inline: var(--space-3);
+  }
+}
+
 .student-session-panel {
   position: static;
   inset: auto;

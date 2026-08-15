@@ -1,10 +1,12 @@
-const CACHE_NAME = "flowfit-professor-v41";
+const CACHE_NAME = "flowfit-professor-v42";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./css/app.css?v=build-20260814-1",
-  "./js/app.js?v=build-20260814-1",
+  "./css/app.css?v=build-20260814-2",
+  "./js/app.js?v=build-20260814-2",
+  "./vendor/cropperjs/cropper.min.css?v=1.6.2",
+  "./vendor/cropperjs/cropper.min.js?v=1.6.2",
   "../appAluno/assets/icons/apple-touch-icon.png",
   "../appAluno/assets/icons/icon-192.png",
   "../appAluno/assets/icons/icon-512.png",

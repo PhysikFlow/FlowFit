@@ -16,8 +16,10 @@
     <link rel="preload" as="image" type="image/png" href="../appAluno/assets/icons/startup-logo-512.png" fetchpriority="high" />
     <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260814-1" />
     <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260814-2" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260814-1" />
-    <script type="module" src="js/app.js?v=build-20260814-1"></script>
+    <link rel="stylesheet" href="vendor/cropperjs/cropper.min.css?v=1.6.2" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260814-2" />
+    <script defer src="vendor/cropperjs/cropper.min.js?v=1.6.2"></script>
+    <script type="module" src="js/app.js?v=build-20260814-2"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title" aria-busy="true">
@@ -425,6 +427,35 @@
           </article>
         </section>
       </section>
+
+      <dialog class="app-dialog asset-crop-dialog" data-asset-crop-dialog aria-labelledby="asset-crop-title" aria-describedby="asset-crop-help">
+        <form class="dialog-form asset-crop-form" data-asset-crop-form>
+          <header class="asset-crop-header">
+            <div>
+              <span class="eyebrow">Imagem quadrada</span>
+              <h2 id="asset-crop-title" data-asset-crop-title>Ajustar imagem</h2>
+            </div>
+            <button class="icon-button" type="button" data-asset-crop-cancel aria-label="Fechar recorte">×</button>
+          </header>
+          <div class="asset-crop-stage" data-asset-crop-stage>
+            <img data-asset-crop-image alt="Imagem selecionada para recorte" />
+          </div>
+          <div class="asset-crop-zoom" aria-label="Controle de zoom">
+            <button class="icon-button" type="button" data-asset-crop-zoom-out aria-label="Diminuir zoom">−</button>
+            <label>
+              <span class="sr-only">Zoom da imagem</span>
+              <input type="range" min="1" max="4" step="0.01" value="1" data-asset-crop-zoom aria-label="Zoom da imagem" />
+            </label>
+            <button class="icon-button" type="button" data-asset-crop-zoom-in aria-label="Aumentar zoom">+</button>
+          </div>
+          <p class="asset-crop-help" id="asset-crop-help">Arraste para reposicionar. Use pinça, roda do mouse ou o controle para ampliar.</p>
+          <p class="form-status" data-asset-crop-status aria-live="polite"></p>
+          <footer class="asset-crop-actions">
+            <button class="button button--quiet" type="button" data-asset-crop-cancel>Cancelar</button>
+            <button class="button" type="submit" data-asset-crop-confirm disabled>Usar recorte</button>
+          </footer>
+        </form>
+      </dialog>
 
       <section class="page" data-page="profile" aria-label="Perfil do personal">
         <section class="profile-grid">
