@@ -98,9 +98,9 @@ export const inferModeFromColor = (hex) => relativeLuminance(hex) > 0.56 ? "ligh
 const readableOnColor = (hex) => {
   const luminance = relativeLuminance(hex);
   const lightContrast = 1.05 / (luminance + 0.05);
-  const darkLuminance = relativeLuminance("#10131a");
+  const darkLuminance = relativeLuminance("#090b10");
   const darkContrast = (luminance + 0.05) / (darkLuminance + 0.05);
-  return darkContrast >= lightContrast ? "#10131a" : "#ffffff";
+  return darkContrast >= lightContrast ? "#090b10" : "#ffffff";
 };
 
 export const contrastRatio = (foreground, background) => {
@@ -181,12 +181,12 @@ export const applyThemeTokens = (theme) => {
   root.style.setProperty("--color-bg", normalized.backgroundColor);
   root.style.setProperty("--color-bg-elevated", `color-mix(in srgb, ${normalized.surfaceColor} 88%, ${normalized.backgroundColor})`);
   root.style.setProperty("--color-surface", normalized.surfaceColor);
-  root.style.setProperty("--color-surface-strong", `color-mix(in srgb, ${normalized.surfaceColor} 92%, ${normalized.accent})`);
+  root.style.setProperty("--color-surface-strong", `color-mix(in srgb, ${normalized.surfaceColor} 92%, ${normalized.textColor})`);
   root.style.setProperty("--color-surface-glass", `color-mix(in srgb, ${normalized.surfaceColor} 82%, transparent)`);
   root.style.setProperty("--color-text", normalized.textColor);
   root.style.setProperty("--color-muted", `color-mix(in srgb, ${normalized.textColor} 68%, ${normalized.backgroundColor})`);
   root.style.setProperty("--color-subtle", `color-mix(in srgb, ${normalized.textColor} 58%, ${normalized.backgroundColor})`);
-  root.style.setProperty("--color-line", `color-mix(in srgb, ${normalized.accent} 18%, transparent)`);
+  root.style.setProperty("--color-line", `color-mix(in srgb, ${normalized.textColor} 13%, transparent)`);
   root.style.setProperty("--color-on-accent", readableOnColor(normalized.accent));
   root.style.setProperty("--font-sans", FONT_STACKS[normalized.fontPreset]);
   root.style.setProperty("--brand-bg-effect", backgroundEffects[normalized.backgroundStyle]);

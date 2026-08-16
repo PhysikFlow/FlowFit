@@ -1,10 +1,10 @@
-const CACHE_NAME = "flowfit-professor-v44";
+const CACHE_NAME = "flowfit-professor-v46";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./css/app.css?v=build-20260815-1",
-  "./js/app.js?v=build-20260815-1",
+  "./css/app.css?v=build-20260816-1",
+  "./js/app.js?v=build-20260816-1",
   "./vendor/cropperjs/cropper.min.css?v=1.6.2",
   "./vendor/cropperjs/cropper.min.js?v=1.6.2",
   "../appAluno/assets/icons/apple-touch-icon.png",
@@ -13,16 +13,16 @@ const APP_SHELL = [
   "../appAluno/assets/icons/icon-1024.png",
   "../appAluno/assets/icons/icon-maskable-512.png",
   "../appAluno/assets/icons/startup-logo-512.png",
-  "../appAluno/css/tokens.css?v=build-20260814-1",
-  "../appAluno/css/components.css?v=build-20260814-2",
+  "../appAluno/css/tokens.css?v=build-20260816-1",
+  "../appAluno/css/components.css?v=build-20260816-1",
   "../appAluno/js/config.js?v=build-20260809-6",
-  "../appAluno/js/core/brand-theme.js?v=build-20260814-1",
+  "../appAluno/js/core/brand-theme.js?v=build-20260816-1",
   "../appAluno/js/core/icons.js?v=build-20260809-6",
   "../appAluno/js/core/platform.js?v=build-20260809-6",
   "../appAluno/js/core/supabase.js?v=build-20260812-5",
   "../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6",
   "../appAluno/js/data/repositories/student-repository.js?v=build-20260813-2",
-  "../appAluno/js/data/repositories/theme-repository.js?v=build-20260814-1",
+  "../appAluno/js/data/repositories/theme-repository.js?v=build-20260816-1",
   "../appAluno/js/data/repositories/workout-repository.js?v=build-20260813-2",
   "../appAluno/js/data/repositories/session-repository.js?v=build-20260812-5"
 ];

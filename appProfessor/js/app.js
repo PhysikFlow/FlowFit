@@ -1,9 +1,9 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260813-1";
-import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260814-1";
+import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260816-1";
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260813-2";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6";
-import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260814-1";
+import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260816-1";
 import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260813-2";
 import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260813-1";
 
@@ -1143,7 +1143,12 @@ const formatUpdatedAt = (value) => {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
 };
 
-const formatVolume = (value) => `${(Number(value || 0) / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}t`;
+const formatVolume = (value) => {
+  const volumeKg = Math.max(0, Number(value) || 0);
+  return volumeKg > 0
+    ? `${(volumeKg / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}t`
+    : "0 kg";
+};
 
 const effortLabel = (value) => ({
   easy: "leve",
@@ -1433,6 +1438,9 @@ const renderDashboard = () => {
     ? "Cadastre o aluno para iniciar o acompanhamento."
     : `${students.length} ${students.length === 1 ? "aluno" : "alunos"} · ${workouts.length} ${workouts.length === 1 ? "treino publicado" : "treinos publicados"}`);
   setText("[data-sync-chip]", isOnline ? "Online" : isSyncing ? "Sincronizando" : "Local");
+  const syncChip = document.querySelector("[data-sync-chip]");
+  syncChip?.classList.toggle("chip--success", isOnline);
+  syncChip?.classList.toggle("chip--warning", !isOnline);
   setText("[data-sync-title]", isOnline ? "Sincronizado" : isSyncing ? "Sincronizando" : "Offline");
   setText("[data-sync-detail]", isOnline
     ? "Dados atualizados."
@@ -2027,7 +2035,6 @@ const renderWorkoutPreview = () => {
           <small class="field-help">Aceita HTTPS, incluindo YouTube, imagem, GIF ou vídeo direto.</small>
         </details>
       </div>
-      <em>${exercise.parsed ? "ok" : "estimado"}</em>
     </article>
     ${renderWorkoutInsertSlot(index + 1)}
     </div>

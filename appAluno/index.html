@@ -13,10 +13,10 @@
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="css/tokens.css?v=build-20260814-1" />
-    <link rel="stylesheet" href="css/components.css?v=build-20260815-3" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260815-9" />
-    <script type="module" src="js/app.js?v=build-20260815-6"></script>
+    <link rel="stylesheet" href="css/tokens.css?v=build-20260816-1" />
+    <link rel="stylesheet" href="css/components.css?v=build-20260816-1" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260816-1" />
+    <script type="module" src="js/app.js?v=build-20260816-1"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title" aria-busy="true">
@@ -74,7 +74,7 @@
 
       <section class="page is-active" data-page="home" aria-labelledby="home-title">
         <article class="welcome card">
-          <span class="eyebrow">Hoje - <span data-home-workout>carregando treino</span></span>
+          <span class="eyebrow" data-home-workout>Carregando treino</span>
           <h1 id="home-title" data-home-title>Seu próximo treino está aqui.</h1>
           <p data-home-summary>Aguardando seus dados.</p>
           <button class="button" type="button" data-go="workout" data-home-workout-action disabled><span data-home-workout-label>Aguardando treino</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg></button>
@@ -86,7 +86,7 @@
         </div>
         <section class="stats card" aria-label="Atividade dos últimos sete dias">
           <article class="stat"><strong data-stat-done>0</strong><small>treinos</small></article>
-          <article class="stat"><strong data-stat-volume>0t</strong><small>volume</small></article>
+          <article class="stat"><strong data-stat-volume>0 kg</strong><small>volume</small></article>
           <article class="stat"><strong data-stat-sets>0</strong><small>séries concluídas</small></article>
         </section>
       </section>
@@ -233,8 +233,7 @@
         <div class="section-title"><h2>Preferências</h2></div>
         <section class="profile-settings card" aria-label="Preferências e conta">
           <div class="profile-setting">
-            <div><strong>Aparência</strong><small>Tema definido pelo personal</small></div>
-            <button class="text-button" type="button" data-theme-reset>Restaurar</button>
+            <div><strong>Aparência</strong><small>Tema gerenciado pelo personal</small></div>
           </div>
           <div class="profile-setting">
             <div><strong>Conta</strong><small>Sessão neste aparelho</small></div>

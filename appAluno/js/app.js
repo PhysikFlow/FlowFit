@@ -1,11 +1,11 @@
 import { Platform } from "./core/platform.js?v=build-20260813-1";
 import { SESSION_PHASE, Store } from "./core/store.js?v=build-20260813-1";
-import { Theme } from "./core/theme.js?v=build-20260814-1";
+import { Theme } from "./core/theme.js?v=build-20260816-1";
 import { svgIcon } from "./core/icons.js?v=build-20260810-7";
-import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260814-1";
+import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260816-1";
 import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260812-6";
 import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260813-2";
-import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260814-1";
+import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260816-1";
 import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260813-2";
 import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260813-1";
 
@@ -80,7 +80,7 @@ const emptyStudent = {
   goal: "Sem objetivo cadastrado",
   status: "Sem vínculo ativo",
   plan: "Sem plano",
-  since: "hoje",
+  since: "",
   coach: "Personal",
   frequency: "Sem frequência cadastrada"
 };
@@ -392,7 +392,12 @@ const createActiveSession = (workout) => {
   return Store.startActiveSession(session);
 };
 
-const formatVolume = (value) => `${(value / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}t`;
+const formatVolume = (value) => {
+  const volumeKg = Math.max(0, Number(value) || 0);
+  return volumeKg > 0
+    ? `${(volumeKg / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}t`
+    : "0 kg";
+};
 
 const formatDecimal = (value) => Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
@@ -820,7 +825,7 @@ const toRuntimeStudent = (student, authContext) => {
   return {
     ...emptyStudent,
     ...student,
-    since: student.createdAt ? formatMonthYear(student.createdAt) : "hoje",
+    since: student.createdAt ? formatMonthYear(student.createdAt) : "",
     coach: student.coachName || "Personal",
     frequency: student.plan || "Atendimento"
   };
@@ -830,7 +835,11 @@ const renderStudent = () => {
   const student = currentStudent || emptyStudent;
   document.querySelectorAll("[data-student-name]").forEach((item) => { item.textContent = student.name; });
   document.querySelectorAll("[data-student-initials]").forEach((item) => { item.textContent = student.initials; });
-  document.querySelector("[data-student-since]").textContent = `Aluno desde ${String(student.since || "hoje").toLowerCase()}`;
+  const studentSince = document.querySelector("[data-student-since]");
+  if (studentSince) {
+    studentSince.hidden = !student.since;
+    studentSince.textContent = student.since ? `Aluno desde ${String(student.since).toLowerCase()}` : "";
+  }
   document.querySelector("[data-student-plan]").textContent = student.plan || "Sem plano";
   document.querySelector("[data-coach-name]").textContent = student.coach;
   document.querySelector("[data-coach-headline]").textContent = student.coachHeadline || "Prescrição e acompanhamento do seu treino.";
@@ -1148,7 +1157,7 @@ const renderExercises = () => {
           <small>${escapeHtml(exercise.prescription)} · ${escapeHtml(exercise.rest)} de descanso</small>
           ${exercise.instructions ? `<p>${escapeHtml(exercise.instructions)}</p>` : ""}
         </div>
-        <span class="exercise-overview__state">${exercise.mediaUrl ? svgIcon("play") : ""}<b>${done}/${total}</b></span>
+        <span class="exercise-overview__state"><b>${done}/${total}</b></span>
       </article>
     `;
   }).join("");
@@ -1893,13 +1902,13 @@ const renderSchedule = () => {
       <article class="schedule-item card ${done ? "is-muted" : ""}">
         <span class="surface-icon">${svgIcon(scheduleIconByType[item.type] || "calendar")}</span>
         <div>
-          <span class="chip">${escapeHtml(scheduleLabelByType[item.type] || item.type)}</span>
+          <span class="chip chip--info">${escapeHtml(scheduleLabelByType[item.type] || item.type)}</span>
           <h3>${escapeHtml(item.title)}</h3>
           <p>${escapeHtml(item.detail)}</p>
           <small>${fromPersonal ? `Disponível em ${escapeHtml(formatWorkoutAvailability(item.time))}` : escapeHtml(formatScheduleTime(item.time))}</small>
         </div>
         ${fromPersonal
-          ? `<span class="chip">Agendado</span>`
+          ? `<span class="chip chip--info">Agendado</span>`
           : `<button class="icon-button" type="button" data-reminder="${escapeHtml(item.id)}" aria-label="${done ? "Reativar" : "Dispensar"} lembrete">
               ${done ? svgIcon("refresh") : svgIcon("check")}
             </button>`}
@@ -1948,12 +1957,12 @@ const renderHistory = () => {
   }
   target.innerHTML = sessions.map((session) => `
     <article class="history-row card ${session.syncStatus === "synced" ? "is-synced" : "is-pending"}">
-      <span class="surface-icon">${svgIcon("trophy")}</span>
+      <span class="surface-icon surface-icon--success">${svgIcon("trophy")}</span>
       <div>
         <strong>${escapeHtml(session.workoutTitle || session.title)}</strong>
         <small>${escapeHtml(formatDateTime(session.finishedAt))} · ${escapeHtml(effortLabelByValue[session.feedback?.effort] || "Sem avaliação")}</small>
       </div>
-      <span class="chip">${session.completedSets || session.sets || 0}/${session.totalSets || session.sets || 0} séries</span>
+      <span class="chip chip--success">${session.completedSets || session.sets || 0}/${session.totalSets || session.sets || 0} séries</span>
       <small class="history-row__sync">${formatVolume(session.volumeKg || session.volume || 0)} de volume · ${session.syncStatus === "synced" ? "Enviado ao professor" : "Envio pendente"}</small>
     </article>
   `).join("");
@@ -2944,13 +2953,6 @@ const handleWorkoutDensityChange = () => {
 };
 if (compactWorkoutQuery.addEventListener) compactWorkoutQuery.addEventListener("change", handleWorkoutDensityChange);
 else compactWorkoutQuery.addListener?.(handleWorkoutDensityChange);
-document.querySelector("[data-theme-reset]")?.addEventListener("click", () => {
-  Platform.storage.set(LOCAL_BRAND_ASSETS_KEY, {});
-  Theme.reset();
-  syncThemeControls();
-  Platform.notify("Aparência original restaurada.");
-});
-
 window.addEventListener("hashchange", () => navigate(location.hash.slice(1), false));
 window.addEventListener("resize", () => {
   syncBottomNavIndicator(navItems.find((item) => item.classList.contains("is-active")), { animate: false });
