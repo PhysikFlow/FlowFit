@@ -7,6 +7,7 @@ import { themeRepository } from "../../appAluno/js/data/repositories/theme-repos
 import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260813-2";
 import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260813-1";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
+import { initCustomSelects, refreshCustomSelects } from "../../appAluno/js/components/custom-select.js?v=build-20260816-1";
 import { createNavigation } from "./core/navigation.js?v=build-20260816-1";
 import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v=build-20260816-1";
 import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260816-2";
@@ -14,6 +15,8 @@ import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=bu
 import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260816-3";
 import { escapeHtml, formatUpdatedAt, formatVolume, initialsFromName, normalizeEmail, normalizeSearch } from "./utils/formatters.js?v=build-20260816-1";
 import { createProfessorViewState } from "./state/view-state.js?v=build-20260816-1";
+
+initCustomSelects();
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -754,6 +757,7 @@ const fillThemeInputs = (theme) => {
   if (fontInput) fontInput.value = normalized.fontPreset;
   if (radiusInput) radiusInput.value = normalized.radiusPreset;
   if (backgroundStyleInput) backgroundStyleInput.value = normalized.backgroundStyle;
+  refreshCustomSelects(document.querySelector("[data-page='appearance']") || document);
   syncHexInputsFromColors();
   updateContrastStatus();
   renderThemePalettes({ syncToTheme: true });
@@ -1104,10 +1108,11 @@ const renderInviteTools = () => {
     whatsappInvite.href = "#";
     if (copyInviteButton) copyInviteButton.textContent = "Copiar convite";
     setInviteStatus("Cadastre um aluno para gerar o primeiro convite.", "");
+    refreshCustomSelects(inviteStudentOptions);
     return;
   }
 
-  inviteStudentOptions.innerHTML = students.map((student) => `<option value="${escapeHtml(student.id)}">${escapeHtml(student.name)}${student.email ? ` - ${escapeHtml(student.email)}` : ""}</option>`).join("");
+  inviteStudentOptions.innerHTML = students.map((student) => `<option value="${escapeHtml(student.id)}" data-icon="${escapeHtml(initialsFromName(student.name))}" data-avatar="true"${student.email ? ` data-description="${escapeHtml(student.email)}"` : ""}>${escapeHtml(student.name)}</option>`).join("");
   if (students.some((student) => student.id === previousValue)) inviteStudentOptions.value = previousValue;
 
   const selected = students.find((student) => student.id === inviteStudentOptions.value && student.inviteToken)
@@ -1124,6 +1129,7 @@ const renderInviteTools = () => {
   else if (selected.inviteStatus === "accepted") setInviteStatus(`${selected.name} já ativou o acesso.`, "synced");
   else if (selected.email) setInviteStatus(`Link opcional: ${selected.name} também pode entrar diretamente com o email cadastrado.`, "synced");
   else setInviteStatus(`Convite necessário: o email será definido no primeiro acesso de ${selected.name}.`, "warning");
+  refreshCustomSelects(inviteStudentOptions);
 };
 
 const renderStudentOptions = () => {
@@ -1141,7 +1147,7 @@ const renderStudentOptions = () => {
   const previousValue = select.value;
   select.disabled = false;
   if (submitButton) submitButton.disabled = false;
-  select.innerHTML = students.map((student) => `<option value="${escapeHtml(student.id)}">${escapeHtml(student.name)}${student.email ? ` - ${escapeHtml(student.email)}` : ""}</option>`).join("");
+  select.innerHTML = students.map((student) => `<option value="${escapeHtml(student.id)}" data-icon="${escapeHtml(initialsFromName(student.name))}" data-avatar="true"${student.email ? ` data-description="${escapeHtml(student.email)}"` : ""}>${escapeHtml(student.name)}</option>`).join("");
   if (students.some((student) => student.id === previousValue)) select.value = previousValue;
   renderInviteTools();
 };
@@ -1343,6 +1349,7 @@ const loadWorkoutForEditing = (workout) => {
   if (studentSelect && students.some((student) => student.id === workout.studentId)) studentSelect.value = workout.studentId;
   if (titleInput) titleInput.value = workoutToEditableTitle(workout);
   if (templateInput) templateInput.value = workout.focus || templateInput.value;
+  refreshCustomSelects(workoutForm);
   if (startsAtInput) startsAtInput.value = formatDateForInput(workout.startsAt || workout.updatedAt);
   workoutDraftExercises = (workout.exercises || []).map((exercise, index) => toDraftExercise(exercise, index));
   if (blocksInput) blocksInput.value = workoutToEditableBlocks(workout);
@@ -1840,7 +1847,7 @@ const { render: renderWorkouts } = createWorkoutsScreen({
 const renderDuplicateWorkoutStudents = (selectedStudentId = "") => {
   if (!duplicateWorkoutStudents) return;
   duplicateWorkoutStudents.innerHTML = students.map((student) => `
-    <option value="${escapeHtml(student.id)}" ${student.id === selectedStudentId ? "selected" : ""}>${escapeHtml(student.name)}${student.email ? ` · ${escapeHtml(student.email)}` : ""}</option>
+    <option value="${escapeHtml(student.id)}" data-icon="${escapeHtml(initialsFromName(student.name))}" data-avatar="true"${student.email ? ` data-description="${escapeHtml(student.email)}"` : ""} ${student.id === selectedStudentId ? "selected" : ""}>${escapeHtml(student.name)}</option>
   `).join("");
 };
 
@@ -2469,6 +2476,7 @@ document.addEventListener("click", async (event) => {
       resetWorkoutFormMode({ resetForm: true, clearStored: true });
       const studentSelect = document.querySelector("[data-student-options]");
       if (studentSelect && student) studentSelect.value = student.id;
+      refreshCustomSelects(studentSelect);
       renderWorkoutPreview();
       focusWorkoutForm();
       return;
@@ -2525,6 +2533,7 @@ document.addEventListener("click", async (event) => {
       }
       const studentSelect = document.querySelector("[data-student-options]");
       if (studentSelect) studentSelect.value = student.id;
+      refreshCustomSelects(studentSelect);
       resetWorkoutFormMode({ clearStored: true });
       renderWorkoutPreview();
     }

@@ -15,11 +15,11 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="preload" as="image" type="image/png" href="../appAluno/assets/icons/startup-logo-512.png" fetchpriority="high" />
     <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260816-1" />
-    <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260816-1" />
+    <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260816-2" />
     <link rel="stylesheet" href="vendor/cropperjs/cropper.min.css?v=1.6.2" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260816-2" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260816-3" />
     <script defer src="vendor/cropperjs/cropper.min.js?v=1.6.2"></script>
-    <script type="module" src="js/app.js?v=build-20260816-5"></script>
+    <script type="module" src="js/app.js?v=build-20260816-6"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title" aria-busy="true">
@@ -202,7 +202,7 @@
             <h2 id="invite-dialog-title">Enviar acesso ao aluno</h2>
             <p>Envie o acesso em poucos toques.</p>
             <label>Aluno
-              <select data-invite-student-options></select>
+              <select data-invite-student-options data-avatar="true" data-show-description="true"></select>
             </label>
             <textarea readonly data-invite-message aria-label="Mensagem de convite"></textarea>
             <div class="button-group button-group--inline">
@@ -253,7 +253,7 @@
           </div>
           <form class="quick-form quick-form--stack" data-workout-form>
             <label>Aluno
-              <select name="student" data-student-options></select>
+              <select name="student" data-student-options data-avatar="true" data-show-description="true"></select>
             </label>
             <label>Nome do treino <input name="title" placeholder="Peito e tríceps" required /></label>
             <label>Modelo
@@ -300,7 +300,7 @@
             <h2 id="duplicate-workout-title">Criar uma cópia independente</h2>
             <p>O treino original permanecerá inalterado.</p>
             <label>Aluno de destino
-              <select name="student" data-duplicate-workout-students required></select>
+              <select name="student" data-duplicate-workout-students data-avatar="true" data-show-description="true" required></select>
             </label>
             <label>Nome
               <input name="title" required />

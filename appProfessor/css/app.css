@@ -2894,6 +2894,16 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   padding: 0 2.2rem 0 var(--space-3);
 }
 
+.page-toolbar__actions > .custom-select {
+  width: auto;
+  min-width: 9.5rem;
+}
+
+.custom-select__trigger.list-filter {
+  width: 100%;
+  padding: var(--space-2) var(--field-padding-x);
+}
+
 .entity-list {
   display: grid;
   grid-template-columns: 1fr;

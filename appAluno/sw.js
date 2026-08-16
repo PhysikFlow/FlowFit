@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-aluno-v91";
+const CACHE_NAME = "flowfit-aluno-v92";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,9 +8,10 @@ const APP_SHELL = [
   "./assets/icons/icon-1024.png",
   "./assets/icons/icon-maskable-512.png",
   "./css/tokens.css?v=build-20260816-1",
-  "./css/components.css?v=build-20260816-1",
+  "./css/components.css?v=build-20260816-2",
   "./css/app.css?v=build-20260816-1",
-  "./js/app.js?v=build-20260816-4",
+  "./js/app.js?v=build-20260816-5",
+  "./js/components/custom-select.js?v=build-20260816-1",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/screens/agenda/agenda-screen.js?v=build-20260816-1",
   "./js/screens/evolution/evolution-screen.js?v=build-20260816-1",

@@ -9,6 +9,7 @@ import { themeRepository } from "./data/repositories/theme-repository.js?v=build
 import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260813-2";
 import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260813-1";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
+import { initCustomSelects, refreshCustomSelects } from "./components/custom-select.js?v=build-20260816-1";
 import { createAgendaScreen } from "./screens/agenda/agenda-screen.js?v=build-20260816-1";
 import { createEvolutionScreen } from "./screens/evolution/evolution-screen.js?v=build-20260816-1";
 import { createHistoryScreen } from "./screens/history/history-screen.js?v=build-20260816-1";
@@ -21,6 +22,8 @@ import {
   formatWorkoutDuration, formatWorkoutElapsed, parseLoadKg, parseReps,
   parseRestSeconds, parseTotalSets
 } from "./utils/formatters.js?v=build-20260816-1";
+
+initCustomSelects();
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -2067,6 +2070,7 @@ workoutRunner?.addEventListener("click", (event) => {
     discomfortForm.elements.severity.value = current.severity || "mild";
     discomfortForm.elements.region.value = current.region || "";
     discomfortForm.elements.note.value = current.note || "";
+    refreshCustomSelects(discomfortForm);
     if (discomfortDialog && !discomfortDialog.open) discomfortDialog.showModal();
     return;
   }
