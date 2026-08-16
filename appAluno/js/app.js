@@ -8,6 +8,19 @@ import { studentRepository } from "./data/repositories/student-repository.js?v=b
 import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260816-1";
 import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260813-2";
 import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260813-1";
+import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
+import { createAgendaScreen } from "./screens/agenda/agenda-screen.js?v=build-20260816-1";
+import { createEvolutionScreen } from "./screens/evolution/evolution-screen.js?v=build-20260816-1";
+import { createHistoryScreen } from "./screens/history/history-screen.js?v=build-20260816-1";
+import { createHomeScreen } from "./screens/home/home-screen.js?v=build-20260816-1";
+import { createNotificationsScreen } from "./screens/notifications/notifications-screen.js?v=build-20260816-1";
+import { createStudentAppState } from "./state/app-state.js?v=build-20260816-1";
+import { createWorkoutSessionState } from "./state/workout-session-state.js?v=build-20260816-1";
+import {
+  escapeHtml, formatClock, formatMonthYear, formatSetPerformance,
+  formatWorkoutDuration, formatWorkoutElapsed, parseLoadKg, parseReps,
+  parseRestSeconds, parseTotalSets
+} from "./utils/formatters.js?v=build-20260816-1";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -27,6 +40,7 @@ const authSubmit = document.querySelector("[data-auth-submit]");
 const authSecondary = document.querySelector("[data-auth-secondary]");
 const oauthLabel = document.querySelector("[data-oauth-label]");
 const toast = document.querySelector("[data-toast]");
+const { showToast, setStatus } = createFeedback({ toast });
 const headerNotificationButton = document.querySelector(".notification-button");
 const homeWorkoutAction = document.querySelector("[data-home-workout-action]");
 const homeWorkoutLabel = document.querySelector("[data-home-workout-label]");
@@ -48,7 +62,6 @@ const accentInput = document.querySelector("[data-accent]");
 const brandInput = document.querySelector("[data-brand-input]");
 const taglineInput = document.querySelector("[data-tagline-input]");
 const modeButtons = [...document.querySelectorAll("[data-mode]")];
-let toastTimer;
 let runnerTickId;
 let wakeLockSentinel = null;
 const SET_CLICK_DEBOUNCE_MS = 2000;
@@ -95,12 +108,7 @@ const emptyWorkout = {
 };
 const scheduleItems = [];
 const notificationItems = [];
-let currentStudent = emptyStudent;
-let currentWorkout = emptyWorkout;
-let studentAccesses = [];
-let availableWorkouts = [];
-let upcomingWorkouts = [];
-let previousSessions = [];
+const appState = createStudentAppState({ emptyStudent, emptyWorkout });
 const PENDING_INVITE_KEY = "flowfit.pending-student-invite";
 const ACTIVE_STUDENT_KEY = "flowfit.active-student";
 const ACTIVE_WORKOUT_KEY = "flowfit.active-workout";
@@ -141,306 +149,43 @@ const captureInviteToken = () => {
 let pendingInviteToken = captureInviteToken();
 const getInviteToken = () => pendingInviteToken;
 
-const escapeHtml = (value) => String(value ?? "")
-  .replace(/&/g, "&amp;")
-  .replace(/</g, "&lt;")
-  .replace(/>/g, "&gt;")
-  .replace(/"/g, "&quot;")
-  .replace(/'/g, "&#039;");
-
-const parseTotalSets = (exercise) => {
-  const match = String(exercise.prescription || "").match(/\d+/);
-  return Number.parseInt(match?.[0] || "1", 10) || 1;
-};
-
-const parseRestSeconds = (exercise) => Number.parseInt(exercise.rest, 10) || 45;
-
-const parseLoadKg = (value) => Number.parseFloat(String(value).replace(",", ".").replace(/[^\d.]/g, "")) || 0;
-
-const parseReps = (exercise) => {
-  const match = String(exercise.prescription || "").match(/x\s*(\d+)/i);
-  return Number.parseInt(match?.[1] || "10", 10) || 10;
-};
-
-const getCurrentExercises = () => Array.isArray(currentWorkout.exercises) ? currentWorkout.exercises : [];
-
-const getTotalSets = () => getCurrentExercises().reduce((sum, exercise) => sum + parseTotalSets(exercise), 0);
-
-const normalizeExerciseName = (value) => String(value || "")
-  .normalize("NFD")
-  .replace(/[\u0300-\u036f]/g, "")
-  .toLowerCase()
-  .replace(/[^a-z0-9]+/g, " ")
-  .trim();
-
-const getActiveSession = () => {
-  const session = Store.getActiveSession();
-  if (!session || session.studentId !== currentStudent.id) return null;
-  return session;
-};
-
-const getSessionExercises = (session = getActiveSession()) => (
-  Array.isArray(session?.workoutSnapshot?.exercises) ? session.workoutSnapshot.exercises : []
-);
-
-const getSessionEntries = (session = getActiveSession()) => (
-  Array.isArray(session?.setEntries) ? session.setEntries : []
-);
-
-const getLastSessionEntry = (session = getActiveSession()) => getSessionEntries(session)
-  .reduce((latest, entry) => {
-    if (!latest) return entry;
-    const latestTime = new Date(latest.completedAt || 0).getTime() || 0;
-    const entryTime = new Date(entry.completedAt || 0).getTime() || 0;
-    return entryTime >= latestTime ? entry : latest;
-  }, null);
-
-const occurrenceId = (exercise) => exercise?.workoutExerciseId || exercise?.id || "";
-
-const getExerciseEntries = (workoutExerciseId, session = getActiveSession()) => getSessionEntries(session)
-  .filter((entry) => (entry.workoutExerciseId || entry.exerciseId) === workoutExerciseId)
-  .sort((a, b) => Number(a.setNumber || 0) - Number(b.setNumber || 0));
-
-const getCompletedSetCount = (exerciseId, session = getActiveSession()) => getExerciseEntries(exerciseId, session).length;
-
-const getCompletedSessionSets = (session = getActiveSession()) => getSessionEntries(session).length;
-
-const getSessionTotalSets = (session = getActiveSession()) => getSessionExercises(session)
-  .reduce((sum, exercise) => sum + parseTotalSets(exercise), 0);
-
-const findSessionExercise = (workoutExerciseId, session = getActiveSession()) => getSessionExercises(session)
-  .find((exercise) => occurrenceId(exercise) === workoutExerciseId) || null;
-
-const getNextIncompleteTarget = (session = getActiveSession(), afterExerciseId = "") => {
-  const exercises = getSessionExercises(session);
-  if (!exercises.length) return null;
-  const startIndex = Math.max(0, exercises.findIndex((exercise) => occurrenceId(exercise) === afterExerciseId));
-  const ordered = [...exercises.slice(startIndex), ...exercises.slice(0, startIndex)];
-  for (const exercise of ordered) {
-    const completedNumbers = new Set(getExerciseEntries(occurrenceId(exercise), session).map((entry) => Number(entry.setNumber)));
-    const total = parseTotalSets(exercise);
-    for (let setNumber = 1; setNumber <= total; setNumber += 1) {
-      if (!completedNumbers.has(setNumber)) return { exercise, setNumber };
-    }
-  }
-  return null;
-};
-
-const findPreviousSet = (exercise, setNumber) => {
-  for (const session of previousSessions) {
-    if (session.status !== "completed" && session.status !== "partial") continue;
-    const historicalExerciseId = exercise.exerciseId || exercise.id;
-    const exactLogs = (session.setLogs || []).filter((log) => log.exerciseId === historicalExerciseId);
-    const nameLogs = (session.setLogs || []).filter((log) => (
-      normalizeExerciseName(log.exerciseName) === normalizeExerciseName(exercise.name)
-    ));
-    const logs = exactLogs.length ? exactLogs : nameLogs;
-    const individual = logs.find((log) => Number(log.setNumber) === Number(setNumber));
-    if (individual) return individual;
-    const legacy = logs.find((log) => !log.setNumber && Number(log.completedSets || 0) >= Number(setNumber));
-    if (legacy) return legacy;
-  }
-  return null;
-};
-
-const findPreviousExerciseLogs = (exercise) => {
-  for (const session of previousSessions) {
-    if (!["completed", "partial"].includes(session.status)) continue;
-    const historicalExerciseId = exercise.exerciseId || exercise.id;
-    const exactLogs = (session.setLogs || []).filter((log) => log.exerciseId === historicalExerciseId);
-    const nameLogs = (session.setLogs || []).filter((log) => (
-      normalizeExerciseName(log.exerciseName) === normalizeExerciseName(exercise.name)
-    ));
-    const logs = exactLogs.length ? exactLogs : nameLogs;
-    if (logs.length) return [...logs].sort((a, b) => Number(a.setNumber || 0) - Number(b.setNumber || 0));
-  }
-  return [];
-};
-
-const createStableId = (prefix) => {
-  const uuid = globalThis.crypto?.randomUUID?.();
-  return uuid ? `${prefix}-${uuid}` : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-};
-
-const getElapsedSeconds = (session, now = Date.now()) => {
-  const startedAt = new Date(session?.startedAt || now).getTime();
-  const pausedAt = session?.pausedAt ? new Date(session.pausedAt).getTime() : null;
-  const activeUntil = Number.isFinite(pausedAt) ? pausedAt : now;
-  return Math.max(0, Math.floor((activeUntil - startedAt) / 1000) - Number(session?.pausedDurationSeconds || 0));
-};
-
-const pauseActiveSession = (session = getActiveSession(), { pausedAt = Date.now(), reason = "manual" } = {}) => {
-  if (!session || session.phase === SESSION_PHASE.PAUSED) return session;
-  return Store.updateActiveSession({
-    phase: SESSION_PHASE.PAUSED,
-    resumePhase: session.phase,
-    pausedAt: new Date(pausedAt).toISOString(),
-    pausedReason: reason
-  });
-};
-
-const resumeActiveSession = (session = getActiveSession()) => {
-  if (!session || session.phase !== SESSION_PHASE.PAUSED) return session;
-  const pausedAt = new Date(session.pausedAt || Date.now()).getTime();
-  const pausedFor = Number.isFinite(pausedAt) ? Math.max(0, Math.floor((Date.now() - pausedAt) / 1000)) : 0;
-  let phase = session.resumePhase || SESSION_PHASE.ACTIVE_SET;
-  if (phase === SESSION_PHASE.TRANSITIONING && new Date(session.transitionEndsAt || 0).getTime() <= Date.now()) {
-    phase = session.pendingExerciseId ? SESSION_PHASE.RESTING : SESSION_PHASE.AWAITING_SUMMARY;
-  }
-  if (phase === SESSION_PHASE.RESTING && new Date(session.restEndsAt || 0).getTime() <= Date.now()) {
-    phase = session.pendingExerciseId || session.currentExerciseId
-      ? SESSION_PHASE.ACTIVE_SET
-      : SESSION_PHASE.AWAITING_SUMMARY;
-  }
-  return Store.updateActiveSession({
-    phase,
-    resumePhase: null,
-    pausedAt: null,
-    pausedReason: null,
-    lastActivityAt: new Date().toISOString(),
-    pausedDurationSeconds: Number(session.pausedDurationSeconds || 0) + pausedFor,
-    transitionEndsAt: phase === SESSION_PHASE.TRANSITIONING ? session.transitionEndsAt : null,
-    restEndsAt: phase === SESSION_PHASE.RESTING ? session.restEndsAt : null,
-    pendingExerciseId: [SESSION_PHASE.TRANSITIONING, SESSION_PHASE.RESTING].includes(phase) ? session.pendingExerciseId : null,
-    pendingSetNumber: [SESSION_PHASE.TRANSITIONING, SESSION_PHASE.RESTING].includes(phase) ? session.pendingSetNumber : null
-  });
-};
-
-const createSessionSnapshot = (workout) => {
-  const exercises = workout.exercises || [];
-  const occurrenceCounts = new Map();
-  exercises.forEach((exercise) => {
-    const baseId = exercise.workoutExerciseId || exercise.id || "";
-    occurrenceCounts.set(baseId, Number(occurrenceCounts.get(baseId) || 0) + 1);
-  });
-  return {
-    id: workout.id,
-    code: workout.code,
-    title: workout.title,
-    focus: workout.focus,
-    version: workout.version || 1,
-    exercises: exercises.map((exercise, index) => {
-      const baseId = exercise.workoutExerciseId || exercise.id || `${workout.id}-item-${index + 1}`;
-      return {
-        ...exercise,
-        workoutExerciseId: Number(occurrenceCounts.get(baseId) || 0) > 1
-          ? `${baseId}-occurrence-${index + 1}`
-          : baseId,
-        exerciseId: exercise.exerciseId || exercise.id || ""
-      };
-    })
-  };
-};
-
-const createActiveSession = (workout) => {
-  const workoutSnapshot = createSessionSnapshot(workout);
-  const firstExercise = workoutSnapshot.exercises?.[0];
-  const session = {
-    id: createStableId("session"),
-    coachId: workout.coachId || currentStudent.coachId || "",
-    studentId: currentStudent.id,
-    studentKey: currentStudent.studentKey || workout.studentKey || "",
-    studentEmail: currentStudent.email || "",
-    workoutId: workout.id,
-    workoutVersion: workout.version || 1,
-    workoutSnapshot,
-    startedAt: new Date().toISOString(),
-    schemaVersion: 2,
-    phase: SESSION_PHASE.ACTIVE_SET,
-    syncStatus: "local",
-    currentExerciseId: occurrenceId(firstExercise),
-    currentSetNumber: 1,
-    restEndsAt: null,
-    transitionEndsAt: null,
-    pendingExerciseId: null,
-    pendingSetNumber: null,
-    pausedAt: null,
-    pausedReason: null,
-    lastActivityAt: new Date().toISOString(),
-    pausedDurationSeconds: 0,
-    setEntries: []
-  };
-
-  const legacyDone = Store.state.activeWorkoutId === workout.id ? Store.state.setLogs || {} : {};
-  Object.entries(legacyDone).forEach(([exerciseId, count]) => {
-    const exerciseIndex = workout.exercises.findIndex((item) => item.id === exerciseId);
-    const exercise = workoutSnapshot.exercises[exerciseIndex];
-    if (!exercise) return;
-    const log = Store.getExerciseLog(exerciseId, {
-      load: parseLoadKg(exercise.load),
-      reps: parseReps(exercise)
-    });
-    for (let setNumber = 1; setNumber <= Math.min(Number(count || 0), parseTotalSets(exercise)); setNumber += 1) {
-      session.setEntries.push({
-        workoutExerciseId: occurrenceId(exercise),
-        exerciseId: exercise.exerciseId || exercise.id,
-        exercisePosition: exerciseIndex,
-        exerciseName: exercise.name,
-        setNumber,
-        setKind: "working",
-        loadKg: Number(log.load || 0),
-        reps: Number(log.reps || 0),
-        completedAt: new Date().toISOString()
-      });
-    }
-  });
-  const next = getNextIncompleteTarget(session, occurrenceId(firstExercise));
-  if (next) {
-    session.currentExerciseId = occurrenceId(next.exercise);
-    session.currentSetNumber = next.setNumber;
-  }
-  return Store.startActiveSession(session);
-};
-
-const formatVolume = (value) => {
-  const volumeKg = Math.max(0, Number(value) || 0);
-  return volumeKg > 0
-    ? `${(volumeKg / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}t`
-    : "0 kg";
-};
-
-const formatDecimal = (value) => Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
-
-const formatSetPerformance = (loadKg, reps) => Number(loadKg) > 0
-  ? `${formatDecimal(loadKg)} kg × ${Number(reps || 0)}`
-  : `${Number(reps || 0)} reps`;
-
-const formatShortDate = (date) => new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(date));
-
-const formatDateTime = (date) => {
-  const parsed = new Date(date);
-  if (Number.isNaN(parsed.getTime())) return String(date || "Sem data");
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(parsed);
-};
-
+const {
+  getCurrentExercises,
+  getTotalSets,
+  getActiveSession,
+  getSessionExercises,
+  getSessionEntries,
+  getLastSessionEntry,
+  occurrenceId,
+  getExerciseEntries,
+  getCompletedSetCount,
+  getCompletedSessionSets,
+  getSessionTotalSets,
+  findSessionExercise,
+  getNextIncompleteTarget,
+  findPreviousSet,
+  findPreviousExerciseLogs,
+  getElapsedSeconds,
+  pauseActiveSession,
+  resumeActiveSession,
+  createSessionSnapshot,
+  createActiveSession
+} = createWorkoutSessionState({
+  Store,
+  SESSION_PHASE,
+  getCurrentStudent: () => appState.currentStudent,
+  getCurrentWorkout: () => appState.currentWorkout,
+  getPreviousSessions: () => appState.previousSessions,
+  parseTotalSets,
+  parseLoadKg,
+  parseReps
+});
 const formatWorkoutAvailability = (value) => {
   const dateKey = workoutDateInputValue(value);
   if (!dateKey) return "em breve";
   const [year, month, day] = dateKey.split("-").map(Number);
   const date = new Date(year, month - 1, day);
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(date);
-};
-
-const formatScheduleTime = (value) => {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value || "Sem horário");
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(parsed);
-};
-
-const formatMonthYear = (date) => new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(date));
-
-const formatDelta = (current, previous, unit) => {
-  if (previous === undefined) return `0 ${unit}`;
-  const delta = Number(current) - Number(previous);
-  const sign = delta > 0 ? "+" : "";
-  return `${sign}${formatDecimal(delta)} ${unit}`;
-};
-
-const deltaTone = (current, previous) => {
-  const delta = Number(current) - Number(previous);
-  if (delta > 0) return "up";
-  if (delta < 0) return "down";
-  return "neutral";
 };
 
 const notificationActionPage = {
@@ -450,26 +195,23 @@ const notificationActionPage = {
   "Ver evolucao": "progress"
 };
 
-const scheduleIconByType = {
-  Treino: "dumbbell",
-  Mensagem: "message",
-  Avaliacao: "ruler"
-};
-
-const notificationIconByType = {
-  Treino: "dumbbell",
-  Agenda: "calendar",
-  Avaliacao: "ruler",
-  Evolucao: "chart",
-  Lembrete: "bell",
-  Mensagem: "message"
-};
-
 const effortLabelByValue = {
   easy: "Leve",
   ok: "Na medida",
   hard: "Pesado"
 };
+
+const { render: renderProgress } = createEvolutionScreen({ disclosure: progressDisclosure });
+const { render: renderSchedule } = createAgendaScreen({
+  getUpcomingWorkouts: () => appState.upcomingWorkouts,
+  formatWorkoutAvailability,
+  localItems: scheduleItems
+});
+const { render: renderHistory } = createHistoryScreen({ effortLabels: effortLabelByValue });
+const { render: renderNotifications } = createNotificationsScreen({
+  items: notificationItems,
+  headerButton: headerNotificationButton
+});
 
 const pageExists = (name) => pages.some((page) => page.dataset.page === name);
 
@@ -617,21 +359,6 @@ const navigate = (name, updateHash = true) => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
-const showToast = (message) => {
-  if (!toast) return;
-  clearTimeout(toastTimer);
-  toast.textContent = message;
-  toast.classList.add("is-visible");
-  toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 2600);
-};
-
-const setStatus = (target, message, state = "") => {
-  if (!target) return;
-  target.textContent = message;
-  target.classList.toggle("is-synced", state === "synced");
-  target.classList.toggle("is-warning", state === "warning");
-};
-
 const setAuthStatus = (message, state = "") => setStatus(authStatus, message, state);
 const setFinishStatus = (message, state = "") => setStatus(finishStatus, message, state);
 
@@ -732,18 +459,18 @@ const syncBrandAssets = () => {
     target.classList.toggle("is-frameless", Boolean(assets.logoDataUrl) && assets.logoFrameEnabled === false);
   });
   document.querySelectorAll("[data-coach-photo]").forEach((target) => {
-    setImageOrText(target, assets.photoDataUrl, getCoachInitials(currentStudent?.coach), "Foto do personal ativo");
+    setImageOrText(target, assets.photoDataUrl, getCoachInitials(appState.currentStudent?.coach), "Foto do personal ativo");
   });
   const activeOptionPhoto = [...document.querySelectorAll("[data-coach-option-photo]")]
-    .find((target) => target.dataset.coachOptionPhoto === String(currentStudent?.id || ""));
+    .find((target) => target.dataset.coachOptionPhoto === String(appState.currentStudent?.id || ""));
   if (activeOptionPhoto) {
-    setImageOrText(activeOptionPhoto, assets.photoDataUrl, getCoachInitials(currentStudent?.coach), `Foto de ${currentStudent?.coach || "Personal"}`);
+    setImageOrText(activeOptionPhoto, assets.photoDataUrl, getCoachInitials(appState.currentStudent?.coach), `Foto de ${appState.currentStudent?.coach || "Personal"}`);
   }
 };
 
 const applyPublishedBrandTheme = async () => {
   try {
-    const remote = await themeRepository.fetchBrandTheme(currentStudent?.coachId || "");
+    const remote = await themeRepository.fetchBrandTheme(appState.currentStudent?.coachId || "");
     if (!remote?.accent || !remote?.brandName) {
       Theme.reset();
       syncThemeControls();
@@ -757,24 +484,24 @@ const applyPublishedBrandTheme = async () => {
 };
 
 const refreshPublishedWorkout = async ({ silent = false } = {}) => {
-  const previousWorkoutId = currentWorkout.id;
-  const result = await workoutRepository.fetchWorkoutsForCurrentStudent(currentStudent);
-  availableWorkouts = result.workouts || [];
-  upcomingWorkouts = result.upcomingWorkouts || [];
-  const preferredWorkoutId = Platform.storage.get(`${ACTIVE_WORKOUT_KEY}:${currentStudent.id}`, "");
-  currentWorkout = availableWorkouts.find((workout) => workout.id === previousWorkoutId)
-    || availableWorkouts.find((workout) => workout.id === preferredWorkoutId)
-    || availableWorkouts[0]
+  const previousWorkoutId = appState.currentWorkout.id;
+  const result = await workoutRepository.fetchWorkoutsForCurrentStudent(appState.currentStudent);
+  appState.availableWorkouts = result.workouts || [];
+  appState.upcomingWorkouts = result.appState.upcomingWorkouts || [];
+  const preferredWorkoutId = Platform.storage.get(`${ACTIVE_WORKOUT_KEY}:${appState.currentStudent.id}`, "");
+  appState.currentWorkout = appState.availableWorkouts.find((workout) => workout.id === previousWorkoutId)
+    || appState.availableWorkouts.find((workout) => workout.id === preferredWorkoutId)
+    || appState.availableWorkouts[0]
     || emptyWorkout;
-  if (currentWorkout.id !== emptyWorkout.id) {
-    Platform.storage.set(`${ACTIVE_WORKOUT_KEY}:${currentStudent.id}`, currentWorkout.id);
+  if (appState.currentWorkout.id !== emptyWorkout.id) {
+    Platform.storage.set(`${ACTIVE_WORKOUT_KEY}:${appState.currentStudent.id}`, appState.currentWorkout.id);
   }
 
-  const changed = currentWorkout.id !== previousWorkoutId;
+  const changed = appState.currentWorkout.id !== previousWorkoutId;
   if (changed) {
     focusedExerciseId = "";
     setClickLocks.clear();
-    if (!silent && currentWorkout.id !== emptyWorkout.id) Platform.notify("Seu personal publicou um novo treino.");
+    if (!silent && appState.currentWorkout.id !== emptyWorkout.id) Platform.notify("Seu personal publicou um novo treino.");
   }
   if (changed || result.synced) renderAll();
   return result;
@@ -790,13 +517,13 @@ const resetScopedDisclosureState = () => {
 };
 
 const activateStudentStore = async () => {
-  Store.useScope(currentStudent.id);
+  Store.useScope(appState.currentStudent.id);
   await Store.restoreActiveSession();
   resetScopedDisclosureState();
   Store.completeOnboarding({
-    name: currentStudent.name,
-    goal: currentStudent.goal,
-    frequency: currentStudent.frequency
+    name: appState.currentStudent.name,
+    goal: appState.currentStudent.goal,
+    frequency: appState.currentStudent.frequency
   });
 };
 
@@ -831,144 +558,16 @@ const toRuntimeStudent = (student, authContext) => {
   };
 };
 
-const renderStudent = () => {
-  const student = currentStudent || emptyStudent;
-  document.querySelectorAll("[data-student-name]").forEach((item) => { item.textContent = student.name; });
-  document.querySelectorAll("[data-student-initials]").forEach((item) => { item.textContent = student.initials; });
-  const studentSince = document.querySelector("[data-student-since]");
-  if (studentSince) {
-    studentSince.hidden = !student.since;
-    studentSince.textContent = student.since ? `Aluno desde ${String(student.since).toLowerCase()}` : "";
-  }
-  document.querySelector("[data-student-plan]").textContent = student.plan || "Sem plano";
-  document.querySelector("[data-coach-name]").textContent = student.coach;
-  document.querySelector("[data-coach-headline]").textContent = student.coachHeadline || "Prescrição e acompanhamento do seu treino.";
-  document.querySelector("[data-profile-goal]").textContent = student.goal || "Não informado";
-  document.querySelector("[data-profile-status]").textContent = student.status || "Não informado";
-};
-
-const renderAccessSelectors = () => {
-  const hasMultipleCoaches = studentAccesses.length > 1;
-  const affordance = document.querySelector("[data-coach-card-affordance]");
-  if (coachCard) {
-    coachCard.disabled = !hasMultipleCoaches;
-    coachCard.setAttribute("aria-label", hasMultipleCoaches
-      ? `Personal ativo: ${currentStudent.coach}. Abrir seleção de personal.`
-      : `Personal: ${currentStudent.coach}`);
-  }
-  if (affordance) affordance.hidden = !hasMultipleCoaches;
-
-  if (coachOptions) {
-    coachOptions.innerHTML = studentAccesses.map((student) => {
-      const coachName = student.coachName || "Personal";
-      const isActive = student.id === currentStudent.id;
-      return `
-        <button class="coach-option ${isActive ? "is-active" : ""}" type="button"
-          data-select-coach="${escapeHtml(student.id)}" aria-pressed="${isActive}">
-          <span class="avatar coach-option__photo" data-coach-option-photo="${escapeHtml(student.id)}" aria-hidden="true">${escapeHtml(getCoachInitials(coachName))}</span>
-          <span class="coach-option__copy">
-            <strong>${escapeHtml(coachName)}</strong>
-            <small>${escapeHtml(student.coachHeadline || "Acompanhamento personalizado")}</small>
-          </span>
-          <span class="coach-option__check" aria-hidden="true">${isActive ? "✓" : ""}</span>
-        </button>
-      `;
-    }).join("");
-
-    const assets = Platform.storage.get(LOCAL_BRAND_ASSETS_KEY, {});
-    const activePhoto = [...coachOptions.querySelectorAll("[data-coach-option-photo]")]
-      .find((target) => target.dataset.coachOptionPhoto === String(currentStudent.id || ""));
-    if (activePhoto) {
-      setImageOrText(activePhoto, assets.photoDataUrl, getCoachInitials(currentStudent.coach), `Foto de ${currentStudent.coach}`);
-    }
-  }
-
-  const picker = document.querySelector("[data-workout-picker]");
-  const options = document.querySelector("[data-workout-options]");
-  const count = document.querySelector("[data-available-workout-count]");
-  if (picker) picker.hidden = availableWorkouts.length <= 1;
-  if (count) count.textContent = `${availableWorkouts.length} ${availableWorkouts.length === 1 ? "disponível" : "disponíveis"}`;
-  if (options) {
-    options.innerHTML = availableWorkouts.map((workout) => `
-      <button class="workout-choice ${workout.id === currentWorkout.id ? "is-active" : ""}" type="button" data-select-workout="${escapeHtml(workout.id)}">
-        <strong>${escapeHtml(workout.title)}</strong>
-        <span>${escapeHtml(workout.focus)}</span>
-        <small>${escapeHtml(workout.estimatedMinutes)} min - ${escapeHtml(workout.exercises.length)} exercícios</small>
-      </button>
-    `).join("");
-  }
-};
-
-const renderHome = () => {
-  const upcomingWorkout = upcomingWorkouts[0] || null;
-  const hasWorkout = currentWorkout.id !== emptyWorkout.id;
-  const availabilityLabel = upcomingWorkout ? formatWorkoutAvailability(upcomingWorkout.startsAt) : "";
-  document.querySelector("[data-home-workout]").textContent = hasWorkout
-    ? "Treino disponível"
-    : upcomingWorkout ? `Agendado para ${availabilityLabel}` : "Sem treino ativo";
-  document.querySelector("[data-home-title]").textContent = hasWorkout
-    ? currentWorkout.title
-    : upcomingWorkout ? upcomingWorkout.title : "Aguardando seu primeiro treino.";
-  document.querySelector("[data-home-summary]").textContent =
-    !hasWorkout
-      ? upcomingWorkout
-        ? `${upcomingWorkout.title} será liberado em ${availabilityLabel}.`
-        : "Seu personal ainda não publicou um treino para você."
-      : `${currentWorkout.focus ? `${currentWorkout.focus} · ` : ""}${getCurrentExercises().length} exercícios · ~${currentWorkout.estimatedMinutes} min`;
-  const sessions = Store.state.sessions || [];
-  const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-  const recentSessions = sessions.filter((session) => {
-    const finishedAt = new Date(session.finishedAt || session.date || 0).getTime();
-    return Number.isFinite(finishedAt) && finishedAt >= sevenDaysAgo;
-  });
-  const doneWorkouts = recentSessions.length;
-  const volumeKg = recentSessions.reduce((sum, session) => sum + Number(session.volumeKg || session.volume || 0), 0);
-  const completedSets = recentSessions.reduce((sum, session) => sum + Number(session.completedSets || session.sets || 0), 0);
-  document.querySelector("[data-stat-done]").textContent = doneWorkouts;
-  document.querySelector("[data-stat-volume]").textContent = formatVolume(volumeKg);
-  document.querySelector("[data-stat-sets]").textContent = completedSets;
-  const activeSession = getActiveSession();
-  const currentCompletedSets = activeSession?.workoutId === currentWorkout.id ? getCompletedSessionSets(activeSession) : 0;
-  if (homeWorkoutAction) {
-    homeWorkoutAction.disabled = !hasWorkout;
-  }
-  if (homeWorkoutLabel) {
-    homeWorkoutLabel.textContent = hasWorkout
-      ? currentCompletedSets > 0 ? "Continuar treino" : "Começar treino"
-      : upcomingWorkout ? `Disponível em ${availabilityLabel}` : "Aguardando treino";
-  }
-  document.querySelector("[data-workout-title]").textContent = hasWorkout
-    ? currentWorkout.title
-    : upcomingWorkout ? upcomingWorkout.title : "Treino";
-  document.querySelector("[data-workout-focus]").textContent = hasWorkout
-    ? currentWorkout.focus
-    : upcomingWorkout ? `Disponível em ${availabilityLabel}` : currentWorkout.focus;
-  document.querySelector("[data-workout-plan-title]").textContent = currentWorkout.id === emptyWorkout.id ? "Sem treino ativo" : currentWorkout.title;
-  document.querySelector("[data-workout-last]").textContent = currentWorkout.lastDoneLabel === "novo" ? "Ainda não executado" : `Última execução ${currentWorkout.lastDoneLabel}`;
-  document.querySelector("[data-workout-minutes]").textContent = `${currentWorkout.estimatedMinutes} min`;
-  document.querySelector("[data-workout-exercise-count]").textContent = `${getCurrentExercises().length} exercícios`;
-  document.querySelector("[data-workout-set-count]").textContent = `${getTotalSets()} séries`;
-  document.querySelectorAll("[data-active-workout-only]").forEach((element) => {
-    element.hidden = !hasWorkout;
-  });
-};
-
-const renderWorkoutProgress = () => {
-  const activeSession = getActiveSession();
-  const belongsToCurrentWorkout = activeSession?.workoutId === currentWorkout.id;
-  const totalSets = belongsToCurrentWorkout ? getSessionTotalSets(activeSession) : getTotalSets();
-  const done = belongsToCurrentWorkout ? getCompletedSessionSets(activeSession) : 0;
-  const percent = totalSets > 0 ? Math.round((done / totalSets) * 100) : 0;
-  document.querySelector("[data-session-count]").textContent = `${done}/${totalSets} séries`;
-  document.querySelector("[data-session-progress]").style.setProperty("--progress", `${percent}%`);
-  document.querySelector("[data-session-progress-track]")?.setAttribute("aria-valuenow", String(percent));
-  const startButton = document.querySelector("[data-start-workout]");
-  if (startButton) {
-    startButton.disabled = totalSets === 0;
-    startButton.textContent = belongsToCurrentWorkout ? "Continuar treino" : "Começar treino";
-  }
-};
-
+const {
+  renderStudent,
+  renderAccessSelectors,
+  renderHome,
+  renderWorkoutProgress
+} = createHomeScreen({
+  appState, emptyStudent, emptyWorkout, Store, homeWorkoutAction, homeWorkoutLabel,
+  coachCard, coachOptions, getCoachInitials, setImageOrText, formatWorkoutAvailability,
+  getCurrentExercises, getTotalSets, getActiveSession, getCompletedSessionSets, getSessionTotalSets
+});
 const getWorkoutVolume = (session = getActiveSession()) => getSessionEntries(session)
   .reduce((sum, entry) => sum + (Number(entry.loadKg || 0) * Number(entry.reps || 0)), 0);
 
@@ -1036,9 +635,9 @@ const buildWorkoutSessionPayload = () => {
   return {
     id: sessionId,
     coachId: activeSession.coachId,
-    studentId: currentStudent.id,
+    studentId: appState.currentStudent.id,
     studentKey: activeSession.studentKey,
-    studentEmail: currentStudent.email || "",
+    studentEmail: appState.currentStudent.email || "",
     workoutId: activeSession.workoutId,
     workoutCode: snapshot.code || "A",
     workoutTitle: snapshot.title || "Treino",
@@ -1054,7 +653,7 @@ const buildWorkoutSessionPayload = () => {
       id: `${sessionId}-feedback`,
       sessionId,
       coachId: activeSession.coachId,
-      studentId: currentStudent.id,
+      studentId: appState.currentStudent.id,
       ...feedback
     },
     setLogs
@@ -1145,7 +744,7 @@ const renderExercises = () => {
     return;
   }
   const activeSession = getActiveSession();
-  const belongsToCurrentWorkout = activeSession?.workoutId === currentWorkout.id;
+  const belongsToCurrentWorkout = activeSession?.workoutId === appState.currentWorkout.id;
   list.innerHTML = exercises.map((exercise, index) => {
     const done = belongsToCurrentWorkout ? getCompletedSetCount(occurrenceId(exercise), activeSession) : 0;
     const total = parseTotalSets(exercise);
@@ -1162,30 +761,6 @@ const renderExercises = () => {
     `;
   }).join("");
   renderWorkoutProgress();
-};
-
-const formatClock = (seconds) => {
-  const safe = Math.max(0, Math.floor(Number(seconds) || 0));
-  const minutes = Math.floor(safe / 60);
-  return `${String(minutes).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
-};
-
-const formatWorkoutElapsed = (seconds) => {
-  const safe = Math.max(0, Math.floor(Number(seconds) || 0));
-  if (safe < 3600) return formatClock(safe);
-  const hours = Math.floor(safe / 3600);
-  const minutes = Math.floor((safe % 3600) / 60);
-  return `${hours}h ${String(minutes).padStart(2, "0")}min`;
-};
-
-const formatWorkoutDuration = (seconds) => {
-  const safe = Math.max(0, Math.floor(Number(seconds) || 0));
-  if (safe < 60) return "<1 min";
-  if (safe < 3600) return `${Math.round(safe / 60)} min`;
-  const roundedMinutes = Math.round(safe / 60);
-  const hours = Math.floor(roundedMinutes / 60);
-  const minutes = roundedMinutes % 60;
-  return minutes ? `${hours}h ${minutes} min` : `${hours}h`;
 };
 
 const getYouTubeVideoId = (value) => {
@@ -1798,176 +1373,6 @@ const releaseRunnerWakeLock = async () => {
   wakeLockSentinel = null;
 };
 
-const renderProgress = () => {
-  const entries = Store.getProgressEntries([]);
-  const historySection = document.querySelector("[data-progress-history]");
-  const progressPage = document.querySelector('[data-page="progress"]');
-  const progressHeading = progressPage?.querySelector(".page-heading");
-  if (progressDisclosure && progressPage) {
-    if (entries.length) progressPage.append(progressDisclosure);
-    else progressHeading?.after(progressDisclosure);
-  }
-  if (progressDisclosure && progressDisclosure.dataset.initialized !== "true") {
-    progressDisclosure.open = entries.length === 0;
-    progressDisclosure.dataset.initialized = "true";
-  }
-  if (historySection) historySection.hidden = entries.length === 0;
-  if (!entries.length) {
-    document.querySelector("[data-chart]").replaceChildren();
-    document.querySelector("[data-metric-list]").replaceChildren();
-    document.querySelector("[data-measurement-history]").replaceChildren();
-    return;
-  }
-  const recentEntries = entries.slice(-7);
-  const latest = entries.at(-1);
-  const weights = recentEntries.map((entry) => entry.weight);
-  const minWeight = Math.min(...weights);
-  const maxWeight = Math.max(...weights);
-  const span = Math.max(maxWeight - minWeight, 1);
-  const metricDefinitions = [
-    { field: "weight", icon: "scale", label: "Peso", unit: "kg" },
-    { field: "waist", icon: "ruler", label: "Cintura", unit: "cm" },
-    { field: "arm", icon: "weight", label: "Braço", unit: "cm" }
-  ];
-  const metrics = metricDefinitions
-    .filter(({ field }) => Number(latest[field]) > 0)
-    .map((metric) => {
-      const previousEntry = [...entries].slice(0, -1).reverse().find((entry) => Number(entry[metric.field]) > 0);
-      const previousValue = previousEntry?.[metric.field];
-      return {
-        ...metric,
-        helper: "Registro atual",
-        value: `${formatDecimal(latest[metric.field])} ${metric.unit}`,
-        delta: previousValue === undefined ? "Primeiro registro" : formatDelta(latest[metric.field], previousValue, metric.unit),
-        tone: previousValue === undefined ? "neutral" : deltaTone(latest[metric.field], previousValue)
-      };
-    });
-
-  document.querySelector("[data-chart]").innerHTML = recentEntries.map((entry) => {
-    const height = 28 + Math.round(((entry.weight - minWeight) / span) * 63);
-    return `<span style="--height: ${height}%"><small>${formatShortDate(entry.date)}</small></span>`;
-  }).join("");
-  document.querySelector("[data-measurements-date]").textContent = formatShortDate(latest.date);
-  document.querySelector("[data-metric-list]").innerHTML = metrics.map((metric) => `
-    <article class="metric card">
-      <span class="surface-icon">${svgIcon(metric.icon)}</span>
-      <div><strong>${metric.label}</strong><small>${metric.helper}</small></div>
-      <div class="metric__value" data-delta-tone="${metric.tone}"><strong>${metric.value}</strong><small>${metric.delta}</small></div>
-    </article>
-  `).join("");
-  document.querySelector("[data-measurement-history]").innerHTML = [...entries].reverse().slice(0, 6).map((entry) => {
-    const complementaryMeasures = [
-      Number(entry.waist) > 0 ? `Cintura ${formatDecimal(entry.waist)} cm` : "",
-      Number(entry.arm) > 0 ? `Braço ${formatDecimal(entry.arm)} cm` : ""
-    ].filter(Boolean);
-    return `
-      <article class="measurement-row card">
-        <span class="surface-icon">${svgIcon("ruler")}</span>
-        <div><strong>${formatShortDate(entry.date)}</strong><small>Peso ${formatDecimal(entry.weight)} kg</small></div>
-        ${complementaryMeasures.map((measure) => `<span>${measure}</span>`).join("")}
-      </article>
-    `;
-  }).join("");
-};
-
-const renderSchedule = () => {
-  const filter = Store.state.scheduleFilter || "Todos";
-  const workoutItems = upcomingWorkouts.map((workout) => ({
-    id: `published-${workout.id}`,
-    type: "Treino",
-    title: workout.title,
-    detail: workout.focus,
-    time: workout.startsAt,
-    source: "personal"
-  }));
-  const items = [...workoutItems, ...Store.getScheduleItems(scheduleItems)]
-    .sort((a, b) => new Date(a.time || 0) - new Date(b.time || 0));
-  const visibleItems = filter === "Todos" ? items : items.filter((item) => item.type === filter);
-  const pendingCount = items.filter((item) => item.source === "personal" || !Store.isReminderDone(item.id)).length;
-  document.querySelector("[data-schedule-count]").textContent = `${pendingCount} ${pendingCount === 1 ? "próximo" : "próximos"}`;
-  document.querySelectorAll("[data-schedule-filter]").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.scheduleFilter === filter);
-  });
-  if (!visibleItems.length) {
-    document.querySelector("[data-schedule-list]").innerHTML =
-      items.length
-        ? `<article class="empty-state card"><strong>Nenhum item neste filtro.</strong><small>Escolha outra categoria para continuar.</small></article>`
-        : `<article class="empty-state card"><strong>Agenda livre.</strong><small>Adicione um lembrete quando precisar.</small></article>`;
-    return;
-  }
-  document.querySelector("[data-schedule-list]").innerHTML = visibleItems.map((item) => {
-    const fromPersonal = item.source === "personal";
-    const done = !fromPersonal && Store.isReminderDone(item.id);
-    return `
-      <article class="schedule-item card ${done ? "is-muted" : ""}">
-        <span class="surface-icon">${svgIcon(scheduleIconByType[item.type] || "calendar")}</span>
-        <div>
-          <span class="chip chip--info">${escapeHtml(scheduleLabelByType[item.type] || item.type)}</span>
-          <h3>${escapeHtml(item.title)}</h3>
-          <p>${escapeHtml(item.detail)}</p>
-          <small>${fromPersonal ? `Disponível em ${escapeHtml(formatWorkoutAvailability(item.time))}` : escapeHtml(formatScheduleTime(item.time))}</small>
-        </div>
-        ${fromPersonal
-          ? `<span class="chip chip--info">Agendado</span>`
-          : `<button class="icon-button" type="button" data-reminder="${escapeHtml(item.id)}" aria-label="${done ? "Reativar" : "Dispensar"} lembrete">
-              ${done ? svgIcon("refresh") : svgIcon("check")}
-            </button>`}
-      </article>
-    `;
-  }).join("");
-};
-
-const renderNotifications = () => {
-  const unreadCount = notificationItems.filter((item) => !Store.isNotificationRead(item.id)).length;
-  if (headerNotificationButton) headerNotificationButton.hidden = notificationItems.length === 0;
-  document.querySelector("[data-notification-count]").textContent = unreadCount;
-  document.querySelector("[data-notification-count]").classList.toggle("is-hidden", unreadCount === 0);
-  if (!notificationItems.length) {
-    document.querySelector("[data-notification-list]").innerHTML =
-      `<article class="empty-state card"><strong>Nenhum aviso por enquanto.</strong><small>Quando houver algo novo, aparecerá aqui.</small></article>`;
-    return;
-  }
-  document.querySelector("[data-notification-list]").innerHTML = notificationItems.map((item) => {
-    const read = Store.isNotificationRead(item.id);
-    return `
-      <article class="notification-item card ${read ? "is-read" : ""}">
-        <div class="notification-item__content">
-          <span class="surface-icon">${svgIcon(notificationIconByType[item.type] || "bell")}</span>
-          <div>
-            <span class="chip">${item.type}</span>
-            <h3>${item.title}</h3>
-            <p>${item.detail}</p>
-            <small>${item.time}</small>
-          </div>
-        </div>
-        <button class="button button--quiet" type="button" data-notification="${item.id}" data-notification-action="${item.action}">
-          ${item.action} ${svgIcon("arrow-right")}
-        </button>
-      </article>
-    `;
-  }).join("");
-};
-
-const renderHistory = () => {
-  const sessions = Store.state.sessions || [];
-  const target = document.querySelector("[data-history-list]");
-  if (!sessions.length) {
-    target.innerHTML = `<article class="empty-state card"><strong>Nenhum treino concluído.</strong><small>Conclua o treino de hoje para enviar o primeiro feedback ao professor.</small></article>`;
-    return;
-  }
-  target.innerHTML = sessions.map((session) => `
-    <article class="history-row card ${session.syncStatus === "synced" ? "is-synced" : "is-pending"}">
-      <span class="surface-icon surface-icon--success">${svgIcon("trophy")}</span>
-      <div>
-        <strong>${escapeHtml(session.workoutTitle || session.title)}</strong>
-        <small>${escapeHtml(formatDateTime(session.finishedAt))} · ${escapeHtml(effortLabelByValue[session.feedback?.effort] || "Sem avaliação")}</small>
-      </div>
-      <span class="chip chip--success">${session.completedSets || session.sets || 0}/${session.totalSets || session.sets || 0} séries</span>
-      <small class="history-row__sync">${formatVolume(session.volumeKg || session.volume || 0)} de volume · ${session.syncStatus === "synced" ? "Enviado ao professor" : "Envio pendente"}</small>
-    </article>
-  `).join("");
-};
-
 const renderAll = () => {
   renderStudent();
   renderAccessSelectors();
@@ -1980,16 +1385,16 @@ const renderAll = () => {
 };
 
 const retryPendingSessions = async () => {
-  if (!currentStudent?.id || !currentStudent?.coachId) return 0;
+  if (!appState.currentStudent?.id || !appState.currentStudent?.coachId) return 0;
   try {
     const result = await sessionRepository.syncPendingSessions({
-      studentId: currentStudent.id,
-      coachId: currentStudent.coachId
+      studentId: appState.currentStudent.id,
+      coachId: appState.currentStudent.coachId
     });
     result.sessions.forEach((session) => Store.addSession(session));
-    previousSessions = [
+    appState.previousSessions = [
       ...result.sessions,
-      ...previousSessions.filter((session) => !result.sessions.some((synced) => synced.id === session.id))
+      ...appState.previousSessions.filter((session) => !result.sessions.some((synced) => synced.id === session.id))
     ].sort((a, b) => new Date(b.finishedAt || 0) - new Date(a.finishedAt || 0));
     const activeSession = getActiveSession();
     const syncedActiveSession = activeSession
@@ -2005,17 +1410,17 @@ const retryPendingSessions = async () => {
 };
 
 const refreshStudentSessionHistory = async () => {
-  if (!currentStudent?.id || !currentStudent?.coachId) {
-    previousSessions = Store.state.sessions || [];
-    return { synced: false, sessions: previousSessions };
+  if (!appState.currentStudent?.id || !appState.currentStudent?.coachId) {
+    appState.previousSessions = Store.state.sessions || [];
+    return { synced: false, sessions: appState.previousSessions };
   }
   const result = await sessionRepository.fetchStudentSessions({
-    studentId: currentStudent.id,
-    coachId: currentStudent.coachId,
+    studentId: appState.currentStudent.id,
+    coachId: appState.currentStudent.coachId,
     limit: 30
   });
-  previousSessions = result.sessions || [];
-  Store.setSessions(previousSessions);
+  appState.previousSessions = result.sessions || [];
+  Store.setSessions(appState.previousSessions);
   return result;
 };
 
@@ -2024,8 +1429,8 @@ const startAuthenticatedApp = async () => {
   const session = await authRepository.getSession();
   if (!session?.user) {
     activateAnonymousStore();
-    currentStudent = emptyStudent;
-    currentWorkout = emptyWorkout;
+    appState.currentStudent = emptyStudent;
+    appState.currentWorkout = emptyWorkout;
     renderAll();
     syncOnboarding();
     syncAuthMode("signin");
@@ -2037,8 +1442,8 @@ const startAuthenticatedApp = async () => {
   if (authContextBeforeClaim?.role && !authRepository.canAccessStudent(authContextBeforeClaim)) {
     await authRepository.signOut();
     activateAnonymousStore();
-    currentStudent = emptyStudent;
-    currentWorkout = emptyWorkout;
+    appState.currentStudent = emptyStudent;
+    appState.currentWorkout = emptyWorkout;
     renderAll();
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
@@ -2056,11 +1461,11 @@ const startAuthenticatedApp = async () => {
       Platform.storage.remove(PENDING_INVITE_KEY);
     }
     activateAnonymousStore();
-    currentStudent = emptyStudent;
-    currentWorkout = emptyWorkout;
-    studentAccesses = [];
-    availableWorkouts = [];
-    upcomingWorkouts = [];
+    appState.currentStudent = emptyStudent;
+    appState.currentWorkout = emptyWorkout;
+    appState.studentAccesses = [];
+    appState.availableWorkouts = [];
+    appState.upcomingWorkouts = [];
     renderAll();
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
@@ -2088,8 +1493,8 @@ const startAuthenticatedApp = async () => {
     if (!linkedStudentResult.student) {
       await authRepository.signOut();
       activateAnonymousStore();
-      currentStudent = emptyStudent;
-      currentWorkout = emptyWorkout;
+      appState.currentStudent = emptyStudent;
+      appState.currentWorkout = emptyWorkout;
       renderAll();
       syncOnboarding();
       syncAuthMode("signin", { preserveStatus: true });
@@ -2116,8 +1521,8 @@ const startAuthenticatedApp = async () => {
   if (!authRepository.canAccessStudent(authContext)) {
     await authRepository.signOut();
     activateAnonymousStore();
-    currentStudent = emptyStudent;
-    currentWorkout = emptyWorkout;
+    appState.currentStudent = emptyStudent;
+    appState.currentWorkout = emptyWorkout;
     renderAll();
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
@@ -2132,8 +1537,8 @@ const startAuthenticatedApp = async () => {
   if (!studentResult.student) {
     await authRepository.signOut();
     activateAnonymousStore();
-    currentStudent = emptyStudent;
-    currentWorkout = emptyWorkout;
+    appState.currentStudent = emptyStudent;
+    appState.currentWorkout = emptyWorkout;
     renderAll();
     syncOnboarding();
     syncAuthMode("signin", { preserveStatus: true });
@@ -2143,16 +1548,16 @@ const startAuthenticatedApp = async () => {
     return false;
   }
 
-  studentAccesses = (studentResult.students || [studentResult.student]).filter(Boolean);
+  appState.studentAccesses = (studentResult.students || [studentResult.student]).filter(Boolean);
   const storedStudentId = Platform.storage.get(`${ACTIVE_STUDENT_KEY}:${session.user.id}`, "");
-  const selectedStudent = studentAccesses.find((student) => student.id === claimedStudentId)
-    || studentAccesses.find((student) => student.id === storedStudentId)
+  const selectedStudent = appState.studentAccesses.find((student) => student.id === claimedStudentId)
+    || appState.studentAccesses.find((student) => student.id === storedStudentId)
     || studentResult.student;
-  currentStudent = toRuntimeStudent(selectedStudent, authContext);
-  Platform.storage.set(`${ACTIVE_STUDENT_KEY}:${session.user.id}`, currentStudent.id);
+  appState.currentStudent = toRuntimeStudent(selectedStudent, authContext);
+  Platform.storage.set(`${ACTIVE_STUDENT_KEY}:${session.user.id}`, appState.currentStudent.id);
   await activateStudentStore();
 
-  currentWorkout = emptyWorkout;
+  appState.currentWorkout = emptyWorkout;
   await applyPublishedBrandTheme();
   await refreshPublishedWorkout({ silent: true });
   await refreshStudentSessionHistory();
@@ -2175,15 +1580,15 @@ const startAuthenticatedApp = async () => {
 };
 
 const switchStudentAccess = async (studentId) => {
-  const student = studentAccesses.find((item) => item.id === studentId);
-  if (!student || student.id === currentStudent.id) return;
+  const student = appState.studentAccesses.find((item) => item.id === studentId);
+  if (!student || student.id === appState.currentStudent.id) return;
   const authContext = await authRepository.getAuthContext();
-  currentStudent = toRuntimeStudent(student, authContext);
-  Platform.storage.set(`${ACTIVE_STUDENT_KEY}:${authContext?.user?.id || "user"}`, currentStudent.id);
+  appState.currentStudent = toRuntimeStudent(student, authContext);
+  Platform.storage.set(`${ACTIVE_STUDENT_KEY}:${authContext?.user?.id || "user"}`, appState.currentStudent.id);
   await activateStudentStore();
-  availableWorkouts = [];
-  upcomingWorkouts = [];
-  currentWorkout = emptyWorkout;
+  appState.availableWorkouts = [];
+  appState.upcomingWorkouts = [];
+  appState.currentWorkout = emptyWorkout;
   focusedExerciseId = "";
   setClickLocks.clear();
   await applyPublishedBrandTheme();
@@ -2192,17 +1597,17 @@ const switchStudentAccess = async (studentId) => {
   const retriedSessions = await retryPendingSessions();
   renderAll();
   if (retriedSessions > 0) {
-    Platform.notify(`Personal ativo: ${currentStudent.coach}. ${retriedSessions} ${retriedSessions === 1 ? "treino pendente enviado" : "treinos pendentes enviados"}.`);
+    Platform.notify(`Personal ativo: ${appState.currentStudent.coach}. ${retriedSessions} ${retriedSessions === 1 ? "treino pendente enviado" : "treinos pendentes enviados"}.`);
   } else {
-    Platform.notify(`Personal ativo: ${currentStudent.coach}.`);
+    Platform.notify(`Personal ativo: ${appState.currentStudent.coach}.`);
   }
 };
 
 const selectWorkout = (workoutId) => {
-  const workout = availableWorkouts.find((item) => item.id === workoutId);
-  if (!workout || workout.id === currentWorkout.id) return;
-  currentWorkout = workout;
-  Platform.storage.set(`${ACTIVE_WORKOUT_KEY}:${currentStudent.id}`, workout.id);
+  const workout = appState.availableWorkouts.find((item) => item.id === workoutId);
+  if (!workout || workout.id === appState.currentWorkout.id) return;
+  appState.currentWorkout = workout;
+  Platform.storage.set(`${ACTIVE_WORKOUT_KEY}:${appState.currentStudent.id}`, workout.id);
   focusedExerciseId = "";
   setClickLocks.clear();
   renderAll();
@@ -2366,7 +1771,7 @@ document.addEventListener("input", (event) => {
 });
 
 coachCard?.addEventListener("click", () => {
-  if (studentAccesses.length <= 1 || !coachDialog) return;
+  if (appState.studentAccesses.length <= 1 || !coachDialog) return;
   if (coachDialogStatus) coachDialogStatus.textContent = "";
   coachDialog.showModal?.();
 });
@@ -2379,8 +1784,8 @@ coachDialog?.addEventListener("click", async (event) => {
 
   const option = event.target.closest("[data-select-coach]");
   if (!option || coachDialog.getAttribute("aria-busy") === "true") return;
-  const student = studentAccesses.find((item) => item.id === option.dataset.selectCoach);
-  if (!student || student.id === currentStudent.id) {
+  const student = appState.studentAccesses.find((item) => item.id === option.dataset.selectCoach);
+  if (!student || student.id === appState.currentStudent.id) {
     coachDialog.close?.();
     return;
   }
@@ -2442,7 +1847,7 @@ document.querySelector("[data-finish]")?.addEventListener("click", async (event)
   renderWorkoutRunner();
   const result = await sessionRepository.syncSession(session);
   if (result.session) Store.addSession(result.session);
-  previousSessions = [result.session || session, ...previousSessions.filter((item) => item.id !== session.id)];
+  appState.previousSessions = [result.session || session, ...appState.previousSessions.filter((item) => item.id !== session.id)];
   Store.updateActiveSession({
     phase: result.synced ? SESSION_PHASE.COMPLETED : SESSION_PHASE.PENDING_SYNC,
     syncStatus: result.synced ? "synced" : "pending"
@@ -2464,13 +1869,13 @@ document.querySelector("[data-finish]")?.addEventListener("click", async (event)
 });
 
 const startCurrentWorkoutSession = () => {
-  if (currentWorkout.id === emptyWorkout.id || !getCurrentExercises().length) return;
+  if (appState.currentWorkout.id === emptyWorkout.id || !getCurrentExercises().length) return;
   let activeSession = getActiveSession();
-  if (activeSession && activeSession.workoutId !== currentWorkout.id) {
+  if (activeSession && activeSession.workoutId !== appState.currentWorkout.id) {
     const discard = window.confirm("Existe outro treino em andamento. Descartar esse registro e iniciar o treino selecionado?");
     if (!discard) {
-      const activeWorkout = availableWorkouts.find((workout) => workout.id === activeSession.workoutId);
-      if (activeWorkout) currentWorkout = activeWorkout;
+      const activeWorkout = appState.availableWorkouts.find((workout) => workout.id === activeSession.workoutId);
+      if (activeWorkout) appState.currentWorkout = activeWorkout;
       renderAll();
       navigate("workout/session");
       return;
@@ -2478,7 +1883,7 @@ const startCurrentWorkoutSession = () => {
     Store.discardActiveSession();
     activeSession = null;
   }
-  if (!activeSession) activeSession = createActiveSession(currentWorkout);
+  if (!activeSession) activeSession = createActiveSession(appState.currentWorkout);
   navigate("workout/session");
 };
 
@@ -2920,11 +2325,11 @@ const signOut = async () => {
   await authRepository.signOut();
   activateAnonymousStore();
   Theme.reset();
-  currentStudent = emptyStudent;
-  currentWorkout = emptyWorkout;
-  studentAccesses = [];
-  availableWorkouts = [];
-  upcomingWorkouts = [];
+  appState.currentStudent = emptyStudent;
+  appState.currentWorkout = emptyWorkout;
+  appState.studentAccesses = [];
+  appState.availableWorkouts = [];
+  appState.upcomingWorkouts = [];
   focusedExerciseId = "";
   setClickLocks.clear();
   renderAll();
@@ -2969,7 +2374,7 @@ window.addEventListener("storage", (event) => {
 
 let foregroundRefreshAt = 0;
 const refreshOnForeground = async () => {
-  if (!Store.state.onboarded || !currentStudent?.coachId || Date.now() - foregroundRefreshAt < 1500) return;
+  if (!Store.state.onboarded || !appState.currentStudent?.coachId || Date.now() - foregroundRefreshAt < 1500) return;
   foregroundRefreshAt = Date.now();
   await applyPublishedBrandTheme();
   await refreshPublishedWorkout({ silent: true });

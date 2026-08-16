@@ -6,12 +6,21 @@ import { authRepository } from "../../appAluno/js/data/repositories/auth-reposit
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260816-1";
 import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260813-2";
 import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260813-1";
+import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
+import { createNavigation } from "./core/navigation.js?v=build-20260816-1";
+import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v=build-20260816-1";
+import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260816-2";
+import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=build-20260816-1";
+import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260816-3";
+import { escapeHtml, formatUpdatedAt, formatVolume, initialsFromName, normalizeEmail, normalizeSearch } from "./utils/formatters.js?v=build-20260816-1";
+import { createProfessorViewState } from "./state/view-state.js?v=build-20260816-1";
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
 const jumpButtons = [...document.querySelectorAll("[data-nav-jump]")];
 const title = document.querySelector("[data-page-title]");
 const toast = document.querySelector("[data-toast]");
+const { setStatus, showToast } = createFeedback({ toast });
 const installAppButton = document.querySelector("[data-install-app]");
 const brandInput = document.querySelector("[data-brand-input]");
 const taglineInput = document.querySelector("[data-tagline-input]");
@@ -204,13 +213,11 @@ const THEME_PALETTES = [
   }
 ];
 
-let toastTimer;
 let themeSaveTimer;
 let students = studentRepository.listStudents();
 let workouts = workoutRepository.listPublishedWorkouts();
 let workoutSessions = [];
-let selectedStudentId = "";
-let dataStatus = "Local";
+const viewState = createProfessorViewState();
 let authContext = null;
 let authAction = "signin";
 let authenticatedSessionDetected = false;
@@ -228,16 +235,7 @@ let removedWorkoutExercise = null;
 let duplicateWorkoutSourceId = "";
 let restoredWorkoutDraftSavedAt = "";
 let deferredInstallPrompt = null;
-let studentSearchQuery = "";
-let studentFilter = "all";
-let workoutSearchQuery = "";
-let workoutFilter = "all";
-let studentSessionOpen = false;
 let themePaletteMode = inferModeFromColor(backgroundInput?.value || DEFAULT_BRAND_THEME.backgroundColor);
-let assetCropper = null;
-let pendingLocalAsset = null;
-let assetCropBaseRatio = 1;
-let isProcessingLocalAsset = false;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -275,28 +273,6 @@ const pageTitles = {
   workouts: "Treinos",
   appearance: "Aparência",
   profile: "Perfil"
-};
-
-const escapeHtml = (value) => String(value ?? "")
-  .replace(/&/g, "&amp;")
-  .replace(/</g, "&lt;")
-  .replace(/>/g, "&gt;")
-  .replace(/"/g, "&quot;")
-  .replace(/'/g, "&#039;");
-
-const initialsFromName = (value) => {
-  const parts = String(value || "Personal")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  return (parts.length > 1 ? `${parts[0][0]}${parts.at(-1)[0]}` : parts[0]?.slice(0, 2) || "PF").toUpperCase();
-};
-
-const setStatus = (target, message, state = "") => {
-  if (!target) return;
-  target.textContent = message;
-  target.classList.toggle("is-synced", state === "synced");
-  target.classList.toggle("is-warning", state === "warning");
 };
 
 const setThemeStatus = (message, state = "") => setStatus(themeStatus, message, state);
@@ -736,246 +712,23 @@ const setAuthChecking = (checking) => {
   authGate?.setAttribute("aria-busy", String(checking));
 };
 
-const readLocalBrandAssets = () => Platform.storage.get(LOCAL_BRAND_ASSETS_KEY, {});
-
-const writeLocalBrandAssets = (assets = {}) => {
-  const current = readLocalBrandAssets();
-  return Platform.storage.set(LOCAL_BRAND_ASSETS_KEY, { ...current, ...assets });
-};
-
-const renderLocalBrandAssets = () => {
-  const assets = readLocalBrandAssets();
-  const logoFrameEnabled = assets.logoFrameEnabled !== false;
-  const logoTarget = document.querySelector("[data-preview-logo]");
-  if (logoTarget) {
-    if (assets.logoDataUrl) {
-      logoTarget.innerHTML = `<img src="${assets.logoDataUrl}" alt="Logo local da marca" />`;
-    } else {
-      const initials = (brandInput?.value || DEFAULT_BRAND_THEME.brandName).trim().slice(0, 2).toUpperCase() || "FF";
-      logoTarget.textContent = initials;
-    }
-    logoTarget.classList.toggle("is-frameless", Boolean(assets.logoDataUrl) && !logoFrameEnabled);
-  }
-
-  if (logoFrameInput) {
-    logoFrameInput.checked = logoFrameEnabled;
-    logoFrameInput.setAttribute("aria-checked", String(logoFrameEnabled));
-  }
-
-  const photoWrap = document.querySelector("[data-preview-photo-wrap]");
-  if (photoWrap) {
-    photoWrap.innerHTML = assets.photoDataUrl
-      ? `<img class="preview-photo" src="${assets.photoDataUrl}" alt="Foto local do personal" />`
-      : `<span class="avatar" data-preview-photo-fallback>${initialsFromName(authContext?.profile?.name || authContext?.email || "PF")}</span>`;
-  }
-
-  setText("[data-logo-file-name]", assets.logoName || "Nenhum arquivo selecionado");
-  setText("[data-photo-file-name]", assets.photoName || "Nenhum arquivo selecionado");
-};
-
-const LOCAL_ASSET_OUTPUT = Object.freeze({
-  logo: { prefix: "logo", label: "Logo", maxDimension: 512, quality: 0.9 },
-  photo: { prefix: "photo", label: "Foto", maxDimension: 256, quality: 0.85 }
+const {
+  readLocalBrandAssets,
+  writeLocalBrandAssets,
+  renderLocalBrandAssets,
+  handleLocalAssetInput,
+  saveCroppedLocalAsset,
+  closeAssetCropDialog,
+  disposeAssetCropper,
+  setAssetCropZoom,
+  isProcessing: isProcessingLocalAsset
+} = createLocalAssetsEditor({
+  getAuthContext: () => authContext,
+  setStatus,
+  showToast,
+  setText,
+  setThemeStatus
 });
-
-const fileToDataUrl = (file) => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.addEventListener("load", () => resolve(String(reader.result || "")));
-  reader.addEventListener("error", () => reject(reader.error || new Error("Falha ao ler imagem.")));
-  reader.readAsDataURL(file);
-});
-
-const canvasToBlob = (canvas, type, quality) => new Promise((resolve, reject) => {
-  canvas.toBlob((blob) => {
-    if (blob) resolve(blob);
-    else reject(new Error("O navegador não conseguiu gerar a imagem."));
-  }, type, quality);
-});
-
-const setAssetCropStatus = (message, state = "") => setStatus(assetCropStatus, message, state);
-
-const setAssetCropControlsBusy = (busy) => {
-  isProcessingLocalAsset = busy;
-  if (assetCropConfirm) {
-    assetCropConfirm.disabled = busy || !assetCropper;
-    assetCropConfirm.textContent = busy ? "Processando…" : "Usar recorte";
-  }
-  document.querySelectorAll("[data-asset-crop-cancel]").forEach((button) => { button.disabled = busy; });
-};
-
-const disposeAssetCropper = () => {
-  assetCropper?.destroy();
-  assetCropper = null;
-  assetCropBaseRatio = 1;
-  if (assetCropImage) {
-    assetCropImage.onload = null;
-    assetCropImage.onerror = null;
-    assetCropImage.removeAttribute("src");
-  }
-  if (pendingLocalAsset?.objectUrl) URL.revokeObjectURL(pendingLocalAsset.objectUrl);
-  if (pendingLocalAsset?.input) pendingLocalAsset.input.value = "";
-  pendingLocalAsset = null;
-  if (assetCropZoom) assetCropZoom.value = "1";
-  setAssetCropControlsBusy(false);
-  if (assetCropConfirm) assetCropConfirm.disabled = true;
-};
-
-const closeAssetCropDialog = () => {
-  if (isProcessingLocalAsset) return;
-  if (assetCropDialog?.open) assetCropDialog.close();
-  else disposeAssetCropper();
-};
-
-const setAssetCropZoom = (value) => {
-  if (!assetCropper || !assetCropZoom) return;
-  const normalized = Math.min(4, Math.max(1, Number(value) || 1));
-  assetCropZoom.value = String(normalized);
-  assetCropper.zoomTo(assetCropBaseRatio * normalized);
-};
-
-const openAssetCropDialog = (file, input, type) => {
-  const spec = LOCAL_ASSET_OUTPUT[type];
-  if (!spec || !assetCropDialog || !assetCropImage || !window.Cropper) {
-    if (input) input.value = "";
-    showToast("O editor de recorte não pôde ser carregado.");
-    return;
-  }
-
-  disposeAssetCropper();
-  const objectUrl = URL.createObjectURL(file);
-  pendingLocalAsset = { file, input, type, objectUrl };
-  if (assetCropTitle) assetCropTitle.textContent = type === "logo" ? "Recortar logo" : "Ajustar foto do personal";
-  setAssetCropStatus("Preparando imagem…");
-  if (assetCropConfirm) assetCropConfirm.disabled = true;
-  if (!assetCropDialog.open) assetCropDialog.showModal();
-
-  assetCropImage.onload = () => {
-    if (pendingLocalAsset?.objectUrl !== objectUrl) return;
-    assetCropper = new window.Cropper(assetCropImage, {
-      aspectRatio: 1,
-      viewMode: 1,
-      dragMode: "move",
-      autoCropArea: 0.82,
-      background: false,
-      guides: true,
-      center: true,
-      highlight: false,
-      movable: true,
-      zoomable: true,
-      zoomOnTouch: true,
-      zoomOnWheel: true,
-      wheelZoomRatio: 0.08,
-      cropBoxMovable: false,
-      cropBoxResizable: false,
-      toggleDragModeOnDblclick: false,
-      responsive: true,
-      restore: false,
-      checkOrientation: true,
-      ready() {
-        if (!assetCropper || pendingLocalAsset?.objectUrl !== objectUrl) return;
-        assetCropBaseRatio = Math.max(0.0001, Number(assetCropper.getImageData()?.ratio) || 1);
-        if (assetCropZoom) assetCropZoom.value = "1";
-        if (assetCropConfirm) assetCropConfirm.disabled = false;
-        setAssetCropStatus(`Saída quadrada em WebP, até ${spec.maxDimension}×${spec.maxDimension}.`);
-      },
-      zoom(event) {
-        if (!assetCropZoom || !assetCropBaseRatio) return;
-        const normalized = Number(event.detail?.ratio || assetCropBaseRatio) / assetCropBaseRatio;
-        assetCropZoom.value = String(Math.min(4, Math.max(1, normalized)));
-      }
-    });
-  };
-
-  assetCropImage.onerror = () => {
-    setAssetCropStatus("Este formato de imagem não pôde ser aberto pelo navegador.", "warning");
-    if (assetCropConfirm) assetCropConfirm.disabled = true;
-  };
-  assetCropImage.src = objectUrl;
-};
-
-const handleLocalAssetInput = (input, type) => {
-  const file = input?.files?.[0];
-  if (!file) return;
-  if (!file.type.startsWith("image/")) {
-    input.value = "";
-    showToast("Escolha um arquivo de imagem.");
-    return;
-  }
-  openAssetCropDialog(file, input, type);
-};
-
-const squareCanvasWithinLimit = (sourceCanvas, maxDimension) => {
-  const sourceSize = Math.max(1, Math.min(sourceCanvas.width, sourceCanvas.height));
-  const outputSize = Math.max(1, Math.min(maxDimension, sourceSize));
-  if (sourceCanvas.width === outputSize && sourceCanvas.height === outputSize) return sourceCanvas;
-  const canvas = document.createElement("canvas");
-  canvas.width = outputSize;
-  canvas.height = outputSize;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Canvas indisponível neste navegador.");
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = "high";
-  context.drawImage(
-    sourceCanvas,
-    (sourceCanvas.width - sourceSize) / 2,
-    (sourceCanvas.height - sourceSize) / 2,
-    sourceSize,
-    sourceSize,
-    0,
-    0,
-    outputSize,
-    outputSize
-  );
-  return canvas;
-};
-
-const croppedAssetName = (file, type) => {
-  const fallback = type === "logo" ? "logo" : "avatar";
-  const base = String(file?.name || fallback).replace(/\.[^.]+$/, "").trim() || fallback;
-  return `${base}-recortado.webp`;
-};
-
-const saveCroppedLocalAsset = async () => {
-  if (!assetCropper || !pendingLocalAsset || isProcessingLocalAsset) return;
-  const { file, type } = pendingLocalAsset;
-  const spec = LOCAL_ASSET_OUTPUT[type];
-  if (!spec) return;
-
-  setAssetCropControlsBusy(true);
-  setAssetCropStatus("Processando recorte…");
-  try {
-    const croppedCanvas = assetCropper.getCroppedCanvas({
-      maxWidth: spec.maxDimension,
-      maxHeight: spec.maxDimension,
-      imageSmoothingEnabled: true,
-      imageSmoothingQuality: "high"
-    });
-    if (!croppedCanvas?.width || !croppedCanvas?.height) throw new Error("O recorte ficou vazio.");
-    const outputCanvas = squareCanvasWithinLimit(croppedCanvas, spec.maxDimension);
-    const blob = await canvasToBlob(outputCanvas, "image/webp", spec.quality);
-    if (blob.type !== "image/webp") throw new Error("Este navegador não oferece exportação WebP.");
-    const dataUrl = await fileToDataUrl(blob);
-    const saved = writeLocalBrandAssets({
-      [`${spec.prefix}DataUrl`]: dataUrl,
-      [`${spec.prefix}Name`]: croppedAssetName(file, type),
-      [`${spec.prefix}Width`]: outputCanvas.width,
-      [`${spec.prefix}Height`]: outputCanvas.height,
-      [`${spec.prefix}MimeType`]: blob.type,
-      [`${spec.prefix}Quality`]: spec.quality
-    });
-    if (!saved) throw new Error("Não há espaço local suficiente para salvar a imagem.");
-
-    renderLocalBrandAssets();
-    setThemeStatus(`${spec.label}: ${outputCanvas.width}×${outputCanvas.height}, WebP, salva neste navegador.`, "warning");
-    showToast(type === "logo" ? "Logo recortado e otimizado." : "Foto recortada e otimizada.");
-    isProcessingLocalAsset = false;
-    assetCropDialog?.close();
-  } catch (error) {
-    setAssetCropStatus(error?.message || "Não foi possível processar esta imagem.", "warning");
-    setAssetCropControlsBusy(false);
-  }
-};
-
 const readTheme = () => ({
   brandName: brandInput?.value?.trim() || DEFAULT_BRAND_THEME.brandName,
   tagline: taglineInput?.value?.trim() || DEFAULT_BRAND_THEME.tagline,
@@ -1031,39 +784,17 @@ const queueThemeSave = () => {
   themeSaveTimer = setTimeout(() => saveThemeNow({ silent: true }), 700);
 };
 
-const showToast = (message, { actionLabel = "", onAction = null, duration = 2600 } = {}) => {
-  if (!toast) return;
-  clearTimeout(toastTimer);
-  toast.replaceChildren();
-  const copy = document.createElement("span");
-  copy.textContent = message;
-  toast.append(copy);
-  if (actionLabel && typeof onAction === "function") {
-    const action = document.createElement("button");
-    action.type = "button";
-    action.textContent = actionLabel;
-    action.addEventListener("click", () => {
-      clearTimeout(toastTimer);
-      toast.classList.remove("is-visible");
-      onAction();
-    }, { once: true });
-    toast.append(action);
-  }
-  toast.classList.add("is-visible");
-  toastTimer = setTimeout(() => toast.classList.remove("is-visible"), duration);
-};
-
 const syncStudentSessionPresentation = () => {
   if (!studentSessionPanel) return;
-  const hasSelection = Boolean(studentSessionOpen && selectedStudentId && !studentSessionPanel.hidden);
+  const hasSelection = Boolean(viewState.studentSessionOpen && viewState.selectedStudentId && !studentSessionPanel.hidden);
   if (studentListView) studentListView.hidden = hasSelection;
   studentSessionPanel.classList.toggle("is-detail-view", hasSelection);
 };
 
 const setStudentSessionOpen = (open, { focus = true } = {}) => {
-  studentSessionOpen = Boolean(open && selectedStudentId && !studentSessionPanel?.hidden);
+  viewState.studentSessionOpen = Boolean(open && viewState.selectedStudentId && !studentSessionPanel?.hidden);
   syncStudentSessionPresentation();
-  if (studentSessionOpen && focus) {
+  if (viewState.studentSessionOpen && focus) {
     window.setTimeout(() => studentSessionPanel?.querySelector("[data-student-session-close]")?.focus(), 80);
   }
 };
@@ -1073,21 +804,15 @@ const revealStudentSession = () => {
   studentSessionPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
-const navigate = (name, updateHash = true) => {
-  const destination = pages.some((page) => page.dataset.page === name) ? name : "dashboard";
-  pages.forEach((page) => page.classList.toggle("is-active", page.dataset.page === destination));
-  navItems.forEach((item) => {
-    const active = item.dataset.nav === destination;
-    item.classList.toggle("is-active", active);
-    if (active) item.setAttribute("aria-current", "page");
-    else item.removeAttribute("aria-current");
-  });
-  if (title) title.textContent = pageTitles[destination] || "Painel";
-  document.body.dataset.currentPage = destination;
-  if (destination !== "students") setStudentSessionOpen(false, { focus: false });
-  if (updateHash || destination !== name) history.replaceState(null, "", `#${destination}`);
-  window.scrollTo({ top: 0, behavior: "smooth" });
-};
+const { navigate } = createNavigation({
+  pages,
+  navItems,
+  title,
+  pageTitles,
+  onNavigate: (destination) => {
+    if (destination !== "students") setStudentSessionOpen(false, { focus: false });
+  }
+});
 
 const setStudentFormOpen = (open, { focus = true } = {}) => {
   if (!studentFormPanel) return;
@@ -1109,13 +834,6 @@ const focusWorkoutForm = () => {
   setWorkoutBuilderOpen(true);
 };
 
-const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
-const normalizeSearch = (value) => String(value || "")
-  .normalize("NFD")
-  .replace(/[\u0300-\u036f]/g, "")
-  .trim()
-  .toLowerCase();
-
 const findExistingStudentForDraft = (draft) => {
   const normalizedEmail = normalizeEmail(draft.email);
   if (!normalizedEmail) return null;
@@ -1134,20 +852,6 @@ const mergeStudentDraftWithExisting = (draft) => {
     createdAt: existing.createdAt,
     updatedAt: new Date().toISOString()
   };
-};
-
-const formatUpdatedAt = (value) => {
-  if (!value) return "Sem data";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
-};
-
-const formatVolume = (value) => {
-  const volumeKg = Math.max(0, Number(value) || 0);
-  return volumeKg > 0
-    ? `${(volumeKg / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}t`
-    : "0 kg";
 };
 
 const effortLabel = (value) => ({
@@ -1254,7 +958,7 @@ const applyWorkoutSessions = (sessions = sessionRepository.listCachedSessions({
 };
 
 const updateDataStatus = (status) => {
-  dataStatus = status;
+  viewState.dataStatus = status;
   renderDashboard();
 };
 
@@ -1262,7 +966,7 @@ const refreshStudents = async ({ silent = false } = {}) => {
   if (!silent) setStudentSyncStatus("Buscando alunos...", "");
   updateDataStatus("Sincronizando");
   const result = await studentRepository.fetchStudents();
-  dataStatus = result.synced ? "Online" : "Local";
+  viewState.dataStatus = result.synced ? "Online" : "Local";
   applyStudents(result.students);
   setStudentSyncStatus(
     result.synced ? "Alunos atualizados." : "Alunos em modo offline.",
@@ -1275,7 +979,7 @@ const refreshPublishedWorkouts = async ({ silent = false } = {}) => {
   if (!silent) setWorkoutSyncStatus("Buscando treinos publicados...", "");
   updateDataStatus("Sincronizando");
   const result = await workoutRepository.fetchPublishedWorkouts();
-  dataStatus = result.synced ? "Online" : dataStatus;
+  viewState.dataStatus = result.synced ? "Online" : viewState.dataStatus;
   applyPublishedWorkouts(result.workouts);
   setWorkoutSyncStatus(
     result.synced ? "Treinos atualizados." : "Treinos em modo offline.",
@@ -1288,7 +992,7 @@ const refreshWorkoutSessions = async ({ silent = false } = {}) => {
   if (!silent) setStudentSyncStatus("Buscando execuções dos alunos...", "");
   updateDataStatus("Sincronizando");
   const result = await sessionRepository.fetchCoachSessions();
-  dataStatus = result.synced ? "Online" : dataStatus;
+  viewState.dataStatus = result.synced ? "Online" : viewState.dataStatus;
   applyWorkoutSessions(result.sessions);
   if (!silent) {
     setStudentSyncStatus(
@@ -1365,121 +1069,23 @@ const getStudentSituations = (student) => {
   return { main, secondary, publishedWorkout };
 };
 
-const renderTasks = () => {
-  const target = document.querySelector("[data-task-list]");
-  if (!target) return;
-  if (!students.length) {
-    target.innerHTML = `
-      <article class="empty-state empty-state--action">
-        <strong>Cadastre o primeiro aluno</strong>
-        <small>O acompanhamento e os treinos aparecerão aqui.</small>
-        <button class="button" type="button" data-task-go="students" data-task-action="new-student">Adicionar aluno</button>
-      </article>
-    `;
-    return;
-  }
-
-  target.innerHTML = students.map((student) => {
-    const situation = getStudentSituations(student);
-    const action = situation.publishedWorkout ? "open-student" : "new-workout";
-    const secondaryLabel = situation.secondary.length
-      ? `+${situation.secondary.length} ${situation.secondary.length === 1 ? "outra situação" : "outras situações"}`
-      : "";
-    return `
-    <button class="task-row" type="button" data-task-go="${action === "new-workout" ? "workouts" : "students"}" data-task-action="${action}" data-task-student="${escapeHtml(student.id)}">
-      <span class="avatar avatar--small">${escapeHtml(student.initials)}</span>
-      <div><strong>${escapeHtml(student.name)}</strong><small>${escapeHtml(situation.main)}</small></div>
-      ${secondaryLabel ? `<span class="task-row__secondary">${escapeHtml(secondaryLabel)}</span>` : ""}
-      <span class="task-row__arrow">${svgIcon("chevron-right")}</span>
-    </button>
-  `;
-  }).join("");
-};
-
-const renderActivities = () => {
-  const target = document.querySelector("[data-activity-list]");
-  if (!target) return;
-  const activities = [
-    ...workoutSessions.map((session) => ({
-      icon: "trophy",
-      title: `${session.workoutTitle} concluído`,
-      detail: `${formatVolume(session.volumeKg)} - ${effortLabel(session.feedback?.effort)} - ${formatUpdatedAt(session.finishedAt)}`,
-      time: session.finishedAt
-    })),
-    ...workouts.map((workout) => ({
-      icon: "dumbbell",
-      title: `Treino publicado para ${workout.owner}`,
-      detail: `${workout.title} - ${formatUpdatedAt(workout.updatedAt)}`,
-      time: workout.updatedAt
-    }))
-  ]
-    .sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0))
-    .slice(0, 6);
-
-  if (!activities.length) {
-    target.innerHTML = `<article class="empty-state"><strong>Ainda sem atividade.</strong><small>As primeiras ações aparecerão aqui.</small></article>`;
-    return;
-  }
-
-  target.innerHTML = activities.map((item) => `
-    <article class="activity-row">
-      <span class="surface-icon">${svgIcon(item.icon)}</span>
-      <div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></div>
-    </article>
-  `).join("");
-};
-
-const renderDashboard = () => {
-  const isEmpty = students.length === 0;
-  const isOnline = dataStatus === "Online";
-  const isSyncing = dataStatus === "Sincronizando";
-  setText("[data-dashboard-headline]", isEmpty ? "Comece pelo primeiro aluno" : "Situações atuais");
-  setText("[data-dashboard-summary]", isEmpty
-    ? "Cadastre o aluno para iniciar o acompanhamento."
-    : `${students.length} ${students.length === 1 ? "aluno" : "alunos"} · ${workouts.length} ${workouts.length === 1 ? "treino publicado" : "treinos publicados"}`);
-  setText("[data-sync-chip]", isOnline ? "Online" : isSyncing ? "Sincronizando" : "Local");
-  const syncChip = document.querySelector("[data-sync-chip]");
-  syncChip?.classList.toggle("chip--success", isOnline);
-  syncChip?.classList.toggle("chip--warning", !isOnline);
-  setText("[data-sync-title]", isOnline ? "Sincronizado" : isSyncing ? "Sincronizando" : "Offline");
-  setText("[data-sync-detail]", isOnline
-    ? "Dados atualizados."
-    : isSyncing
-      ? "Atualizando dados..."
-      : "Conecte-se para enviar alterações.");
-
-  const syncStatus = document.querySelector("[data-sync-notice]");
-  syncStatus?.toggleAttribute("hidden", isOnline);
-  syncStatus?.classList.toggle("is-online", isOnline);
-  syncStatus?.classList.toggle("is-syncing", isSyncing);
-  renderTasks();
-  renderActivities();
-  renderAccount();
-};
-
-const renderAccount = () => {
-  const activeCount = getActiveStudentCount();
-  const limit = ACCOUNT_PLAN.activeStudentLimit;
-  const usage = limit ? Math.min(100, Math.round((activeCount / limit) * 100)) : 0;
-  setText("[data-account-plan]", ACCOUNT_PLAN.name);
-  setText("[data-account-active-students]", activeCount);
-  setText("[data-account-student-limit]", limit);
-
-  const progress = document.querySelector("[data-account-limit-progress]");
-  if (progress) progress.style.setProperty("--progress", `${usage}%`);
-
-  const exceeded = activeCount > limit;
-  const nearLimit = activeCount >= Math.max(1, Math.round(limit * 0.8));
-  setStatus(
-    document.querySelector("[data-account-status]"),
-    exceeded
-      ? `Limite excedido em ${activeCount - limit}. Arquive alunos inativos antes de adicionar novos.`
-      : nearLimit
-        ? `${activeCount} de ${limit} alunos ativos. Você está perto do limite.`
-        : "",
-    exceeded || nearLimit ? "warning" : ""
-  );
-};
+const {
+  render: renderDashboard,
+  renderAccount,
+  renderActivities,
+  renderTasks
+} = createDashboardScreen({
+  accountPlan: ACCOUNT_PLAN,
+  getStudents: () => students,
+  getWorkouts: () => workouts,
+  getSessions: () => workoutSessions,
+  getDataStatus: () => viewState.dataStatus,
+  getStudentSituations,
+  formatVolume,
+  effortLabel,
+  formatUpdatedAt,
+  setStatus
+});
 
 const renderInviteTools = () => {
   if (!inviteStudentOptions || !inviteMessage || !whatsappInvite) return;
@@ -1757,198 +1363,23 @@ const resetWorkoutFormMode = ({ resetForm = false, clearStored = false } = {}) =
   renderWorkoutPreview();
 };
 
-const aggregateSessionLogs = (logs = []) => {
-  const grouped = new Map();
-  logs.forEach((log) => {
-    const key = log.workoutExerciseId || log.exerciseId || `${log.position}-${log.exerciseName}`;
-    const current = grouped.get(key) || { ...log, completedSets: 0, entries: [] };
-    if (log.setNumber) {
-      current.completedSets += 1;
-      current.loadKg = log.loadKg;
-      current.reps = log.reps;
-    } else {
-      current.completedSets += Number(log.completedSets || 0);
-    }
-    current.entries.push(log);
-    grouped.set(key, current);
-  });
-  return [...grouped.values()].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
-};
-
-const renderStudentSessionPanel = () => {
-  const target = studentSessionPanel;
-  if (!target) return;
-  const selectedStudent = students.find((student) => student.id === selectedStudentId) || null;
-  if (!selectedStudent) {
-    target.hidden = true;
-    target.innerHTML = "";
-    setStudentSessionOpen(false, { focus: false });
-    return;
-  }
-  target.hidden = false;
-  selectedStudentId = selectedStudent.id;
-  const sessions = getSessionsForStudent(selectedStudent.id);
-  const totalSessions = sessions.length;
-  const lastSession = sessions[0] || null;
-  const totalVolume = sessions.reduce((sum, session) => sum + Number(session.volumeKg || 0), 0);
-  const painCount = sessions.filter((session) => session.feedback?.pain && session.feedback.pain !== "none").length;
-  const averageSets = totalSessions
-    ? Math.round(sessions.reduce((sum, session) => sum + Number(session.completedSets || 0), 0) / totalSessions)
-    : 0;
-
-  const sessionCards = sessions.slice(0, 5).map((session) => {
-    const setRows = aggregateSessionLogs(session.setLogs || []).slice(0, 8).map((log) => {
-      const individualSets = log.entries.filter((entry) => entry.setNumber);
-      const detail = individualSets.length
-        ? individualSets.map((entry) => `${entry.loadKg}kg × ${entry.reps}${entry.discomfort && entry.discomfort !== "none" ? " · ⚠ desconforto" : ""}`).join(" · ")
-        : `${log.loadKg}kg × ${log.reps}`;
-      return `
-        <article class="session-log-row">
-          <div><strong>${escapeHtml(log.exerciseName)}</strong><small>${escapeHtml(log.prescription || "")}</small></div>
-          <span class="chip">${escapeHtml(String(log.completedSets))} séries</span>
-          <span>${escapeHtml(detail)}</span>
-        </article>
-      `;
-    }).join("");
-    return `
-      <details class="session-card">
-        <summary class="session-card__summary">
-          <div>
-            <span class="eyebrow">${escapeHtml(formatUpdatedAt(session.finishedAt))}</span>
-            <h3>${escapeHtml(session.workoutTitle)}</h3>
-            <span class="session-card__summary-line">${escapeHtml(session.completedSets)}/${escapeHtml(session.totalSets)} séries · ${session.status === "partial" ? "parcial · " : ""}${escapeHtml(effortLabel(session.feedback?.effort))} · ${escapeHtml(painLabel(session.feedback?.pain))}</span>
-          </div>
-          <span class="session-card__summary-action">
-            <span class="chip">${escapeHtml(formatVolume(session.volumeKg))}</span>
-            <span class="session-card__chevron">${svgIcon("chevron-down")}</span>
-          </span>
-        </summary>
-        <div class="session-card__body">
-          ${session.feedback?.note ? `<p class="session-card__note">${escapeHtml(session.feedback.note)}</p>` : ""}
-          <section class="session-log-list">${setRows || `<article class="empty-state"><strong>Sem detalhes das séries</strong><small>Este treino não possui registros por exercício.</small></article>`}</section>
-        </div>
-      </details>
-    `;
-  }).join("");
-
-  target.innerHTML = `
-    <div class="student-session-panel__head">
-      <div class="student-session-panel__title">
-        <button class="button button--quiet" type="button" data-student-session-close>${svgIcon("chevron-left")} Voltar para alunos</button>
-        <span class="eyebrow">Acompanhamento</span>
-        <h2 id="student-session-title">${escapeHtml(selectedStudent.name)}</h2>
-      </div>
-      <div class="student-session-panel__actions">
-        <button class="button button--quiet" type="button" data-refresh-sessions>Atualizar</button>
-      </div>
-    </div>
-    <div class="student-session-panel__metrics">
-      <span><strong>${totalSessions}</strong><small>concluídos</small></span>
-      <span><strong>${lastSession ? formatUpdatedAt(lastSession.finishedAt) : "—"}</strong><small>último treino</small></span>
-      <span><strong>${formatVolume(totalVolume)}</strong><small>volume</small></span>
-      <span><strong>${painCount ? `${painCount} alerta(s)` : `${averageSets} séries`}</strong><small>${painCount ? "dor/desconforto" : "média"}</small></span>
-    </div>
-    <section class="session-list">
-      ${sessionCards || `<article class="empty-state"><strong>Sem treinos concluídos</strong><small>O histórico aparecerá após o primeiro treino.</small></article>`}
-    </section>
-  `;
-  syncStudentSessionPresentation();
-};
-
-const renderStudents = () => {
-  const target = document.querySelector("[data-student-list]");
-  if (!students.some((student) => student.id === selectedStudentId)) {
-    selectedStudentId = "";
-  }
-  const query = normalizeSearch(studentSearchQuery);
-  const visibleStudents = students.filter((student) => {
-    const matchesSearch = !query
-      || normalizeSearch([student.name, student.email, student.goal, student.status].join(" ")).includes(query);
-    const matchesFilter = studentFilter === "all"
-      || (studentFilter === "without-workout" && !getPublishedWorkoutForStudent(student))
-      || (studentFilter === "invite-pending" && student.inviteStatus !== "accepted" && !isInviteExpired(student))
-      || (studentFilter === "invite-expired" && isInviteExpired(student));
-    return matchesSearch && matchesFilter;
-  });
-  setText("[data-student-count]", query || studentFilter !== "all"
-    ? `${visibleStudents.length} de ${students.length}`
-    : `${students.length} ${students.length === 1 ? "cadastrado" : "cadastrados"}`);
-  if (!target) {
-    renderStudentOptions();
-    renderWorkoutPreview();
-    renderStudentSessionPanel();
-    return;
-  }
-  if (!students.length) {
-    target.innerHTML = `<article class="empty-state empty-state--action"><strong>Nenhum aluno cadastrado</strong><small>Adicione o primeiro aluno para começar.</small><button class="button" type="button" data-toggle-student-form>Novo aluno</button></article>`;
-    renderStudentOptions();
-    renderWorkoutPreview();
-    renderStudentSessionPanel();
-    return;
-  }
-
-  if (!visibleStudents.length) {
-    target.innerHTML = `<article class="empty-state"><strong>Nenhum aluno encontrado</strong><small>Ajuste a busca ou o filtro selecionado.</small></article>`;
-    renderStudentOptions();
-    renderWorkoutPreview();
-    renderStudentSessionPanel();
-    return;
-  }
-
-  const rows = visibleStudents.map((student) => {
-    const publishedWorkout = getPublishedWorkoutForStudent(student);
-    const workoutLabel = publishedWorkout?.title || "Sem treino publicado";
-    const studentSessions = getSessionsForStudent(student.id);
-    const latestSession = studentSessions[0] || null;
-    const followupLabel = latestSession
-      ? `Último: ${formatUpdatedAt(latestSession.finishedAt)}`
-      : "Nenhum treino concluído";
-    const accessState = student.inviteStatus === "accepted"
-      ? "active"
-      : isInviteExpired(student) ? "expired" : "pending";
-    const accessLabel = accessState === "active" ? "Acesso ativo" : accessState === "expired" ? "Convite expirado" : "Convite pendente";
-    const accessEmail = student.email || "Sem email de acesso";
-    const statusIsException = student.status && student.status !== "Ativo";
-    return `
-      <article class="entity-row student-row" data-student-card="${escapeHtml(student.id)}">
-        <div class="entity-row__identity">
-          <span class="avatar">${escapeHtml(student.initials)}</span>
-          <div><h2>${escapeHtml(student.name)}</h2><small>${escapeHtml(accessEmail)}</small></div>
-        </div>
-        <div class="entity-row__field"><small>Objetivo</small><span>${escapeHtml(student.goal)}</span></div>
-        <div class="entity-row__field"><small>Treino</small><span>${escapeHtml(workoutLabel)}</span></div>
-        <div class="entity-row__field entity-row__states">
-          <small>Status e acesso</small>
-          <span class="status-text${statusIsException ? " is-exception" : ""}">${escapeHtml(student.status)}</span>
-          <span class="status-text${accessState === "active" ? "" : " is-exception"}" data-access-state="${accessState}">${escapeHtml(accessLabel)}</span>
-        </div>
-        <div class="entity-row__field"><small>Última sessão</small><span>${escapeHtml(followupLabel)}</span></div>
-        <div class="entity-row__actions">
-          ${publishedWorkout
-            ? `<button class="button" type="button" data-student-detail="${escapeHtml(student.id)}">Acompanhar</button>`
-            : `<button class="button" type="button" data-student-action="${escapeHtml(student.id)}">Criar treino</button>`}
-          <details class="action-menu entity-menu">
-            <summary class="icon-button" aria-label="Mais ações para ${escapeHtml(student.name)}">•••</summary>
-            <div class="action-menu__popover">
-              <button type="button" data-student-invite="${escapeHtml(student.id)}">Enviar convite</button>
-              ${publishedWorkout ? `<button type="button" data-student-action="${escapeHtml(student.id)}">Editar treino</button>` : ""}
-            </div>
-          </details>
-        </div>
-      </article>
-    `;
-  }).join("");
-  target.innerHTML = `
-    <div class="entity-list__header" aria-hidden="true">
-      <span>Aluno</span><span>Objetivo</span><span>Treino</span><span>Status e acesso</span><span>Última sessão</span><span>Ações</span>
-    </div>
-    ${rows}
-  `;
-  renderStudentOptions();
-  renderWorkoutPreview();
-  renderStudentSessionPanel();
-};
-
+const {
+  render: renderStudents,
+  renderSessionPanel: renderStudentSessionPanel
+} = createStudentsScreen({
+  getStudents: () => students,
+  viewState,
+  getSessionsForStudent,
+  getPublishedWorkoutForStudent,
+  isInviteExpired,
+  effortLabel,
+  painLabel,
+  setStudentSessionOpen,
+  syncStudentSessionPresentation,
+  setCount: (value) => setText("[data-student-count]", value),
+  renderStudentOptions: () => renderStudentOptions(),
+  renderWorkoutPreview: () => renderWorkoutPreview()
+});
 const getWorkoutDraft = () => {
   if (!workoutForm) return { exercises: [], totalSets: 0, estimatedMinutes: 0 };
   const exercises = reconcileWorkoutDraftFromText();
@@ -2288,68 +1719,16 @@ const isValidHttpsUrl = (value) => {
   }
 };
 
-const renderWorkouts = () => {
-  const target = document.querySelector("[data-workout-list]");
-  const query = normalizeSearch(workoutSearchQuery);
-  const visibleWorkouts = workouts.filter((workout) => {
-    const stage = getWorkoutStage(workout);
-    const matchesSearch = !query
-      || normalizeSearch([workout.title, workout.owner, workout.focus, stage.label].join(" ")).includes(query);
-    const matchesFilter = workoutFilter === "all"
-      || (workoutFilter === "active" && stage.label === "Ativo")
-      || (workoutFilter === "scheduled" && stage.label === "Agendado");
-    return matchesSearch && matchesFilter;
-  });
-  setText("[data-workout-count]", query || workoutFilter !== "all"
-    ? `${visibleWorkouts.length} de ${workouts.length}`
-    : `${workouts.length} ${workouts.length === 1 ? "publicado" : "publicados"}`);
-  if (!target) return;
-  if (!workouts.length) {
-    target.innerHTML = `<article class="empty-state empty-state--action"><strong>Nenhum treino publicado</strong><small>Crie o primeiro treino para um aluno cadastrado.</small><button class="button" type="button" data-open-workout-form>Novo treino</button></article>`;
-    return;
-  }
-
-  if (!visibleWorkouts.length) {
-    target.innerHTML = `<article class="empty-state"><strong>Nenhum treino encontrado</strong><small>Ajuste a busca ou o filtro selecionado.</small></article>`;
-    return;
-  }
-
-  const rows = visibleWorkouts.map((workout) => {
-    const blocks = getWorkoutBlocks(workout);
-    const exerciseCount = (workout.exercises || []).length;
-    const totalSets = (workout.exercises || []).reduce((sum, exercise) => sum + parseSets(exercise.prescription), 0);
-    const stage = getWorkoutStage(workout);
-    const syncLabel = getWorkoutSyncLabel(workout);
-    return `
-      <article class="entity-row workout-row">
-        <div class="entity-row__identity">
-          <span class="surface-icon">${svgIcon("dumbbell")}</span>
-          <div><h2>${escapeHtml(workout.title)}</h2><small>${escapeHtml(workout.focus || blocks[0] || "Treino")}</small></div>
-        </div>
-        <div class="entity-row__field"><small>Aluno</small><span>${escapeHtml(workout.owner || "Aluno")}</span></div>
-        <div class="entity-row__field"><small>Estágio</small><span class="status-text">${escapeHtml(stage.label)}</span><span>${escapeHtml(stage.detail)}</span></div>
-        <div class="entity-row__field"><small>Resumo</small><span>${exerciseCount} exercícios · ${totalSets} séries · ${escapeHtml(workout.estimatedMinutes || 0)} min</span></div>
-        <div class="entity-row__field"><small>Atualização</small><span>${escapeHtml(formatUpdatedAt(workout.updatedAt))}</span><span class="status-text${syncLabel === "Publicado" ? "" : " is-exception"}">${escapeHtml(syncLabel)}</span></div>
-        <div class="entity-row__actions">
-          <button class="button" type="button" aria-label="Editar ${escapeHtml(workout.title)}" data-workout-action="${escapeHtml(workout.id)}">Editar</button>
-          <details class="action-menu entity-menu">
-            <summary class="icon-button" aria-label="Mais ações para ${escapeHtml(workout.title)}">•••</summary>
-            <div class="action-menu__popover action-menu__popover--end">
-              <button type="button" data-workout-duplicate="${escapeHtml(workout.id)}">Duplicar treino</button>
-              <button class="is-danger" type="button" data-workout-archive="${escapeHtml(workout.id)}">Arquivar</button>
-            </div>
-          </details>
-        </div>
-      </article>
-    `;
-  }).join("");
-  target.innerHTML = `
-    <div class="entity-list__header entity-list__header--workouts" aria-hidden="true">
-      <span>Treino</span><span>Aluno</span><span>Estágio</span><span>Resumo</span><span>Atualização</span><span>Ações</span>
-    </div>
-    ${rows}
-  `;
-};
+const { render: renderWorkouts } = createWorkoutsScreen({
+  getWorkouts: () => workouts,
+  getSearchQuery: () => viewState.workoutSearchQuery,
+  getFilter: () => viewState.workoutFilter,
+  getWorkoutStage,
+  getWorkoutBlocks,
+  getWorkoutSyncLabel,
+  parseSets,
+  setCount: (value) => setText("[data-workout-count]", value)
+});
 
 const renderDuplicateWorkoutStudents = (selectedStudentId = "") => {
   if (!duplicateWorkoutStudents) return;
@@ -2452,22 +1831,22 @@ document.querySelector("[data-close-workout-form]")?.addEventListener("click", (
 });
 
 studentSearchInput?.addEventListener("input", () => {
-  studentSearchQuery = studentSearchInput.value;
+  viewState.studentSearchQuery = studentSearchInput.value;
   renderStudents();
 });
 
 studentFilterInput?.addEventListener("change", () => {
-  studentFilter = studentFilterInput.value;
+  viewState.studentFilter = studentFilterInput.value;
   renderStudents();
 });
 
 workoutSearchInput?.addEventListener("input", () => {
-  workoutSearchQuery = workoutSearchInput.value;
+  viewState.workoutSearchQuery = workoutSearchInput.value;
   renderWorkouts();
 });
 
 workoutFilterInput?.addEventListener("change", () => {
-  workoutFilter = workoutFilterInput.value;
+  viewState.workoutFilter = workoutFilterInput.value;
   renderWorkouts();
 });
 
@@ -2865,7 +2244,7 @@ document.querySelector("[data-asset-crop-zoom-in]")?.addEventListener("click", (
   setAssetCropZoom((Number(assetCropZoom?.value) || 1) + 0.15);
 });
 assetCropDialog?.addEventListener("cancel", (event) => {
-  if (isProcessingLocalAsset) event.preventDefault();
+  if (isProcessingLocalAsset()) event.preventDefault();
 });
 assetCropDialog?.addEventListener("close", disposeAssetCropper);
 document.querySelector("[data-clear-brand-assets]")?.addEventListener("click", () => {
@@ -2996,7 +2375,7 @@ document.addEventListener("click", async (event) => {
     }
 
     if (student) {
-      selectedStudentId = student.id;
+      viewState.selectedStudentId = student.id;
       renderStudents();
       revealStudentSession();
     }
@@ -3005,7 +2384,7 @@ document.addEventListener("click", async (event) => {
 
   const studentSessionClose = event.target.closest("[data-student-session-close]");
   if (studentSessionClose) {
-    selectedStudentId = "";
+    viewState.selectedStudentId = "";
     setStudentSessionOpen(false, { focus: false });
     renderStudents();
     window.setTimeout(() => studentSearchInput?.focus(), 80);
@@ -3020,7 +2399,7 @@ document.addEventListener("click", async (event) => {
 
   const studentDetail = event.target.closest("[data-student-detail]");
   if (studentDetail) {
-    selectedStudentId = studentDetail.dataset.studentDetail;
+    viewState.selectedStudentId = studentDetail.dataset.studentDetail;
     navigate("students");
     renderStudents();
     revealStudentSession();
@@ -3187,8 +2566,8 @@ const signOutProfessor = async () => {
     students = [];
     workouts = [];
     workoutSessions = [];
-    selectedStudentId = "";
-    dataStatus = "Local";
+    viewState.selectedStudentId = "";
+    viewState.dataStatus = "Local";
     renderAll();
     syncAuthMode("signin");
     setAuthLocked(true);
@@ -3305,7 +2684,7 @@ const startAuthenticatedPanel = async () => {
   students = [];
   workouts = [];
   workoutSessions = [];
-  selectedStudentId = "";
+  viewState.selectedStudentId = "";
   renderAll();
 
   const refreshResults = await Promise.allSettled([
