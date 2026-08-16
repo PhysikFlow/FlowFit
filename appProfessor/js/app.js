@@ -231,6 +231,7 @@ let workoutDraftTextSignature = "";
 let workoutDraftDirty = false;
 let workoutDraftSaveTimer;
 let activeWorkoutDrag = null;
+const workoutReorderAnimations = new Set();
 let removedWorkoutExercise = null;
 let duplicateWorkoutSourceId = "";
 let restoredWorkoutDraftSavedAt = "";
@@ -1423,7 +1424,7 @@ const renderWorkoutPreview = () => {
   previewList.innerHTML = draft.exercises.map((exercise, index) => `
     <div class="workout-preview__entry" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}">
     <article class="workout-preview__item workout-preview__item--editable">
-      <button class="workout-exercise-drag-handle" type="button" data-draft-drag-handle="${escapeHtml(exercise.draftKey)}" aria-label="Mover ${escapeHtml(exercise.name)}. Use as setas para reordenar." title="Arrastar para reordenar">⋮⋮</button>
+      <button class="workout-exercise-drag-handle" type="button" data-draft-drag-handle="${escapeHtml(exercise.draftKey)}" aria-label="Mover ${escapeHtml(exercise.name)}. Arraste ou use as setas para reordenar." title="Arrastar para reordenar"><span aria-hidden="true">⠿</span></button>
       <span class="workout-preview__number">${String(index + 1).padStart(2, "0")}</span>
       <div class="workout-preview__exercise-main">
         <div class="workout-preview__exercise-head">
@@ -1580,28 +1581,129 @@ const updateDraftExerciseField = (input) => {
 };
 
 const clearWorkoutDragVisuals = () => {
-  previewList?.querySelectorAll(".is-dragging, .is-drop-before, .is-drop-after")
-    .forEach((element) => element.classList.remove("is-dragging", "is-drop-before", "is-drop-after"));
+  workoutReorderAnimations.forEach((animation) => animation.cancel());
+  workoutReorderAnimations.clear();
+  document.querySelectorAll(".workout-preview__entry.is-dragging, .workout-preview__entry.is-settling")
+    .forEach((element) => {
+      element.classList.remove("is-dragging", "is-settling");
+      element.removeAttribute("style");
+    });
   document.body.classList.remove("is-reordering-workout");
 };
 
-const finishWorkoutDrag = ({ cancel = false } = {}) => {
-  if (!activeWorkoutDrag) return;
-  const { key, moved } = activeWorkoutDrag;
-  if (moved && !cancel) {
-    const order = [...previewList.querySelectorAll(".workout-preview__entry[data-draft-exercise-key]")]
-      .map((entry) => entry.dataset.draftExerciseKey);
-    const byKey = new Map(workoutDraftExercises.map((exercise) => [exercise.draftKey, exercise]));
-    workoutDraftExercises = order.map((draftKey) => byKey.get(draftKey)).filter(Boolean);
-    writeWorkoutDraftText();
-    markWorkoutDraftChanged();
+const getWorkoutPreviewEntries = () => [...(previewList?.querySelectorAll(
+  ".workout-preview__entry[data-draft-exercise-key]"
+) || [])];
+
+const animateWorkoutEntryReflow = (beforeRects) => {
+  getWorkoutPreviewEntries().forEach((entry) => {
+    const before = beforeRects.get(entry);
+    if (!before || typeof entry.animate !== "function") return;
+    const after = entry.getBoundingClientRect();
+    const deltaX = before.left - after.left;
+    const deltaY = before.top - after.top;
+    if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) return;
+    const animation = entry.animate([
+      { transform: `translate3d(${deltaX}px, ${deltaY}px, 0)` },
+      { transform: "translate3d(0, 0, 0)" }
+    ], {
+      duration: 180,
+      easing: "cubic-bezier(0.2, 0.8, 0.2, 1)"
+    });
+    workoutReorderAnimations.add(animation);
+    animation.finished.catch(() => {}).finally(() => workoutReorderAnimations.delete(animation));
+  });
+};
+
+const moveWorkoutDragPlaceholder = (clientY) => {
+  if (!activeWorkoutDrag?.placeholder || activeWorkoutDrag.settling) return;
+  const idleEntries = getWorkoutPreviewEntries();
+  const beforeRects = new Map(idleEntries.map((entry) => [entry, entry.getBoundingClientRect()]));
+  const reference = idleEntries.find((entry) => {
+    const rect = entry.getBoundingClientRect();
+    return clientY < rect.top + (rect.height / 2);
+  }) || null;
+  const placeholder = activeWorkoutDrag.placeholder;
+  if (reference === placeholder.nextElementSibling || (!reference && placeholder === previewList.lastElementChild)) return;
+  previewList.insertBefore(placeholder, reference);
+  animateWorkoutEntryReflow(beforeRects);
+};
+
+const beginWorkoutDrag = () => {
+  if (!activeWorkoutDrag || activeWorkoutDrag.moved) return;
+  const { entry } = activeWorkoutDrag;
+  const rect = entry.getBoundingClientRect();
+  const placeholder = document.createElement("div");
+  placeholder.className = "workout-preview__placeholder";
+  placeholder.style.height = `${rect.height}px`;
+  placeholder.setAttribute("aria-hidden", "true");
+  entry.before(placeholder);
+  document.body.appendChild(entry);
+  Object.assign(entry.style, {
+    position: "fixed",
+    zIndex: "1000",
+    top: `${rect.top}px`,
+    left: `${rect.left}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+    margin: "0",
+    transform: "translate3d(0, 0, 0)"
+  });
+  entry.classList.add("is-dragging");
+  document.body.classList.add("is-reordering-workout");
+  Object.assign(activeWorkoutDrag, { moved: true, placeholder, originRect: rect });
+};
+
+const finalizeWorkoutDrag = ({ cancel = false } = {}) => {
+  if (!activeWorkoutDrag?.moved || activeWorkoutDrag.settling) {
+    activeWorkoutDrag = null;
+    return;
   }
-  activeWorkoutDrag = null;
-  clearWorkoutDragVisuals();
-  if (moved) {
+  const drag = activeWorkoutDrag;
+  drag.settling = true;
+  drag.handle.releasePointerCapture?.(drag.pointerId);
+
+  if (cancel) {
+    const entries = getWorkoutPreviewEntries();
+    const beforeRects = new Map(entries.map((entry) => [entry, entry.getBoundingClientRect()]));
+    previewList.insertBefore(drag.placeholder, entries[drag.originIndex] || null);
+    animateWorkoutEntryReflow(beforeRects);
+  }
+
+  const targetIndex = [...previewList.children]
+    .filter((element) => element === drag.placeholder || element.matches?.(".workout-preview__entry[data-draft-exercise-key]"))
+    .indexOf(drag.placeholder);
+  const targetRect = drag.placeholder.getBoundingClientRect();
+  const currentRect = drag.entry.getBoundingClientRect();
+  Object.assign(drag.entry.style, {
+    transition: "none",
+    transform: "none",
+    top: `${currentRect.top}px`,
+    left: `${currentRect.left}px`
+  });
+  drag.entry.getBoundingClientRect();
+  drag.entry.classList.add("is-settling");
+  drag.entry.style.transition = "";
+  Object.assign(drag.entry.style, {
+    top: `${targetRect.top}px`,
+    left: `${targetRect.left}px`,
+    width: `${targetRect.width}px`
+  });
+
+  window.setTimeout(() => {
+    if (!cancel && targetIndex >= 0 && targetIndex !== drag.originIndex) {
+      const [exercise] = workoutDraftExercises.splice(drag.originIndex, 1);
+      workoutDraftExercises.splice(targetIndex, 0, exercise);
+      writeWorkoutDraftText();
+      markWorkoutDraftChanged();
+    }
+    drag.entry.remove();
+    drag.placeholder.remove();
+    activeWorkoutDrag = null;
+    clearWorkoutDragVisuals();
     renderWorkoutPreview();
-    window.setTimeout(() => findDraftExerciseHandle(key)?.focus(), 0);
-  }
+    window.setTimeout(() => findDraftExerciseHandle(drag.key)?.focus(), 0);
+  }, 190);
 };
 
 previewList?.addEventListener("pointerdown", (event) => {
@@ -1612,41 +1714,46 @@ previewList?.addEventListener("pointerdown", (event) => {
   activeWorkoutDrag = {
     pointerId: event.pointerId,
     key: handle.dataset.draftDragHandle,
+    handle,
     entry,
+    originIndex: findDraftExerciseIndex(handle.dataset.draftDragHandle),
+    startX: event.clientX,
     startY: event.clientY,
-    moved: false
+    moved: false,
+    settling: false
   };
   handle.setPointerCapture?.(event.pointerId);
 });
 
-previewList?.addEventListener("pointermove", (event) => {
+document.addEventListener("pointermove", (event) => {
   if (!activeWorkoutDrag || activeWorkoutDrag.pointerId !== event.pointerId) return;
+  if (activeWorkoutDrag.settling) return;
   if (!activeWorkoutDrag.moved && Math.abs(event.clientY - activeWorkoutDrag.startY) < 6) return;
   event.preventDefault();
-  activeWorkoutDrag.moved = true;
-  activeWorkoutDrag.entry.classList.add("is-dragging");
-  document.body.classList.add("is-reordering-workout");
+  beginWorkoutDrag();
+  if (!activeWorkoutDrag?.moved) return;
+  const offsetX = event.clientX - activeWorkoutDrag.startX;
+  const offsetY = event.clientY - activeWorkoutDrag.startY;
+  activeWorkoutDrag.entry.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
   const listRect = previewList.getBoundingClientRect();
   const autoScrollEdge = 52;
   if (event.clientY < listRect.top + autoScrollEdge) previewList.scrollBy({ top: -14, behavior: "auto" });
   else if (event.clientY > listRect.bottom - autoScrollEdge) previewList.scrollBy({ top: 14, behavior: "auto" });
-  const targetEntry = document.elementFromPoint(event.clientX, event.clientY)
-    ?.closest(".workout-preview__entry");
-  previewList.querySelectorAll(".is-drop-before, .is-drop-after")
-    .forEach((entry) => entry.classList.remove("is-drop-before", "is-drop-after"));
-  if (!targetEntry || targetEntry === activeWorkoutDrag.entry) return;
-  const rect = targetEntry.getBoundingClientRect();
-  const placeBefore = event.clientY < rect.top + (rect.height / 2);
-  targetEntry.classList.add(placeBefore ? "is-drop-before" : "is-drop-after");
-  previewList.insertBefore(activeWorkoutDrag.entry, placeBefore ? targetEntry : targetEntry.nextElementSibling);
+  moveWorkoutDragPlaceholder(event.clientY);
 });
 
-previewList?.addEventListener("pointerup", (event) => {
-  if (activeWorkoutDrag?.pointerId === event.pointerId) finishWorkoutDrag();
+document.addEventListener("pointerup", (event) => {
+  if (activeWorkoutDrag?.pointerId === event.pointerId) finalizeWorkoutDrag();
 });
 
-previewList?.addEventListener("pointercancel", (event) => {
-  if (activeWorkoutDrag?.pointerId === event.pointerId) finishWorkoutDrag({ cancel: true });
+document.addEventListener("pointercancel", (event) => {
+  if (activeWorkoutDrag?.pointerId === event.pointerId) finalizeWorkoutDrag({ cancel: true });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !activeWorkoutDrag?.moved) return;
+  event.preventDefault();
+  finalizeWorkoutDrag({ cancel: true });
 });
 
 previewList?.addEventListener("keydown", (event) => {

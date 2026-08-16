@@ -1236,9 +1236,9 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   color: var(--text-supporting);
   cursor: grab;
   font: inherit;
-  font-size: 1.15rem;
+  font-size: 1.45rem;
   font-weight: var(--type-weight-emphasis);
-  letter-spacing: -0.3rem;
+  line-height: 1;
   touch-action: none;
 }
 
@@ -1254,39 +1254,37 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
 }
 
 .is-reordering-workout {
+  cursor: grabbing;
   user-select: none;
 }
 
 .workout-preview__entry.is-dragging {
-  z-index: 2;
-  opacity: 0.88;
-  transform: scale(0.992);
+  pointer-events: none;
+  opacity: 0.96;
+  cursor: grabbing;
+  will-change: top, left, transform;
 }
 
 .workout-preview__entry.is-dragging .workout-preview__item {
   border-color: var(--selection-color);
-  box-shadow: 0 0.7rem 1.5rem rgb(0 0 0 / 0.2);
+  box-shadow: 0 1.1rem 2.4rem rgb(0 0 0 / 0.3), 0 0 0 0.12rem var(--selection-soft);
 }
 
-.workout-preview__entry.is-drop-before::before,
-.workout-preview__entry.is-drop-after::after {
-  position: absolute;
-  z-index: 3;
-  right: 0.35rem;
-  left: 0.35rem;
-  height: 0.16rem;
-  border-radius: var(--radius-track);
-  background: var(--selection-color);
-  box-shadow: 0 0 0 0.2rem var(--selection-soft);
-  content: "";
+.workout-preview__entry.is-dragging .workout-insert-slot {
+  visibility: hidden;
 }
 
-.workout-preview__entry.is-drop-before::before {
-  top: -0.28rem;
+.workout-preview__entry.is-settling {
+  transition: top 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    left 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.workout-preview__entry.is-drop-after::after {
-  bottom: -0.28rem;
+.workout-preview__placeholder {
+  min-height: 3.75rem;
+  border: 1px dashed color-mix(in srgb, var(--selection-color) 55%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--selection-soft) 42%, transparent);
 }
 
 .workout-preview__item strong {
