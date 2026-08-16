@@ -487,7 +487,7 @@ const refreshPublishedWorkout = async ({ silent = false } = {}) => {
   const previousWorkoutId = appState.currentWorkout.id;
   const result = await workoutRepository.fetchWorkoutsForCurrentStudent(appState.currentStudent);
   appState.availableWorkouts = result.workouts || [];
-  appState.upcomingWorkouts = result.appState.upcomingWorkouts || [];
+  appState.upcomingWorkouts = result.upcomingWorkouts || [];
   const preferredWorkoutId = Platform.storage.get(`${ACTIVE_WORKOUT_KEY}:${appState.currentStudent.id}`, "");
   appState.currentWorkout = appState.availableWorkouts.find((workout) => workout.id === previousWorkoutId)
     || appState.availableWorkouts.find((workout) => workout.id === preferredWorkoutId)
