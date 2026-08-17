@@ -1230,6 +1230,7 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   height: 2.5rem;
   padding: 0;
   place-items: center;
+  align-self: center;
   border: 0;
   background: transparent;
   color: var(--text-supporting);
