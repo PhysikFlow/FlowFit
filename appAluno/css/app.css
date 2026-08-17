@@ -182,6 +182,10 @@ body.has-onboarding {
   gap: 0.6rem;
 }
 
+.onboarding__install {
+  margin-top: var(--space-2);
+}
+
 /* O aluno tem um unico fluxo: Google ou link magico. Os controles antigos
    permanecem no HTML por uma versao apenas para atualizar PWAs instalados. */
 .onboarding-form .auth-mode-tabs--student,

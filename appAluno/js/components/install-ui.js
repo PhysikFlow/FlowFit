@@ -1,8 +1,14 @@
-// UI de instalação PWA do app Aluno: convite dispensável na home + guia de
-// instalação manual (iOS/menu do navegador). Toda a lógica de estado/eventos
-// fica no InstallManager compartilhado — aqui só temos apresentação e ações.
+// UI de instalação PWA do app Aluno: convite na home, botão na tela de login e
+// guia de instalação manual (iOS/menu do navegador). Toda a lógica de
+// estado/eventos fica no InstallManager compartilhado — aqui só há
+// apresentação e ações.
+//
+// Por enquanto o convite sempre reaparece ao recarregar a página: o
+// "dispensar" vale apenas para a sessão atual (em memória), sem persistência.
 
-import { InstallManager } from "../core/install.js?v=build-20260816-1";
+import { InstallManager } from "../core/install.js?v=build-20260816-2";
+
+let sessionDismissed = false;
 
 const openGuide = () => {
   const dialog = document.querySelector("[data-install-guide]");
@@ -13,37 +19,40 @@ const openGuide = () => {
   dialog.showModal?.();
 };
 
+const handleInstallAction = async (button) => {
+  if (InstallManager.canInstallNatively()) {
+    if (button) button.hidden = true;
+    try {
+      await InstallManager.install();
+    } catch {
+      // Sem ação extra: o fallback manual segue disponível.
+    }
+    sync();
+    return;
+  }
+  openGuide();
+};
+
+const sync = () => {
+  const standalone = InstallManager.isStandalone();
+  const invite = document.querySelector("[data-install-invite]");
+  const onboardingAction = document.querySelector("[data-install-onboarding-action]");
+  if (invite) invite.hidden = standalone || sessionDismissed;
+  if (onboardingAction) onboardingAction.hidden = standalone;
+};
+
 export const initInstallUi = () => {
   if (!globalThis.window) return;
 
-  const invite = document.querySelector("[data-install-invite]");
-  const action = document.querySelector("[data-install-action]");
-  const dismiss = document.querySelector("[data-install-dismiss]");
-
   InstallManager.init();
-
-  const sync = () => {
-    if (!invite) return;
-    invite.hidden = InstallManager.isStandalone() || InstallManager.guideDismissed();
-  };
   InstallManager.onChange(sync);
 
-  action?.addEventListener("click", async () => {
-    if (InstallManager.canInstallNatively()) {
-      invite.hidden = true;
-      try {
-        await InstallManager.install();
-      } catch {
-        // Sem ação extra: o fallback manual segue disponível.
-      }
-      sync();
-      return;
-    }
-    openGuide();
+  document.querySelectorAll("[data-install-action]").forEach((button) => {
+    button.addEventListener("click", () => handleInstallAction(button));
   });
 
-  dismiss?.addEventListener("click", () => {
-    InstallManager.dismissGuide();
+  document.querySelector("[data-install-dismiss]")?.addEventListener("click", () => {
+    sessionDismissed = true;
     sync();
   });
 

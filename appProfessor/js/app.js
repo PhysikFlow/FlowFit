@@ -1,7 +1,7 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260813-1";
 import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260816-2";
-import { InstallManager } from "../../appAluno/js/core/install.js?v=build-20260816-1";
+import { InstallManager } from "../../appAluno/js/core/install.js?v=build-20260816-2";
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260813-2";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260816-1";

@@ -12,8 +12,6 @@
 
 import { Platform } from "./platform.js?v=build-20260813-1";
 
-export const INSTALL_GUIDE_DISMISS_KEY = "flowfit.install-guide-dismissed";
-
 let deferredInstallPrompt = null;
 const listeners = new Set();
 
@@ -63,17 +61,6 @@ export const InstallManager = {
     prompt.prompt();
     await prompt.userChoice;
     return true;
-  },
-
-  // Preferência de UX persistida em localStorage. O estado "instalado" NÃO é
-  // persistido: ele é sempre derivado do runtime (display-mode/standalone).
-  guideDismissed() {
-    return Boolean(Platform.storage.get(INSTALL_GUIDE_DISMISS_KEY, false));
-  },
-
-  dismissGuide() {
-    Platform.storage.set(INSTALL_GUIDE_DISMISS_KEY, true);
-    notify();
   },
 
   onChange(listener) {
