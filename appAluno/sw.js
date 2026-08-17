@@ -9,7 +9,7 @@ const APP_SHELL = [
   "./assets/icons/icon-maskable-512.png",
   "./css/tokens.css?v=build-20260816-1",
   "./css/components.css?v=build-20260816-2",
-  "./css/app.css?v=build-20260816-3",
+  "./css/app.css?v=build-20260816-4",
   "./js/app.js?v=build-20260816-9",
   "./js/components/custom-select.js?v=build-20260816-1",
   "./js/components/feedback.js?v=build-20260816-1",

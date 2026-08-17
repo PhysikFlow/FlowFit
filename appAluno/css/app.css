@@ -79,6 +79,9 @@ body.has-onboarding {
 .auth-session-check--minimal {
   width: auto;
   gap: 0;
+  /* Enquanto a sessao e verificada o spinner e o unico filho visivel,
+     entao so ele usa margem automatica para ficar centralizado. */
+  margin: auto 0;
   padding: var(--space-4);
 }
 
@@ -134,10 +137,13 @@ body.has-onboarding {
   position: fixed;
   z-index: 50;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   overflow-y: auto;
-  padding: calc(env(safe-area-inset-top) + var(--space-4)) var(--space-4)
+  /* O conteudo comeca proximo ao topo (~30px) e flui normalmente;
+     nada e centralizado/distribuido pela altura da tela. */
+  padding: calc(env(safe-area-inset-top) + 1.875rem) var(--space-4)
     calc(env(safe-area-inset-bottom) + var(--space-4));
   background:
     var(--brand-bg-effect),
@@ -151,7 +157,8 @@ body.has-onboarding {
 .onboarding__panel {
   width: min(100%, 25.5rem);
   max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--space-4));
-  margin: auto 0;
+  /* Centraliza so na horizontal; o topo e definido pelo padding do container. */
+  margin: 0 auto;
   overflow-y: auto;
   padding: var(--space-3);
 }
@@ -184,8 +191,7 @@ body.has-onboarding {
 
 .onboarding__install {
   width: min(100%, 16rem);
-  margin-top: var(--space-3);
-  justify-self: center;
+  margin-top: var(--space-5);
 }
 
 /* O aluno tem um unico fluxo: Google ou link magico. Os controles antigos
