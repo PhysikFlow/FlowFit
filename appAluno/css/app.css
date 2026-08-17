@@ -79,9 +79,6 @@ body.has-onboarding {
 .auth-session-check--minimal {
   width: auto;
   gap: 0;
-  /* Enquanto a sessao e verificada o spinner e o unico filho visivel,
-     entao so ele usa margem automatica para ficar centralizado. */
-  margin: auto 0;
   padding: var(--space-4);
 }
 
@@ -140,10 +137,11 @@ body.has-onboarding {
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* Card + botao ficam juntos como um grupo, centralizado verticalmente.
+     "safe" evita que o topo fique inacessivel em telas baixas. */
+  justify-content: safe center;
   overflow-y: auto;
-  /* O conteudo comeca proximo ao topo (~30px) e flui normalmente;
-     nada e centralizado/distribuido pela altura da tela. */
-  padding: calc(env(safe-area-inset-top) + 1.875rem) var(--space-4)
+  padding: calc(env(safe-area-inset-top) + var(--space-4)) var(--space-4)
     calc(env(safe-area-inset-bottom) + var(--space-4));
   background:
     var(--brand-bg-effect),
@@ -157,7 +155,7 @@ body.has-onboarding {
 .onboarding__panel {
   width: min(100%, 25.5rem);
   max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--space-4));
-  /* Centraliza so na horizontal; o topo e definido pelo padding do container. */
+  /* Sem margens verticais: a posicao vertical vem do `justify-content` do container. */
   margin: 0 auto;
   overflow-y: auto;
   padding: var(--space-3);
