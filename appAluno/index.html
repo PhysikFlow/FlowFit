@@ -15,8 +15,8 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="css/tokens.css?v=build-20260816-1" />
     <link rel="stylesheet" href="css/components.css?v=build-20260816-2" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260816-1" />
-    <script type="module" src="js/app.js?v=build-20260816-6"></script>
+    <link rel="stylesheet" href="css/app.css?v=build-20260816-2" />
+    <script type="module" src="js/app.js?v=build-20260816-7"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title" aria-busy="true">
@@ -79,6 +79,18 @@
           <p data-home-summary>Aguardando seus dados.</p>
           <button class="button" type="button" data-go="workout" data-home-workout-action disabled><span data-home-workout-label>Aguardando treino</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg></button>
         </article>
+
+        <section class="install-invite card" data-install-invite hidden aria-label="Instalar o aplicativo">
+          <span class="install-invite__icon" aria-hidden="true">
+            <svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>
+          </span>
+          <span class="install-invite__copy">
+            <strong>Instalar o app</strong>
+            <small>Abra mais rápido, direto da tela de início.</small>
+          </span>
+          <button class="button button--quiet" type="button" data-install-action>Instalar</button>
+          <button class="install-invite__dismiss" type="button" data-install-dismiss aria-label="Dispensar convite">×</button>
+        </section>
 
         <div class="section-title">
           <h2>Últimos 7 dias</h2>
@@ -481,6 +493,48 @@
         </div>
       </dialog>
     </section>
+
+    <dialog class="install-guide-dialog" data-install-guide aria-labelledby="install-guide-title">
+      <div class="install-guide-dialog__panel">
+        <header class="install-guide-dialog__header">
+          <div>
+            <span class="eyebrow">Acesso rápido</span>
+            <h2 id="install-guide-title">Instalar o app</h2>
+            <p>Adicione o FlowFit à tela de início para abrir como um app de verdade.</p>
+          </div>
+          <button class="icon-button" type="button" data-close-install-guide aria-label="Fechar guia de instalação">×</button>
+        </header>
+
+        <div data-install-guide-ios hidden>
+          <div class="install-guide__art" aria-hidden="true">
+            <span class="install-guide__art-step">
+              <svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>
+              <small>Compartilhar</small>
+            </span>
+            <b>→</b>
+            <span class="install-guide__art-step">
+              <svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M4 11 12 4l8 7" /><path d="M6 10v10h12V10" /><path d="M10 20v-6h4v6" /></svg>
+              <small>Tela de início</small>
+            </span>
+          </div>
+          <ol class="install-guide__steps">
+            <li>Toque em <strong>Compartilhar</strong> no Safari.</li>
+            <li>Escolha <strong>Adicionar à Tela de Início</strong>.</li>
+            <li>Confirme em <strong>Adicionar</strong>.</li>
+          </ol>
+        </div>
+
+        <div data-install-guide-manual hidden>
+          <ol class="install-guide__steps">
+            <li>Abra o <strong>menu do navegador</strong> (⋮ ou ☰).</li>
+            <li>Escolha <strong>Instalar app</strong> ou <strong>Adicionar à tela inicial</strong>.</li>
+            <li>Confirme a instalação.</li>
+          </ol>
+        </div>
+
+        <button class="button button--block" type="button" data-close-install-guide>Entendi</button>
+      </div>
+    </dialog>
 
     <div class="toast" role="status" aria-live="polite" data-toast></div>
   </body>

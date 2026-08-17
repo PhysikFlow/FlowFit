@@ -17,9 +17,9 @@
     <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260816-1" />
     <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260816-2" />
     <link rel="stylesheet" href="vendor/cropperjs/cropper.min.css?v=1.6.2" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260816-3" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260816-4" />
     <script defer src="vendor/cropperjs/cropper.min.js?v=1.6.2"></script>
-    <script type="module" src="js/app.js?v=build-20260816-6"></script>
+    <script type="module" src="js/app.js?v=build-20260816-7"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title" aria-busy="true">
@@ -483,6 +483,41 @@
             <button class="button" type="submit" data-asset-crop-confirm disabled>Usar recorte</button>
           </footer>
         </form>
+      </dialog>
+
+      <dialog class="app-dialog" data-install-guide-dialog aria-labelledby="install-guide-title">
+        <article class="install-guide dialog-form">
+          <button class="icon-button dialog-form__close" type="button" data-close-install-guide aria-label="Fechar guia de instalação">×</button>
+          <span class="eyebrow">Acesso rápido</span>
+          <h2 id="install-guide-title">Instalar o app</h2>
+          <p>Adicione o FlowFit à tela de início para abrir como um app.</p>
+          <div data-install-guide-ios hidden>
+            <div class="install-guide__art" aria-hidden="true">
+              <span class="install-guide__art-step">
+                <svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>
+                <small>Compartilhar</small>
+              </span>
+              <b>→</b>
+              <span class="install-guide__art-step">
+                <svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M4 11 12 4l8 7" /><path d="M6 10v10h12V10" /><path d="M10 20v-6h4v6" /></svg>
+                <small>Tela de início</small>
+              </span>
+            </div>
+            <ol class="install-guide__steps">
+              <li>Toque em <strong>Compartilhar</strong> no Safari.</li>
+              <li>Escolha <strong>Adicionar à Tela de Início</strong>.</li>
+              <li>Confirme em <strong>Adicionar</strong>.</li>
+            </ol>
+          </div>
+          <div data-install-guide-manual hidden>
+            <ol class="install-guide__steps">
+              <li>Abra o <strong>menu do navegador</strong> (⋮ ou ☰).</li>
+              <li>Escolha <strong>Instalar app</strong> ou <strong>Adicionar à tela inicial</strong>.</li>
+              <li>Confirme a instalação.</li>
+            </ol>
+          </div>
+          <button class="button" type="button" data-close-install-guide>Entendi</button>
+        </article>
       </dialog>
 
       <section class="page" data-page="profile" aria-label="Perfil do personal">

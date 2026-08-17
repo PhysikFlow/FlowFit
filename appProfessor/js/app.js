@@ -1,6 +1,7 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260813-1";
 import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260816-2";
+import { InstallManager } from "../../appAluno/js/core/install.js?v=build-20260816-1";
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260813-2";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260816-1";
@@ -238,20 +239,13 @@ const workoutReorderAnimations = new Set();
 let removedWorkoutExercise = null;
 let duplicateWorkoutSourceId = "";
 let restoredWorkoutDraftSavedAt = "";
-let deferredInstallPrompt = null;
 let themePaletteMode = inferModeFromColor(backgroundInput?.value || DEFAULT_BRAND_THEME.backgroundColor);
 
 const $ = (selector) => document.querySelector(selector);
 
-const isInstalledRuntime = () => Boolean(
-  Platform.runtime === "pwa"
-  || window.navigator?.standalone
-  || window.matchMedia?.("(display-mode: standalone)")?.matches
-);
-
 const syncInstallButton = () => {
   if (!installAppButton) return;
-  installAppButton.hidden = isInstalledRuntime() || !deferredInstallPrompt;
+  installAppButton.hidden = InstallManager.isStandalone();
 };
 
 const setText = (selector, value) => {
@@ -2864,47 +2858,37 @@ const initializeOptionalPwaFeatures = () => {
       else window.addEventListener("load", registerServiceWorker, { once: true });
     }
 
-    window.addEventListener("beforeinstallprompt", (event) => {
-      if (isInstalledRuntime()) {
-        deferredInstallPrompt = null;
-        syncInstallButton();
-        return;
-      }
-      event.preventDefault();
-      deferredInstallPrompt = event;
-      syncInstallButton();
+    InstallManager.init();
+    InstallManager.onChange(syncInstallButton);
+
+    const openInstallGuide = () => {
+      const dialog = document.querySelector("[data-install-guide-dialog]");
+      if (!dialog || dialog.open) return;
+      const ios = InstallManager.isIOS();
+      document.querySelector("[data-install-guide-ios]")?.toggleAttribute("hidden", !ios);
+      document.querySelector("[data-install-guide-manual]")?.toggleAttribute("hidden", ios);
+      dialog.showModal?.();
+    };
+
+    document.querySelectorAll("[data-close-install-guide]").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelector("[data-install-guide-dialog]")?.close?.();
+      });
     });
 
     installAppButton?.addEventListener("click", async () => {
-      try {
-        if (!deferredInstallPrompt || isInstalledRuntime()) {
-          deferredInstallPrompt = null;
+      if (InstallManager.canInstallNatively()) {
+        try {
+          installAppButton.hidden = true;
+          await InstallManager.install();
           syncInstallButton();
-          return;
+        } catch (error) {
+          warnOptionalFeature("instalação PWA", error);
         }
-        installAppButton.hidden = true;
-        deferredInstallPrompt.prompt();
-        await deferredInstallPrompt.userChoice;
-        deferredInstallPrompt = null;
-        syncInstallButton();
-      } catch (error) {
-        deferredInstallPrompt = null;
-        syncInstallButton();
-        warnOptionalFeature("instalação PWA", error);
+        return;
       }
+      openInstallGuide();
     });
-
-    window.addEventListener("appinstalled", () => {
-      deferredInstallPrompt = null;
-      syncInstallButton();
-    });
-
-    const displayModeQuery = window.matchMedia?.("(display-mode: standalone)");
-    if (displayModeQuery?.addEventListener) {
-      displayModeQuery.addEventListener("change", syncInstallButton);
-    } else {
-      displayModeQuery?.addListener?.(syncInstallButton);
-    }
     syncInstallButton();
   } catch (error) {
     warnOptionalFeature("inicialização PWA", error);

@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-aluno-v95";
+const CACHE_NAME = "flowfit-aluno-v96";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -9,10 +9,11 @@ const APP_SHELL = [
   "./assets/icons/icon-maskable-512.png",
   "./css/tokens.css?v=build-20260816-1",
   "./css/components.css?v=build-20260816-2",
-  "./css/app.css?v=build-20260816-1",
-  "./js/app.js?v=build-20260816-6",
+  "./css/app.css?v=build-20260816-2",
+  "./js/app.js?v=build-20260816-7",
   "./js/components/custom-select.js?v=build-20260816-1",
   "./js/components/feedback.js?v=build-20260816-1",
+  "./js/components/install-ui.js?v=build-20260816-1",
   "./js/components/wheel-picker.js?v=build-20260816-2",
   "./js/screens/agenda/agenda-screen.js?v=build-20260816-1",
   "./js/screens/evolution/evolution-screen.js?v=build-20260816-1",
@@ -29,6 +30,7 @@ const APP_SHELL = [
   "./js/data/repositories/session-repository.js?v=build-20260813-1",
   "./js/config.js?v=build-20260809-6",
   "./js/core/brand-theme.js?v=build-20260816-2",
+  "./js/core/install.js?v=build-20260816-1",
   "./js/core/icons.js?v=build-20260810-7",
   "./js/core/platform.js?v=build-20260813-1",
   "./js/core/store.js?v=build-20260813-1",

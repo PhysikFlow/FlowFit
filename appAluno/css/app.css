@@ -1699,6 +1699,189 @@ body.has-workout-runner > .toast { visibility: hidden; }
   background: var(--selection-soft);
 }
 
+/* --- Instalação PWA (convite na home + guia) --- */
+.install-invite {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  box-shadow: none;
+}
+
+.install-invite[hidden] {
+  display: none;
+}
+
+.install-invite__icon {
+  display: grid;
+  width: 2.35rem;
+  height: 2.35rem;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--selection-soft);
+  color: var(--selection-color);
+}
+
+.install-invite__icon .icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.install-invite__copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.install-invite__copy strong {
+  font-size: var(--text-sm);
+}
+
+.install-invite__copy small {
+  color: var(--text-supporting);
+  font-size: var(--text-xs);
+  line-height: 1.35;
+}
+
+.install-invite .button {
+  min-height: var(--control-height-sm);
+  padding-inline: var(--space-3);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.install-invite__dismiss {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-supporting);
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+
+.install-guide-dialog {
+  width: min(calc(100% - 2rem), 29rem);
+  max-height: min(78dvh, 40rem);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-strong);
+  color: var(--text-primary);
+  box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 0.46);
+}
+
+.install-guide-dialog::backdrop {
+  background: rgb(0 0 0 / 0.66);
+  backdrop-filter: blur(5px);
+}
+
+.install-guide-dialog__panel {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.install-guide-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.install-guide-dialog__header > div {
+  min-width: 0;
+}
+
+.install-guide-dialog__header h2 {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xl);
+}
+
+.install-guide-dialog__header p {
+  margin: var(--space-2) 0 0;
+  color: var(--text-supporting);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.install-guide__art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-raised) 70%, transparent);
+}
+
+.install-guide__art > b {
+  color: var(--text-disabled);
+}
+
+.install-guide__art-step {
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  color: var(--selection-color);
+}
+
+.install-guide__art-step .icon {
+  width: 1.7rem;
+  height: 1.7rem;
+}
+
+.install-guide__art-step small {
+  color: var(--text-supporting);
+  font-size: var(--text-xs);
+  font-weight: var(--type-weight-item-title);
+}
+
+.install-guide__steps {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: install-step;
+}
+
+.install-guide__steps li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+  counter-increment: install-step;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.install-guide__steps li::before {
+  content: counter(install-step);
+  display: grid;
+  width: 1.6rem;
+  height: 1.6rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--selection-soft);
+  color: var(--selection-color);
+  font-size: var(--text-xs);
+  font-weight: var(--type-weight-emphasis);
+}
+
+.install-guide__steps li strong {
+  font-weight: var(--type-weight-item-title);
+}
+
 .coach-option__photo {
   width: 3rem;
   height: 3rem;
