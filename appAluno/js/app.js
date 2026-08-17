@@ -10,7 +10,7 @@ import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from
 import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260813-1";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "./components/custom-select.js?v=build-20260816-1";
-import { initRunnerWheelPickers } from "./components/wheel-picker.js?v=build-20260816-1";
+import { initRunnerWheelPickers } from "./components/wheel-picker.js?v=build-20260816-2";
 import { createAgendaScreen } from "./screens/agenda/agenda-screen.js?v=build-20260816-1";
 import { createEvolutionScreen } from "./screens/evolution/evolution-screen.js?v=build-20260816-1";
 import { createHistoryScreen } from "./screens/history/history-screen.js?v=build-20260816-1";
@@ -723,7 +723,7 @@ const renderLegacyExercises = () => {
             <span>${escapeHtml(exercise.tempo)}</span>
           </div>
           <div class="set-log" aria-label="Registro rápido de ${escapeHtml(exercise.name)}">
-            <label>Carga <input type="number" inputmode="decimal" min="0" step="0.5" value="${escapeHtml(log.load)}" data-log-load="${escapeHtml(exercise.id)}" aria-label="Carga usada em ${escapeHtml(exercise.name)}" /></label>
+            <label>Carga <input type="number" inputmode="numeric" min="0" max="500" step="1" value="${escapeHtml(log.load)}" data-log-load="${escapeHtml(exercise.id)}" aria-label="Carga usada em ${escapeHtml(exercise.name)}" /></label>
             <label>Reps <input type="number" inputmode="numeric" min="1" step="1" value="${escapeHtml(log.reps)}" data-log-reps="${escapeHtml(exercise.id)}" aria-label="Repetições por série em ${escapeHtml(exercise.name)}" /></label>
           </div>
           ${exercise.notes ? `<small>${escapeHtml(exercise.notes)}</small>` : ""}

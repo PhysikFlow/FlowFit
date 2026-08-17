@@ -7,7 +7,7 @@
 
 const COPY_COUNT = 3;               // cópias dos valores para simular o loop infinito
 const DEFAULT_ITEM_HEIGHT = 32;     // px — espelha --runner-wheel-item em app.css (2rem)
-const MAX_LOAD = 100;               // kg
+const MAX_LOAD = 500;               // kg
 const MAX_REPS = 100;
 const MAX_VELOCITY = 1.8;           // px/ms máximo do impulso ao soltar
 const MOMENTUM_THRESHOLD = 0.08;    // abaixo disso encaixa direto, sem inércia
@@ -46,10 +46,6 @@ class WheelPicker {
   }
 
   render() {
-    this.lens = document.createElement("span");
-    this.lens.className = "runner-wheel__lens";
-    this.lens.setAttribute("aria-hidden", "true");
-
     this.itemsEl = document.createElement("div");
     this.itemsEl.className = "runner-wheel__items";
 
@@ -63,7 +59,7 @@ class WheelPicker {
     });
     this.itemsEl.append(fragment);
 
-    this.wheel.append(this.lens, this.itemsEl);
+    this.wheel.append(this.itemsEl);
     this.middleStart = this.options.length;
   }
 
@@ -223,7 +219,12 @@ class WheelPicker {
 
   setValue(rawValue, { silent = false } = {}) {
     const parsed = Number(rawValue);
-    const value = Number.isFinite(parsed) ? parsed : this.options[0];
+    let value = Number.isFinite(parsed) ? parsed : this.options[0];
+    const step = Number(this.input.step);
+    if (Number.isFinite(step) && step >= 1) {
+      // Passos inteiros (ex.: cargas sem ,5): encaixa no valor mais próximo.
+      value = this.options[this.nearestIndex(value)];
+    }
     const changed = value !== this.value;
     this.index = this.nearestIndex(value);
     this.value = value;
@@ -346,7 +347,7 @@ class WheelPicker {
 
 const buildLoadOptions = () => {
   const options = [];
-  for (let value = 0; value <= MAX_LOAD; value += 0.5) options.push(Number(value.toFixed(1)));
+  for (let value = 0; value <= MAX_LOAD; value += 1) options.push(value);
   return options;
 };
 
