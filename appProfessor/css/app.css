@@ -1238,19 +1238,26 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
 }
 
 .workout-exercise-drag-dots {
+  display: grid;
+  grid-template-columns: repeat(2, 6px);
+  grid-template-rows: repeat(3, 6px);
+  gap: 4px;
+  color: var(--text-supporting);
+  opacity: 0.65;
+  transition: color 120ms ease, opacity 120ms ease;
+}
+
+.workout-exercise-drag-dots i {
   display: block;
-  width: 14px;
-  height: 23px;
-  background-image: radial-gradient(circle, currentColor 2.1px, transparent 2.2px);
-  background-size: 4.2px 4.2px;
-  background-position: 0 0, 9px 0, 0 9px, 9px 9px, 0 18px, 9px 18px;
-  background-repeat: no-repeat;
-  opacity: 0.55;
-  transition: opacity 120ms ease;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .workout-exercise-drag-handle:hover .workout-exercise-drag-dots,
-.workout-exercise-drag-handle:focus-visible .workout-exercise-drag-dots {
+.workout-exercise-drag-handle:focus-visible .workout-exercise-drag-dots,
+.is-reordering-workout .workout-exercise-drag-dots {
   color: var(--selection-color);
   opacity: 1;
 }
@@ -1258,11 +1265,6 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
 .workout-exercise-drag-handle:active,
 .is-reordering-workout .workout-exercise-drag-handle {
   cursor: grabbing;
-}
-
-.is-reordering-workout .workout-exercise-drag-dots {
-  color: var(--selection-color);
-  opacity: 1;
 }
 
 .is-reordering-workout {

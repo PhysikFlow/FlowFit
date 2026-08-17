@@ -1425,7 +1425,7 @@ const renderWorkoutPreview = () => {
   previewList.innerHTML = draft.exercises.map((exercise, index) => `
     <div class="workout-preview__entry" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}">
     <article class="workout-preview__item workout-preview__item--editable">
-      <button class="workout-exercise-drag-handle" type="button" data-draft-drag-handle="${escapeHtml(exercise.draftKey)}" aria-label="Mover ${escapeHtml(exercise.name)}. Arraste ou use as setas para reordenar." title="Arrastar para reordenar"><span class="workout-exercise-drag-dots" aria-hidden="true"></span></button>
+      <button class="workout-exercise-drag-handle" type="button" data-draft-drag-handle="${escapeHtml(exercise.draftKey)}" aria-label="Mover ${escapeHtml(exercise.name)}. Arraste ou use as setas para reordenar." title="Arrastar para reordenar"><span class="workout-exercise-drag-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
       <span class="workout-preview__number">${String(index + 1).padStart(2, "0")}</span>
       <div class="workout-preview__exercise-main">
         <div class="workout-preview__exercise-head">
