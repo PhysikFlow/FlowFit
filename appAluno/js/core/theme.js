@@ -1,5 +1,5 @@
 import { Platform } from "./platform.js?v=build-20260813-1";
-import { DEFAULT_BRAND_THEME, LOCAL_THEME_KEY, applyThemeTokens, normalizeBrandTheme } from "./brand-theme.js?v=build-20260816-1";
+import { DEFAULT_BRAND_THEME, LOCAL_THEME_KEY, applyThemeTokens, normalizeBrandTheme } from "./brand-theme.js?v=build-20260816-2";
 
 export const Theme = {
   value: normalizeBrandTheme({ ...DEFAULT_BRAND_THEME, ...Platform.storage.get(LOCAL_THEME_KEY, {}) }),

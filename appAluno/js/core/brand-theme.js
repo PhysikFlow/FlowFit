@@ -202,7 +202,10 @@ export const applyThemeTokens = (theme) => {
   root.style.setProperty("--radius-avatar", radius.avatar);
   root.style.setProperty("--radius-pill", radius.compact);
   root.style.setProperty("--radius-track", "999px");
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", normalized.accent);
+  // A barra do sistema (status bar/toolbar) usa a cor de fundo chapada, não o
+  // acento — evita a impressão de "importante" com acentos fortes. Em barra
+  // transparente (iOS, Android 15+) quem desenha atrás é o próprio fundo do app.
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", normalized.backgroundColor);
 
   return normalized;
 };

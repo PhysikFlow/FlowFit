@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-professor-v51";
+const CACHE_NAME = "flowfit-professor-v52";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -25,7 +25,7 @@ const APP_SHELL = [
   "../appAluno/css/components.css?v=build-20260816-2",
   "../appAluno/js/components/custom-select.js?v=build-20260816-1",
   "../appAluno/js/config.js?v=build-20260809-6",
-  "../appAluno/js/core/brand-theme.js?v=build-20260816-1",
+  "../appAluno/js/core/brand-theme.js?v=build-20260816-2",
   "../appAluno/js/core/icons.js?v=build-20260809-6",
   "../appAluno/js/core/platform.js?v=build-20260809-6",
   "../appAluno/js/core/supabase.js?v=build-20260812-5",

@@ -1,5 +1,5 @@
 import { Platform } from "../../core/platform.js?v=build-20260813-1";
-import { LOCAL_BRAND_ASSETS_KEY } from "../../core/brand-theme.js?v=build-20260816-1";
+import { LOCAL_BRAND_ASSETS_KEY } from "../../core/brand-theme.js?v=build-20260816-2";
 import { escapeHtml, formatVolume } from "../../utils/formatters.js?v=build-20260816-1";
 
 export const createHomeScreen = ({

@@ -1,5 +1,5 @@
 import { Platform } from "../../../../appAluno/js/core/platform.js?v=build-20260813-1";
-import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY } from "../../../../appAluno/js/core/brand-theme.js?v=build-20260816-1";
+import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY } from "../../../../appAluno/js/core/brand-theme.js?v=build-20260816-2";
 import { initialsFromName } from "../../utils/formatters.js?v=build-20260816-1";
 
 export const createLocalAssetsEditor = ({
