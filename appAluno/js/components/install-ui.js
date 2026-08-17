@@ -37,8 +37,11 @@ const sync = () => {
   const standalone = InstallManager.isStandalone();
   const invite = document.querySelector("[data-install-invite]");
   const onboardingAction = document.querySelector("[data-install-onboarding-action]");
+  const authCard = document.querySelector("[data-auth-content]");
   if (invite) invite.hidden = standalone || sessionDismissed;
-  if (onboardingAction) onboardingAction.hidden = standalone;
+  // O botão da tela de login acompanha o card: some enquanto a sessão é
+  // verificada (card oculto) e só aparece com ele.
+  if (onboardingAction) onboardingAction.hidden = standalone || (authCard?.hidden ?? true);
 };
 
 export const initInstallUi = () => {
@@ -61,6 +64,11 @@ export const initInstallUi = () => {
       document.querySelector("[data-install-guide]")?.close?.();
     });
   });
+
+  const authCard = document.querySelector("[data-auth-content]");
+  if (authCard && globalThis.MutationObserver) {
+    new MutationObserver(sync).observe(authCard, { attributes: true, attributeFilter: ["hidden"] });
+  }
 
   sync();
 };

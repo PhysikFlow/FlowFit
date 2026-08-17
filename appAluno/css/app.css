@@ -183,7 +183,9 @@ body.has-onboarding {
 }
 
 .onboarding__install {
-  margin-top: var(--space-2);
+  width: min(100%, 16rem);
+  margin-top: var(--space-3);
+  justify-self: center;
 }
 
 /* O aluno tem um unico fluxo: Google ou link magico. Os controles antigos
