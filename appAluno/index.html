@@ -315,22 +315,22 @@
             </details>
           </div>
 
-          <div class="runner-log" aria-label="Registro da série atual">
-            <div class="runner-log__field" role="group" aria-labelledby="runner-load-label">
+          <div class="runner-log runner-log--wheels" aria-label="Registro da série atual">
+            <div class="runner-wheel-picker" role="group" aria-labelledby="runner-load-label">
               <span class="runner-log__label" id="runner-load-label">Carga</span>
-              <div class="runner-stepper">
-                <button type="button" data-adjust-runner="load" data-adjust-delta="-0.5" aria-label="Diminuir carga em meio quilo">−</button>
-                <span class="runner-input-shell"><input type="number" inputmode="decimal" min="0" step="0.5" placeholder="0" data-runner-load aria-label="Carga da série atual em quilos" /><b>kg</b></span>
-                <button type="button" data-adjust-runner="load" data-adjust-delta="0.5" aria-label="Aumentar carga em meio quilo">+</button>
+              <div class="runner-wheel-picker__body">
+                <div class="runner-wheel" tabindex="0" role="spinbutton" aria-label="Carga da série atual em quilos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-runner-wheel="load"></div>
+                <span class="runner-wheel-picker__unit" aria-hidden="true">kg</span>
               </div>
+              <input type="number" inputmode="decimal" min="0" step="0.5" placeholder="0" data-runner-load aria-label="Carga da série atual em quilos" hidden />
             </div>
-            <div class="runner-log__field" role="group" aria-labelledby="runner-reps-label">
+            <div class="runner-wheel-picker" role="group" aria-labelledby="runner-reps-label">
               <span class="runner-log__label" id="runner-reps-label">Repetições</span>
-              <div class="runner-stepper">
-                <button type="button" data-adjust-runner="reps" data-adjust-delta="-1" aria-label="Diminuir uma repetição">−</button>
-                <span class="runner-input-shell"><input type="number" inputmode="numeric" min="1" step="1" data-runner-reps aria-label="Repetições da série atual" /></span>
-                <button type="button" data-adjust-runner="reps" data-adjust-delta="1" aria-label="Aumentar uma repetição">+</button>
+              <div class="runner-wheel-picker__body">
+                <div class="runner-wheel" tabindex="0" role="spinbutton" aria-label="Repetições da série atual" aria-valuemin="1" aria-valuemax="100" aria-valuenow="1" data-runner-wheel="reps"></div>
+                <span class="runner-wheel-picker__unit" aria-hidden="true">reps</span>
               </div>
+              <input type="number" inputmode="numeric" min="1" step="1" data-runner-reps aria-label="Repetições da série atual" hidden />
             </div>
           </div>
           <p class="runner-performance" data-runner-performance hidden></p>

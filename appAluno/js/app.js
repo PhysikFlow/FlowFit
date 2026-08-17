@@ -10,6 +10,7 @@ import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from
 import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260813-1";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "./components/custom-select.js?v=build-20260816-1";
+import { initRunnerWheelPickers } from "./components/wheel-picker.js?v=build-20260816-1";
 import { createAgendaScreen } from "./screens/agenda/agenda-screen.js?v=build-20260816-1";
 import { createEvolutionScreen } from "./screens/evolution/evolution-screen.js?v=build-20260816-1";
 import { createHistoryScreen } from "./screens/history/history-screen.js?v=build-20260816-1";
@@ -24,6 +25,7 @@ import {
 } from "./utils/formatters.js?v=build-20260816-1";
 
 initCustomSelects();
+const runnerWheels = initRunnerWheelPickers();
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -1296,6 +1298,7 @@ const renderWorkoutRunner = () => {
   const suggestedLoad = session.currentLoad ?? previous?.loadKg ?? parseLoadKg(exercise.load);
   loadInput.value = Number(suggestedLoad) > 0 ? suggestedLoad : "";
   repsInput.value = session.currentReps ?? previous?.reps ?? parseReps(exercise);
+  runnerWheels.syncAll();
   completeButton.disabled = false;
   document.querySelector("[data-correct-last-set]").hidden = getSessionEntries(session).length === 0;
   renderRunnerMedia(exercise);
