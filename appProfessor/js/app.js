@@ -114,6 +114,7 @@ const studentImportForm = document.querySelector("[data-student-import-form]");
 const studentImportInput = document.querySelector("[data-student-import-input]");
 const studentImportFile = document.querySelector("[data-student-import-file]");
 const studentImportStatus = document.querySelector("[data-student-import-status]");
+const sideNav = document.querySelector(".side-nav");
 
 const ACCOUNT_PLAN = {
   name: "Plano inicial",
@@ -810,6 +811,7 @@ const { navigate } = createNavigation({
   pageTitles,
   onNavigate: (destination) => {
     if (destination !== "students") setStudentSessionOpen(false, { focus: false });
+    sideNav?.querySelector(`[data-nav="${destination}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
   }
 });
 
@@ -1909,6 +1911,16 @@ navItems.forEach((item) => item.addEventListener("click", (event) => {
   event.preventDefault();
   navigate(item.dataset.nav);
 }));
+
+const syncSideNavEdgeFades = () => {
+  if (!sideNav) return;
+  const { scrollLeft, scrollWidth, clientWidth } = sideNav;
+  sideNav.classList.toggle("has-edge-left", scrollLeft > 4);
+  sideNav.classList.toggle("has-edge-right", scrollLeft < scrollWidth - clientWidth - 4);
+};
+sideNav?.addEventListener("scroll", syncSideNavEdgeFades, { passive: true });
+window.addEventListener("resize", syncSideNavEdgeFades);
+syncSideNavEdgeFades();
 
 jumpButtons.forEach((button) => button.addEventListener("click", () => {
   navigate(button.dataset.navJump);

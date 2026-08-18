@@ -1,10 +1,10 @@
-const CACHE_NAME = "flowfit-professor-v59";
+const CACHE_NAME = "flowfit-professor-v60";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./css/app.css?v=build-20260817-7",
-  "./js/app.js?v=build-20260817-9",
+  "./css/app.css?v=build-20260817-8",
+  "./js/app.js?v=build-20260817-10",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/core/navigation.js?v=build-20260816-1",
   "./js/screens/dashboard/dashboard-screen.js?v=build-20260816-1",

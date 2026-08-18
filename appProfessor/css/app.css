@@ -347,6 +347,11 @@ body.is-auth-locked {
   padding-inline: var(--space-3);
 }
 
+/* Perfil no header: visível apenas no mobile, onde a barra inferior não o mostra mais. */
+.topbar-profile-link {
+  display: none;
+}
+
 body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   display: none;
 }
@@ -2270,7 +2275,7 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
     z-index: 55;
     inset: auto 0 0;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 3.2rem;
+    grid-template-columns: 1fr;
     height: auto;
     max-height: calc(var(--admin-mobile-nav-height) + env(safe-area-inset-bottom));
     gap: var(--space-2);
@@ -2292,12 +2297,47 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   }
 
   .side-nav {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0.35rem;
-    overflow: visible;
-    padding: 0.1rem 0.05rem 0.2rem;
+    position: relative;
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.1rem 0 0.2rem;
     scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Fades nas bordas indicam que há mais itens para o lado. */
+  .side-nav::before,
+  .side-nav::after {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    bottom: 0;
+    width: 2.6rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 160ms ease;
+  }
+
+  .side-nav::before {
+    left: 0;
+    background: linear-gradient(to right, color-mix(in srgb, var(--surface-overlay) 94%, var(--surface-page)), transparent);
+  }
+
+  .side-nav::after {
+    right: 0;
+    background: linear-gradient(to left, color-mix(in srgb, var(--surface-overlay) 94%, var(--surface-page)), transparent);
+  }
+
+  .side-nav.has-edge-left::before {
+    opacity: 1;
+  }
+
+  .side-nav.has-edge-right::after {
+    opacity: 1;
   }
 
   .side-nav::-webkit-scrollbar {
@@ -2305,6 +2345,7 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   }
 
   .side-nav a {
+    flex: 0 0 66.67%;
     min-width: 0;
     min-height: 3.55rem;
     flex-direction: column;
@@ -2316,6 +2357,7 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
     letter-spacing: -0.01em;
     line-height: 1.05;
     text-align: center;
+    scroll-snap-align: start;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -2330,37 +2372,40 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   }
 
   .side-nav a.is-active {
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--selection-color) 24%, transparent);
+    background: var(--selection-soft);
+    box-shadow: inset 0 0 0 1px var(--selection-border);
+    color: var(--selection-color);
+  }
+
+  .topbar-profile-link {
+    display: grid;
+    width: 2.35rem;
+    height: 2.35rem;
+    place-items: center;
+    flex: 0 0 auto;
+    border: 1px solid var(--selection-border);
+    border-radius: 0.92rem;
+    background: var(--selection-soft);
+    color: var(--selection-color);
+  }
+
+  .topbar-profile-link .sidebar-profile__avatar {
+    border: 0;
+    background: transparent;
+  }
+
+  .topbar-profile-link.is-active {
+    border-color: var(--selection-color);
   }
 
   .sidebar-profile-link {
-    width: 3.2rem;
-    min-height: 3.55rem;
-    grid-template-columns: 1fr;
-    place-items: center;
-    margin: 0;
-    padding: 0.34rem;
-    border-radius: 1rem;
-    background: color-mix(in srgb, var(--surface-raised) 90%, transparent);
-  }
-
-  .sidebar-profile-link:hover {
-    transform: none;
-  }
-
-  .sidebar-profile-link.is-active {
-    border-color: var(--selection-border);
-    background: var(--selection-soft);
+    display: none;
   }
 
   .sidebar-profile__avatar {
     width: 2.35rem;
     height: 2.35rem;
     border-radius: 0.92rem;
-  }
-
-  .sidebar-profile__identity {
-    display: none;
   }
 
   .admin-shell {
@@ -2730,11 +2775,6 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   .side-nav a {
     min-height: 3.3rem;
     font-size: 0.61rem;
-  }
-
-  .sidebar-profile-link {
-    width: 100%;
-    min-height: 3.3rem;
   }
 
   .sidebar-profile__avatar {
