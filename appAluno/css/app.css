@@ -317,6 +317,10 @@ body.has-onboarding {
   min-width: 0;
 }
 
+.brand > div {
+  min-width: 0;
+}
+
 .brand-logo {
   display: grid;
   width: 2.35rem;
@@ -1379,6 +1383,11 @@ body.has-workout-runner > .toast { visibility: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
   .runner-phase,
+  .runner-transition__icon,
+  .runner-transition .eyebrow,
+  .runner-transition h1,
+  .runner-transition p,
+  .runner-action-bar.is-armed .runner-complete-set,
   .set-button.is-pressing,
   .exercise.is-pressing {
     animation: none;
@@ -2151,7 +2160,11 @@ body.has-workout-runner > .toast { visibility: hidden; }
   }
 
   .brand small {
-    display: none;
+    display: block;
+    max-width: 42vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .welcome {
@@ -2908,12 +2921,24 @@ body.has-workout-runner > .toast { visibility: hidden; }
   border-color: color-mix(in srgb, var(--status-success) 55%, transparent);
   background: var(--status-success);
   color: #092114;
+  animation: runner-armed-pulse 900ms var(--ease-out) infinite;
 }
 
 .runner-action-bar.is-correcting.is-armed .runner-complete-set {
   border-color: color-mix(in srgb, var(--status-warning) 62%, transparent);
   background: var(--status-warning);
   color: #211805;
+}
+
+@keyframes runner-armed-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.035);
+  }
 }
 
 .runner-swipe-hint {
@@ -2949,6 +2974,10 @@ body.has-workout-runner > .toast { visibility: hidden; }
   font-weight: var(--type-weight-display);
 }
 
+.runner-action-bar.is-armed .runner-swipe-feedback span {
+  transform: scale(1.3);
+}
+
 .runner-swipe-feedback strong {
   font-size: 0.62rem;
   line-height: 1.1;
@@ -2962,6 +2991,58 @@ body.has-workout-runner > .toast { visibility: hidden; }
 
 .runner-transition__icon {
   margin-bottom: var(--space-3);
+  animation: runner-success-pop 560ms var(--ease-out);
+}
+
+.runner-transition .eyebrow,
+.runner-transition h1,
+.runner-transition p {
+  animation: runner-success-rise 440ms var(--ease-out) both;
+}
+
+.runner-transition .eyebrow {
+  animation-delay: 100ms;
+}
+
+.runner-transition h1 {
+  animation-delay: 170ms;
+}
+
+.runner-transition p {
+  animation-delay: 250ms;
+}
+
+@keyframes runner-success-pop {
+  0% {
+    transform: scale(0.35);
+    opacity: 0;
+  }
+
+  60% {
+    transform: scale(1.14);
+    opacity: 1;
+  }
+
+  78% {
+    transform: scale(0.95);
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes runner-success-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .runner-rest {

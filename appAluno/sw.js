@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-aluno-v100";
+const CACHE_NAME = "flowfit-aluno-v101";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -33,7 +33,7 @@ const APP_SHELL = [
   "./assets/fonts/teko-500.woff2",
   "./assets/fonts/teko-600.woff2",
   "./assets/fonts/teko-700.woff2",
-  "./css/app.css?v=build-20260816-5",
+  "./css/app.css?v=build-20260817-6",
   "./js/app.js?v=build-20260817-10",
   "./js/components/custom-select.js?v=build-20260816-1",
   "./js/components/feedback.js?v=build-20260816-1",
