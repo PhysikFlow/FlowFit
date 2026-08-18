@@ -2307,8 +2307,9 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
     transform: translateX(-50%);
     width: min(calc(100% - 1rem), 34rem);
     display: flex;
+    flex-direction: row;
     height: auto;
-    max-height: calc(var(--admin-mobile-nav-height) + env(safe-area-inset-bottom));
+    max-height: none;
     gap: var(--space-1);
     align-items: center;
     overflow: visible;
@@ -2327,9 +2328,9 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   .side-nav {
     position: relative;
     display: flex;
+    width: 100%;
+    flex: 1 1 auto;
     gap: 0.3rem;
-    flex: 1 1 0;
-    min-width: 0;
     overflow-x: auto;
     overflow-y: hidden;
     padding: 0.1rem 0.2rem 0.2rem;
