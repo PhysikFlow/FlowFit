@@ -849,10 +849,8 @@ const syncSideNavIndicator = (activeItem, { animate = true } = {}) => {
   cancelAnimationFrame(sideNavIndicatorFrame);
   sideNavIndicatorFrame = requestAnimationFrame(() => {
     sideNavIndicator.hidden = false;
-    const navRect = sideNav.getBoundingClientRect();
-    const itemRect = activeItem.getBoundingClientRect();
-    const indicatorWidth = Math.max(24, itemRect.width * 0.52);
-    const indicatorLeft = itemRect.left - navRect.left + ((itemRect.width - indicatorWidth) / 2);
+    const indicatorWidth = Math.max(24, activeItem.offsetWidth * 0.52);
+    const indicatorLeft = activeItem.offsetLeft + ((activeItem.offsetWidth - indicatorWidth) / 2);
     const shouldPositionImmediately = !animate || !sideNavIndicator.classList.contains("is-ready");
     sideNavIndicator.classList.toggle("is-positioning", shouldPositionImmediately);
     sideNavIndicator.style.left = `${indicatorLeft}px`;
