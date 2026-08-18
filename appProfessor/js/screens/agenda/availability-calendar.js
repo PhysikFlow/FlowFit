@@ -11,6 +11,7 @@
  *   import { initAvailabilityCalendar } from "./availability-calendar.js";
  *   initAvailabilityCalendar(document.querySelector("[data-agenda-calendar]"));
  */
+import { Platform } from "../../../../appAluno/js/core/platform.js?v=build-20260818-1";
 import { svgIcon } from "../../../../appAluno/js/core/icons.js?v=build-20260818-1";
 
 const DAYS = [
@@ -180,7 +181,7 @@ export function initAvailabilityCalendar(container) {
                 <span class="ag-dot ag-dot--busy"></span>Indisponível
               </button>
             </div>
-            <span class="ag-hint">Clique em uma célula marcada para desmarcar.</span>
+            <span class="ag-hint">Clique para alternar. Arraste para marcar vários.</span>
           </div>
         </header>
 
@@ -239,25 +240,68 @@ export function initAvailabilityCalendar(container) {
     });
 
     // Pointer drag painting
+    // On touch devices painting requires a long-press (~450 ms) to arm,
+    // so the first swipe naturally scrolls the table. On desktop (mouse)
+    // painting starts immediately as before.
+    const isTouchDevice = matchMedia("(hover: none), (pointer: coarse)").matches;
+    const LONG_PRESS_MS = 450;
+    const MOVE_CANCEL_PX = 12;
+
     let pointerDown = false;
     let dragging = false;
+    let armed = isTouchDevice ? false : true; // desktop: armed instantly
     let pointerId = null;
     let startCell = null;
     let lastDragCell = null;
+    let startX = 0;
+    let startY = 0;
+    let longPressTimer = null;
+    let cancelled = false;
+
+    function armPainting() {
+      armed = true;
+      Platform.vibrate(25);
+    }
+
+    function cancelPainting() {
+      cancelled = true;
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
 
     grid.addEventListener("pointerdown", (e) => {
       const cell = e.target.closest(".ag-slot");
       if (!cell) return;
-      e.preventDefault();
+      if (!isTouchDevice) e.preventDefault(); // desktop only
       pointerDown = true;
       dragging = false;
+      armed = !isTouchDevice; // desktop: armed immediately
+      cancelled = false;
       pointerId = e.pointerId;
+      startX = e.clientX;
+      startY = e.clientY;
       startCell = cell;
       lastDragCell = cell;
+      clearTimeout(longPressTimer);
+      if (isTouchDevice) {
+        longPressTimer = setTimeout(() => {
+          if (pointerDown && !cancelled) armPainting();
+        }, LONG_PRESS_MS);
+      }
     });
 
     grid.addEventListener("pointermove", (e) => {
       if (!pointerDown || e.pointerId !== pointerId) return;
+      // Before armed on touch, check if user is scrolling away
+      if (!armed) {
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (Math.abs(dx) > MOVE_CANCEL_PX || Math.abs(dy) > MOVE_CANCEL_PX) {
+          cancelPainting();
+          return;
+        }
+        return; // not armed yet – don't paint
+      }
       let el = container.elementFromPoint?.(e.clientX, e.clientY);
       if (!el) el = document.elementFromPoint(e.clientX, e.clientY);
       const cell = el?.closest?.(".ag-slot");
@@ -274,11 +318,18 @@ export function initAvailabilityCalendar(container) {
     const finishPointer = (e) => {
       if (!pointerDown || e.pointerId !== pointerId) return;
       const wasDragging = dragging;
+      const wasArmed = armed;
       pointerDown = false;
       dragging = false;
+      armed = isTouchDevice ? false : true;
       pointerId = null;
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
       if (!startCell) return;
-      if (!wasDragging) {
+      if (cancelled || !wasArmed) {
+        // Touch user didn't hold long enough – treat as a tap
+        toggleCell(startCell);
+      } else if (!wasDragging) {
         toggleCell(startCell);
       } else {
         if (startCell.dataset.state !== "reserved") {
@@ -293,6 +344,7 @@ export function initAvailabilityCalendar(container) {
       }
       startCell = null;
       lastDragCell = null;
+      cancelled = false;
     };
 
     window.addEventListener("pointerup", finishPointer);

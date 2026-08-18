@@ -4152,5 +4152,6 @@ body { color: var(--text-primary); font-weight: var(--type-weight-body); }
   .ag-setting { padding: var(--space-3); }
   .ag-scroll { max-height: 62vh; }
   .ag-footer { padding: var(--space-3); }
-  .ag-grid { grid-template-columns: 3rem repeat(7, minmax(4.5rem, 1fr)); }
+  .ag-grid { grid-template-columns: 2.6rem repeat(7, minmax(3.2rem, 1fr)); }
+  .ag-slot { touch-action: auto; }
 }
