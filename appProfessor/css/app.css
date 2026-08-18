@@ -2311,7 +2311,7 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
     max-height: calc(var(--admin-mobile-nav-height) + env(safe-area-inset-bottom));
     gap: var(--space-1);
     align-items: center;
-    overflow: hidden;
+    overflow: visible;
     padding: var(--space-2) var(--space-3) calc(var(--space-2) + 0.28rem + env(safe-area-inset-bottom));
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
@@ -2328,8 +2328,8 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
     position: relative;
     display: flex;
     gap: 0.3rem;
+    flex: 1 1 0;
     min-width: 0;
-    flex: 1 1 auto;
     overflow-x: auto;
     overflow-y: hidden;
     padding: 0.1rem 0.2rem 0.2rem;
@@ -2446,6 +2446,8 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   }
 
   .side-nav a.is-active {
+    background: transparent;
+    border-color: transparent;
     color: var(--selection-color);
   }
 
