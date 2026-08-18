@@ -12,6 +12,7 @@ import { initCustomSelects, refreshCustomSelects } from "../../appAluno/js/compo
 import { createNavigation } from "./core/navigation.js?v=build-20260816-1";
 import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v=build-20260816-1";
 import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260818-1";
+import { initAvailabilityCalendar } from "./screens/agenda/availability-calendar.js?v=build-20260818-1";
 import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=build-20260816-1";
 import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260816-3";
 import { escapeHtml, formatUpdatedAt, formatVolume, initialsFromName, normalizeEmail, normalizeSearch } from "./utils/formatters.js?v=build-20260816-1";
@@ -271,6 +272,7 @@ const pageTitles = {
   dashboard: "Dashboard",
   students: "Alunos",
   workouts: "Treinos",
+  agenda: "Agenda",
   appearance: "Aparência",
   profile: "Perfil"
 };
@@ -1926,6 +1928,7 @@ const applyTheme = (overrides = {}) => {
   renderInviteTools();
 };
 
+let agendaCalendarReady = false;
 const renderAll = () => {
   renderIcons();
   renderCoachProfile();
@@ -1934,6 +1937,10 @@ const renderAll = () => {
   renderDashboard();
   applyTheme();
   renderThemePalettes({ syncToTheme: true });
+  if (!agendaCalendarReady) {
+    agendaCalendarReady = true;
+    initAvailabilityCalendar(document.querySelector("[data-agenda-calendar]"));
+  }
 };
 
 navItems.forEach((item) => item.addEventListener("click", (event) => {

@@ -18,7 +18,7 @@
     <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260816-2" />
     <link rel="stylesheet" href="../appAluno/css/fonts.css?v=build-20260817-1" />
     <link rel="stylesheet" href="vendor/cropperjs/cropper.min.css?v=1.6.2" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260818-1" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260818-2" />
     <script defer src="vendor/cropperjs/cropper.min.js?v=1.6.2"></script>
     <script type="module" src="js/app.js?v=build-20260818-2"></script>
   </head>
@@ -74,6 +74,7 @@
         <a class="is-active" href="#dashboard" data-nav="dashboard" aria-current="page"><span data-icon="chart"></span>Dashboard</a>
         <a href="#students" data-nav="students"><span data-icon="users"></span>Alunos</a>
         <a href="#workouts" data-nav="workouts"><span data-icon="dumbbell"></span>Treinos</a>
+        <a href="#agenda" data-nav="agenda"><span data-icon="calendar"></span>Agenda</a>
         <a href="#appearance" data-nav="appearance"><span data-icon="palette"></span>Aparência</a>
       </nav>
 
@@ -315,6 +316,23 @@
           </form>
         </dialog>
 
+      </section>
+
+      <section class="page" data-page="agenda" aria-label="Agenda e disponibilidade">
+        <header class="page-heading">
+          <div>
+            <span class="eyebrow">Disponibilidade</span>
+            <h2 id="agenda-title">Agenda semanal</h2>
+            <p>Defina seus horários livres e indisponíveis para os alunos.</p>
+          </div>
+        </header>
+
+        <div class="agenda-calendar-wrapper card" data-agenda-calendar>
+          <div class="agenda-calendar-loading">
+            <span class="auth-session-spinner" aria-hidden="true"></span>
+            <strong>Carregando calendário</strong>
+          </div>
+        </div>
       </section>
 
       <section class="page" data-page="appearance" aria-label="Aparência do app do aluno">
