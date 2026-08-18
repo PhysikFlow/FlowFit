@@ -2301,6 +2301,7 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   .sidebar {
     position: fixed;
     z-index: 55;
+    top: auto;
     left: 50%;
     bottom: max(0.45rem, env(safe-area-inset-bottom));
     transform: translateX(-50%);
