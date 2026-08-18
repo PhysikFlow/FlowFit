@@ -1,9 +1,11 @@
 import { getSupabase } from "../../core/supabase.js?v=build-20260812-5";
 import { Platform } from "../../core/platform.js?v=build-20260813-1";
-import { LEGACY_REMOTE_THEME_KEY, REMOTE_THEME_KEY, normalizeBrandTheme } from "../../core/brand-theme.js?v=build-20260817-3";
+import { LEGACY_REMOTE_THEME_KEY, REMOTE_THEME_KEY, normalizeBrandTheme } from "../../core/brand-theme.js?v=build-20260818-1";
+import { SUPABASE_URL } from "../../config.js?v=build-20260809-6";
 import { authRepository } from "./auth-repository.js?v=build-20260812-5";
 
 const TABLE = "brand_theme";
+export const BRAND_ASSET_BUCKET = "flowfit-brand-assets";
 const THEME_COLUMNS_BASE = "coach_id, brand_name, tagline, accent, mode, updated_at";
 const THEME_COLUMNS_EXTENDED = [
   THEME_COLUMNS_BASE,
@@ -12,15 +14,31 @@ const THEME_COLUMNS_EXTENDED = [
   "text_color",
   "font_preset",
   "radius_preset",
-  "background_style"
+  "background_style",
+  "logo_path",
+  "photo_path",
+  "logo_frame_enabled"
 ].join(", ");
+
+const assetPublicUrl = (path, version = "") => {
+  const safePath = String(path || "").trim();
+  if (!safePath) return "";
+  const encodedPath = safePath.split("/").map((part) => encodeURIComponent(part)).join("/");
+  const base = `${String(SUPABASE_URL).replace(/\/$/, "")}/storage/v1/object/public/${BRAND_ASSET_BUCKET}/${encodedPath}`;
+  return version ? `${base}?v=${encodeURIComponent(version)}` : base;
+};
 
 // O app usa camelCase; o banco usa snake_case. A conversao fica confinada aqui.
 // O cache local guarda o shape do app (camelCase), entao aceitamos ambos.
 const toAppTheme = (row) => row ? {
   ...normalizeBrandTheme(row),
   coachId: String(row.coach_id || row.coachId || ""),
-  updatedAt: String(row.updated_at || row.updatedAt || "")
+  updatedAt: String(row.updated_at || row.updatedAt || ""),
+  logoPath: String(row.logo_path || row.logoPath || ""),
+  photoPath: String(row.photo_path || row.photoPath || ""),
+  logoFrameEnabled: row.logo_frame_enabled !== false && row.logoFrameEnabled !== false,
+  logoUrl: assetPublicUrl(row.logo_path || row.logoPath, row.updated_at || row.updatedAt),
+  photoUrl: assetPublicUrl(row.photo_path || row.photoPath, row.updated_at || row.updatedAt)
 } : null;
 
 const isMissingThemeColumn = (error) => {
@@ -54,6 +72,39 @@ const writeCachedTheme = (theme, { userId, coachId } = {}) => {
 
 const clearCachedTheme = ({ userId, coachId } = {}) => {
   Platform.storage.remove(scopedThemeKey(userId, coachId));
+};
+
+const isAssetType = (type) => type === "logo" || type === "photo";
+const assetColumn = (type) => type === "logo" ? "logo_path" : "photo_path";
+const assetPathFor = (coachId, type) => `${String(coachId || "").trim()}/${type}.webp`;
+
+const getCoachWriteContext = async () => {
+  const client = await getSupabase();
+  const authContext = await authRepository.getAuthContext();
+  if (!client || !authContext?.user || !authRepository.canWriteAsCoach(authContext)) {
+    return { client: null, authContext };
+  }
+  return { client, authContext };
+};
+
+const updateAssetMetadata = async (client, authContext, fields) => {
+  const payload = {
+    coach_id: authContext.coachId,
+    updated_at: new Date().toISOString(),
+    ...fields
+  };
+  const result = await client
+    .from(TABLE)
+    .upsert(payload, { onConflict: "coach_id" })
+    .select(THEME_COLUMNS_EXTENDED)
+    .single();
+  if (isMissingThemeColumn(result.error)) {
+    return { synced: false, reason: "schema-not-applied", error: result.error };
+  }
+  if (result.error || !result.data) return { synced: false, error: result.error };
+  const theme = toAppTheme(result.data);
+  writeCachedTheme(theme, { userId: authContext.user.id, coachId: authContext.coachId });
+  return { synced: true, theme, updatedAt: theme.updatedAt, error: null };
 };
 
 export const themeRepository = {
@@ -127,6 +178,7 @@ export const themeRepository = {
         font_preset: normalized.fontPreset,
         radius_preset: normalized.radiusPreset,
         background_style: normalized.backgroundStyle,
+        logo_frame_enabled: normalized.logoFrameEnabled,
         updated_at: new Date().toISOString()
       };
 
@@ -164,5 +216,46 @@ export const themeRepository = {
     } catch (error) {
       return { synced: false, error, theme: normalized };
     }
+  },
+
+  async uploadBrandAsset(type, blob) {
+    if (!isAssetType(type) || !(blob instanceof Blob) || blob.type !== "image/webp") {
+      return { synced: false, reason: "invalid-asset" };
+    }
+    if (blob.size > 2 * 1024 * 1024) {
+      return { synced: false, reason: "asset-too-large" };
+    }
+    const { client, authContext } = await getCoachWriteContext();
+    if (!client) return { synced: false, reason: "not-authenticated-as-coach" };
+
+    const path = assetPathFor(authContext.coachId, type);
+    const { error: uploadError } = await client.storage
+      .from(BRAND_ASSET_BUCKET)
+      .upload(path, blob, {
+        cacheControl: "31536000",
+        contentType: "image/webp",
+        upsert: true
+      });
+    if (uploadError) return { synced: false, error: uploadError };
+
+    const result = await updateAssetMetadata(client, authContext, { [assetColumn(type)]: path });
+    if (!result.synced) return { ...result, path };
+    return { ...result, path, url: assetPublicUrl(path, result.updatedAt) };
+  },
+
+  async removeBrandAsset(type) {
+    if (!isAssetType(type)) return { synced: false, reason: "invalid-asset" };
+    const { client, authContext } = await getCoachWriteContext();
+    if (!client) return { synced: false, reason: "not-authenticated-as-coach" };
+
+    const path = assetPathFor(authContext.coachId, type);
+    const { error: removeError } = await client.storage
+      .from(BRAND_ASSET_BUCKET)
+      .remove([path]);
+    const metadata = await updateAssetMetadata(client, authContext, { [assetColumn(type)]: null });
+    if (!metadata.synced) return { ...metadata, path, error: metadata.error || removeError };
+    return { ...metadata, path, synced: !removeError, error: removeError || null };
   }
 };
+
+export const getBrandAssetPublicUrl = assetPublicUrl;

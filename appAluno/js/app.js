@@ -1,11 +1,11 @@
 import { Platform } from "./core/platform.js?v=build-20260813-1";
 import { SESSION_PHASE, Store } from "./core/store.js?v=build-20260813-1";
-import { Theme } from "./core/theme.js?v=build-20260817-2";
+import { Theme } from "./core/theme.js?v=build-20260818-1";
 import { svgIcon } from "./core/icons.js?v=build-20260810-7";
-import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260817-3";
+import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260818-1";
 import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260812-6";
 import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260813-2";
-import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260817-2";
+import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260818-1";
 import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260813-2";
 import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260813-1";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
@@ -15,7 +15,7 @@ import { initInstallUi } from "./components/install-ui.js?v=build-20260816-3";
 import { createAgendaScreen } from "./screens/agenda/agenda-screen.js?v=build-20260816-1";
 import { createEvolutionScreen } from "./screens/evolution/evolution-screen.js?v=build-20260816-1";
 import { createHistoryScreen } from "./screens/history/history-screen.js?v=build-20260816-1";
-import { createHomeScreen } from "./screens/home/home-screen.js?v=build-20260817-2";
+import { createHomeScreen } from "./screens/home/home-screen.js?v=build-20260818-1";
 import { createNotificationsScreen } from "./screens/notifications/notifications-screen.js?v=build-20260816-1";
 import { createStudentAppState } from "./state/app-state.js?v=build-20260816-1";
 import { createWorkoutSessionState } from "./state/workout-session-state.js?v=build-20260816-1";
@@ -461,10 +461,18 @@ const setImageOrText = (target, dataUrl, fallback, alt) => {
 };
 
 const syncBrandAssets = () => {
-  const assets = Platform.storage.get(LOCAL_BRAND_ASSETS_KEY, {});
+  const localAssets = Platform.storage.get(LOCAL_BRAND_ASSETS_KEY, {});
+  const assets = {
+    ...localAssets,
+    logoDataUrl: localAssets.logoDataUrl || Theme.value.logoUrl || "",
+    photoDataUrl: localAssets.photoDataUrl || Theme.value.photoUrl || "",
+    logoFrameEnabled: localAssets.logoFrameEnabled !== undefined
+      ? localAssets.logoFrameEnabled
+      : Theme.value.logoFrameEnabled
+  };
   const logoFallback = (Theme.value.brandName || "FlowFit").slice(0, 2).toUpperCase();
   document.querySelectorAll("[data-brand-logo]").forEach((target) => {
-    setImageOrText(target, assets.logoDataUrl, logoFallback, "Logo local da marca");
+    setImageOrText(target, assets.logoDataUrl, logoFallback, "Logo da marca");
     target.classList.toggle("is-frameless", Boolean(assets.logoDataUrl) && assets.logoFrameEnabled === false);
   });
   document.querySelectorAll("[data-coach-photo]").forEach((target) => {

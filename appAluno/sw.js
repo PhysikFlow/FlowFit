@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-aluno-v102";
+const CACHE_NAME = "flowfit-aluno-v103";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -34,7 +34,7 @@ const APP_SHELL = [
   "./assets/fonts/teko-600.woff2",
   "./assets/fonts/teko-700.woff2",
   "./css/app.css?v=build-20260817-7",
-  "./js/app.js?v=build-20260817-11",
+  "./js/app.js?v=build-20260818-1",
   "./js/components/custom-select.js?v=build-20260816-1",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/components/install-ui.js?v=build-20260816-3",
@@ -42,24 +42,24 @@ const APP_SHELL = [
   "./js/screens/agenda/agenda-screen.js?v=build-20260816-1",
   "./js/screens/evolution/evolution-screen.js?v=build-20260816-1",
   "./js/screens/history/history-screen.js?v=build-20260816-1",
-  "./js/screens/home/home-screen.js?v=build-20260817-2",
+  "./js/screens/home/home-screen.js?v=build-20260818-1",
   "./js/screens/notifications/notifications-screen.js?v=build-20260816-1",
   "./js/state/app-state.js?v=build-20260816-1",
   "./js/state/workout-session-state.js?v=build-20260816-1",
   "./js/utils/formatters.js?v=build-20260816-1",
   "./js/data/repositories/auth-repository.js?v=build-20260812-6",
   "./js/data/repositories/student-repository.js?v=build-20260813-2",
-  "./js/data/repositories/theme-repository.js?v=build-20260817-2",
+  "./js/data/repositories/theme-repository.js?v=build-20260818-1",
   "./js/data/repositories/workout-repository.js?v=build-20260813-2",
   "./js/data/repositories/session-repository.js?v=build-20260813-1",
   "./js/config.js?v=build-20260809-6",
-  "./js/core/brand-theme.js?v=build-20260817-3",
+  "./js/core/brand-theme.js?v=build-20260818-1",
   "./js/core/install.js?v=build-20260816-2",
   "./js/core/icons.js?v=build-20260810-7",
   "./js/core/platform.js?v=build-20260813-1",
   "./js/core/store.js?v=build-20260813-1",
   "./js/core/session-draft-storage.js?v=build-20260811-2",
-  "./js/core/theme.js?v=build-20260817-2",
+  "./js/core/theme.js?v=build-20260818-1",
   "./js/core/supabase.js?v=build-20260812-5",
   "./manifest.webmanifest"
 ];

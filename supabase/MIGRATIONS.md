@@ -42,3 +42,18 @@ identidade do treino e deixa o campo alfabético `code` apenas para
 compatibilidade. A publicação passa a copiar somente o `title` para o resumo do
 aluno e a migration corrige os resumos existentes a partir do plano publicado
 mais recente de cada vínculo.
+
+## Assets de marca branca
+
+`migrations/20260818110654_flowfit_brand_assets_storage.sql` adiciona
+`logo_path`, `photo_path` e `logo_frame_enabled` a `brand_theme` e cria o
+bucket público `flowfit-brand-assets`. Os objetos usam o caminho
+`<auth.uid()>/logo.webp` ou `<auth.uid()>/photo.webp`: leitura pública serve o
+app do aluno, mas upload, atualização e remoção só passam pela pasta do
+professor autenticado. A migration seguinte,
+`migrations/20260818110804_flowfit_brand_assets_coach_only.sql`, reforça que
+somente professores com acesso permitido podem alterar os objetos.
+
+O app continua guardando uma cópia otimizada local para funcionar offline. A
+cópia local é fallback; quando o upload remoto conclui, o caminho publicado no
+tema é usado por todos os dispositivos.

@@ -60,6 +60,9 @@ create table if not exists public.brand_theme (
   font_preset      text not null default 'system',
   radius_preset    text not null default 'soft',
   background_style text not null default 'aurora',
+  logo_path        text,
+  photo_path       text,
+  logo_frame_enabled boolean not null default true,
   updated_at timestamptz not null default now()
 );
 
@@ -907,6 +910,45 @@ grant select, insert, update, delete on public.workout_exercises to authenticate
 grant select, insert, update, delete on public.workout_sessions to authenticated;
 grant select, insert, update, delete on public.workout_set_logs to authenticated;
 grant select, insert, update, delete on public.workout_feedback to authenticated;
+
+-- Assets públicos da marca branca. Este bloco é referência de bootstrap;
+-- alterações aplicáveis em banco existente ficam em migrations/.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'flowfit-brand-assets',
+  'flowfit-brand-assets',
+  true,
+  2097152,
+  array['image/webp']::text[]
+)
+on conflict (id) do update
+set
+  name = excluded.name,
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "flowfit_brand_assets_select_own" on storage.objects;
+drop policy if exists "flowfit_brand_assets_insert_own" on storage.objects;
+drop policy if exists "flowfit_brand_assets_update_own" on storage.objects;
+drop policy if exists "flowfit_brand_assets_delete_own" on storage.objects;
+
+create policy "flowfit_brand_assets_select_own"
+  on storage.objects for select to authenticated
+  using (bucket_id = 'flowfit-brand-assets' and split_part(name, '/', 1) = (select auth.uid())::text);
+
+create policy "flowfit_brand_assets_insert_own"
+  on storage.objects for insert to authenticated
+  with check (bucket_id = 'flowfit-brand-assets' and split_part(name, '/', 1) = (select auth.uid())::text and (select public.can_operate_as_coach()));
+
+create policy "flowfit_brand_assets_update_own"
+  on storage.objects for update to authenticated
+  using (bucket_id = 'flowfit-brand-assets' and split_part(name, '/', 1) = (select auth.uid())::text and (select public.can_operate_as_coach()))
+  with check (bucket_id = 'flowfit-brand-assets' and split_part(name, '/', 1) = (select auth.uid())::text and (select public.can_operate_as_coach()));
+
+create policy "flowfit_brand_assets_delete_own"
+  on storage.objects for delete to authenticated
+  using (bucket_id = 'flowfit-brand-assets' and split_part(name, '/', 1) = (select auth.uid())::text and (select public.can_operate_as_coach()));
 
 alter table public.profiles enable row level security;
 alter table public.brand_theme enable row level security;

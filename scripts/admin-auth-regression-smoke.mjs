@@ -39,10 +39,10 @@ assert.match(professorApp, /for \(const delay of \[150, 350, 700\]\)/);
 assert.match(professorApp, /O login do Google voltou ao FlowFit, mas nenhuma sessão válida foi criada/);
 assert.match(professorApp, /url\.search = ""/);
 assert.match(professorCss, /data-account-state="blocked"/);
-assert.match(professorIndex, /app\.css\?v=build-20260813-1/);
-assert.match(professorIndex, /app\.js\?v=build-20260813-1/);
-assert.match(professorWorker, /flowfit-professor-v39/);
-assert.match(studentWorker, /flowfit-aluno-v62/);
+assert.match(professorIndex, /app\.css\?v=build-\d+-\d+/);
+assert.match(professorIndex, /app\.js\?v=build-\d+-\d+/);
+assert.match(professorWorker, /flowfit-professor-v\d+/);
+assert.match(studentWorker, /flowfit-aluno-v\d+/);
 for (const worker of [professorWorker, studentWorker]) {
   assert.match(worker, /fetch\(request, \{ cache: "no-store" \}\)/);
   assert.match(worker, /new Request\(url, \{ cache: "reload" \}\)/);

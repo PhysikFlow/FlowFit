@@ -139,7 +139,12 @@ export const normalizeBrandTheme = (theme = {}) => {
     textColor: isValidHex(theme.textColor || theme.text_color) ? (theme.textColor || theme.text_color) : palette.textColor,
     fontPreset,
     radiusPreset,
-    backgroundStyle
+    backgroundStyle,
+    logoPath: String(theme.logoPath || theme.logo_path || "").trim(),
+    photoPath: String(theme.photoPath || theme.photo_path || "").trim(),
+    logoUrl: String(theme.logoUrl || theme.logo_url || "").trim(),
+    photoUrl: String(theme.photoUrl || theme.photo_url || "").trim(),
+    logoFrameEnabled: theme.logoFrameEnabled !== false && theme.logo_frame_enabled !== false
   };
 };
 

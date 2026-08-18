@@ -1,5 +1,5 @@
 import { Platform } from "../../../../appAluno/js/core/platform.js?v=build-20260813-1";
-import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY } from "../../../../appAluno/js/core/brand-theme.js?v=build-20260817-3";
+import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY } from "../../../../appAluno/js/core/brand-theme.js?v=build-20260818-1";
 import { initialsFromName } from "../../utils/formatters.js?v=build-20260816-1";
 
 export const createLocalAssetsEditor = ({
@@ -7,7 +7,12 @@ export const createLocalAssetsEditor = ({
   setStatus,
   showToast,
   setText,
-  setThemeStatus
+  setThemeStatus,
+  getRemoteBrandAssets,
+  uploadBrandAsset,
+  removeBrandAsset,
+  onRemoteBrandAssetChanged,
+  setBrandMark
 }) => {
   const brandInput = document.querySelector("[data-brand-input]");
   const logoFrameInput = document.querySelector("[data-logo-frame-input]");
@@ -23,6 +28,7 @@ export const createLocalAssetsEditor = ({
   let isProcessingLocalAsset = false;
 
   const readLocalBrandAssets = () => Platform.storage.get(LOCAL_BRAND_ASSETS_KEY, {});
+  const readRemoteBrandAssets = () => getRemoteBrandAssets?.() || {};
   
   const writeLocalBrandAssets = (assets = {}) => {
     const current = readLocalBrandAssets();
@@ -31,16 +37,39 @@ export const createLocalAssetsEditor = ({
   
   const renderLocalBrandAssets = () => {
     const assets = readLocalBrandAssets();
-    const logoFrameEnabled = assets.logoFrameEnabled !== false;
+    const remote = readRemoteBrandAssets();
+    const logoSource = assets.logoDataUrl || remote.logoUrl || "";
+    const photoSource = assets.photoDataUrl || remote.photoUrl || "";
+    const logoFrameEnabled = assets.logoFrameEnabled !== undefined
+      ? assets.logoFrameEnabled !== false
+      : remote.logoFrameEnabled !== false;
+    setBrandMark?.(logoSource);
+    document.querySelectorAll("[data-coach-initials]").forEach((target) => {
+      target.replaceChildren();
+      if (photoSource) {
+        const image = document.createElement("img");
+        image.src = photoSource;
+        image.alt = "Foto do personal";
+        target.append(image);
+        target.classList.add("has-image");
+      } else {
+        target.classList.remove("has-image");
+        target.textContent = initialsFromName(getAuthContext()?.profile?.name || getAuthContext()?.email || "PF");
+      }
+    });
     const logoTarget = document.querySelector("[data-preview-logo]");
     if (logoTarget) {
-      if (assets.logoDataUrl) {
-        logoTarget.innerHTML = `<img src="${assets.logoDataUrl}" alt="Logo local da marca" />`;
+      if (logoSource) {
+        logoTarget.innerHTML = "";
+        const image = document.createElement("img");
+        image.src = logoSource;
+        image.alt = "Logo da marca";
+        logoTarget.append(image);
       } else {
         const initials = (brandInput?.value || DEFAULT_BRAND_THEME.brandName).trim().slice(0, 2).toUpperCase() || "FF";
         logoTarget.textContent = initials;
       }
-      logoTarget.classList.toggle("is-frameless", Boolean(assets.logoDataUrl) && !logoFrameEnabled);
+      logoTarget.classList.toggle("is-frameless", Boolean(logoSource) && !logoFrameEnabled);
     }
   
     if (logoFrameInput) {
@@ -50,13 +79,24 @@ export const createLocalAssetsEditor = ({
   
     const photoWrap = document.querySelector("[data-preview-photo-wrap]");
     if (photoWrap) {
-      photoWrap.innerHTML = assets.photoDataUrl
-        ? `<img class="preview-photo" src="${assets.photoDataUrl}" alt="Foto local do personal" />`
-        : `<span class="avatar" data-preview-photo-fallback>${initialsFromName(getAuthContext()?.profile?.name || getAuthContext()?.email || "PF")}</span>`;
+      photoWrap.innerHTML = "";
+      if (photoSource) {
+        const image = document.createElement("img");
+        image.className = "preview-photo";
+        image.src = photoSource;
+        image.alt = "Foto do personal";
+        photoWrap.append(image);
+      } else {
+        const fallback = document.createElement("span");
+        fallback.className = "avatar";
+        fallback.dataset.previewPhotoFallback = "";
+        fallback.textContent = initialsFromName(getAuthContext()?.profile?.name || getAuthContext()?.email || "PF");
+        photoWrap.append(fallback);
+      }
     }
   
-    setText("[data-logo-file-name]", assets.logoName || "Nenhum arquivo selecionado");
-    setText("[data-photo-file-name]", assets.photoName || "Nenhum arquivo selecionado");
+    setText("[data-logo-file-name]", assets.logoName || remote.logoPath?.split("/").pop() || "Nenhum arquivo selecionado");
+    setText("[data-photo-file-name]", assets.photoName || remote.photoPath?.split("/").pop() || "Nenhum arquivo selecionado");
   };
   
   const LOCAL_ASSET_OUTPUT = Object.freeze({
@@ -250,16 +290,68 @@ export const createLocalAssetsEditor = ({
         [`${spec.prefix}Quality`]: spec.quality
       });
       if (!saved) throw new Error("Não há espaço local suficiente para salvar a imagem.");
-  
+
+      let remoteResult = null;
+      if (uploadBrandAsset) {
+        setAssetCropStatus("Salvando na nuvem…");
+        remoteResult = await uploadBrandAsset(type, blob);
+        if (remoteResult?.synced) {
+          onRemoteBrandAssetChanged?.(type, remoteResult.theme || remoteResult);
+        }
+      }
       renderLocalBrandAssets();
-      setThemeStatus(`${spec.label}: ${outputCanvas.width}×${outputCanvas.height}, WebP, salva neste navegador.`, "warning");
-      showToast(type === "logo" ? "Logo recortado e otimizado." : "Foto recortada e otimizada.");
+      if (remoteResult && !remoteResult.synced) {
+        setThemeStatus(`${spec.label} salva neste aparelho, mas não foi publicada. Verifique a conexão e tente novamente.`, "warning");
+        showToast(`${spec.label} salva localmente; publicação pendente.`);
+      } else {
+        setThemeStatus(`${spec.label}: ${outputCanvas.width}×${outputCanvas.height}, WebP, publicada no app.`, "synced");
+        showToast(type === "logo" ? "Logo publicada." : "Foto publicada.");
+      }
       isProcessingLocalAsset = false;
       assetCropDialog?.close();
     } catch (error) {
       setAssetCropStatus(error?.message || "Não foi possível processar esta imagem.", "warning");
       setAssetCropControlsBusy(false);
     }
+  };
+
+  const clearBrandAssets = async () => {
+    Platform.storage.set(LOCAL_BRAND_ASSETS_KEY, {});
+    const results = [];
+    if (removeBrandAsset) {
+      results.push(await removeBrandAsset("logo"));
+      results.push(await removeBrandAsset("photo"));
+      results.forEach((result, index) => {
+        if (result?.synced) onRemoteBrandAssetChanged?.(index === 0 ? "logo" : "photo", result.theme || result);
+      });
+    }
+    renderLocalBrandAssets();
+    return results;
+  };
+
+  const syncLegacyBrandAssets = async () => {
+    const local = readLocalBrandAssets();
+    const remote = readRemoteBrandAssets();
+    if (!uploadBrandAsset) return [];
+    const pending = [
+      { type: "logo", source: local.logoDataUrl, remotePath: remote.logoPath },
+      { type: "photo", source: local.photoDataUrl, remotePath: remote.photoPath }
+    ].filter((asset) => asset.source && !asset.remotePath);
+    const results = [];
+    for (const asset of pending) {
+      try {
+        const response = await fetch(asset.source);
+        if (!response.ok) continue;
+        const blob = await response.blob();
+        const result = await uploadBrandAsset(asset.type, blob);
+        results.push({ ...result, type: asset.type });
+        if (result?.synced) onRemoteBrandAssetChanged?.(asset.type, result.theme || result);
+      } catch (error) {
+        results.push({ synced: false, type: asset.type, error });
+      }
+    }
+    if (results.some((result) => result?.synced)) renderLocalBrandAssets();
+    return results;
   };
   
   
@@ -270,6 +362,8 @@ export const createLocalAssetsEditor = ({
     renderLocalBrandAssets,
     handleLocalAssetInput,
     saveCroppedLocalAsset,
+    clearBrandAssets,
+    syncLegacyBrandAssets,
     closeAssetCropDialog,
     disposeAssetCropper,
     setAssetCropZoom,

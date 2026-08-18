@@ -7,6 +7,8 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 
 const repository = read("appAluno/js/data/repositories/workout-repository.js");
 const sessions = read("appAluno/js/data/repositories/session-repository.js");
+const themeRepository = read("appAluno/js/data/repositories/theme-repository.js");
+const professorAssets = read("appProfessor/js/screens/appearance/local-assets-editor.js");
 const schema = read("supabase/schema.sql");
 const remoteSmoke = read("scripts/supabase-remote-contract-smoke.mjs");
 const migrationDir = path.join(root, "supabase", "migrations");
@@ -32,6 +34,12 @@ const checks = [
   ["migration documenta compatibilidade legada", migration.includes("v_is_legacy_log")],
   ["migration revoga sync de anon", migration.includes("revoke all on function public.sync_workout_session")],
   ["migration mantém search_path seguro", migration.includes("set search_path = pg_catalog, public")],
+  ["schema possui caminhos de assets da marca", schema.includes("logo_path") && schema.includes("photo_path") && schema.includes("logo_frame_enabled")],
+  ["migration cria bucket público de assets", migration.includes("flowfit-brand-assets") && migration.includes("image/webp")],
+  ["migration restringe upload ao professor", migration.includes("can_operate_as_coach()") && migration.includes("flowfit_brand_assets_insert_own")],
+  ["frontend publica e remove assets", themeRepository.includes("uploadBrandAsset") && themeRepository.includes("removeBrandAsset")],
+  ["editor mantém fallback local quando upload falha", professorAssets.includes("publicação pendente") && professorAssets.includes("writeLocalBrandAssets")],
+  ["editor migra assets locais legados", professorAssets.includes("syncLegacyBrandAssets") && professorAssets.includes("fetch(asset.source)")],
   ["schema é bootstrap e não migration incremental", schema.includes("use exclusivamente as migrations")],
   ["schema não remove índice legado", !schema.includes("drop index if exists public.workout_set_logs_session_exercise_set_idx")],
   ["smoke remoto exige status HTTP", remoteSmoke.includes("value.status === 401") && remoteSmoke.includes("value.status === 200")],

@@ -186,6 +186,23 @@ body.is-auth-locked {
   display: block;
 }
 
+.sidebar__brand [data-brand-icon] {
+  overflow: hidden;
+}
+
+.sidebar__brand [data-brand-icon].is-image,
+.mobile-topbar-brand [data-brand-icon-mobile].is-image {
+  padding: 0.18rem;
+  background: var(--selection-soft);
+}
+
+.sidebar__brand [data-brand-icon] img,
+.mobile-topbar-brand [data-brand-icon-mobile] img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .sidebar__brand small {
   margin-top: var(--space-1);
   color: var(--text-supporting);
@@ -260,6 +277,17 @@ body.is-auth-locked {
   color: var(--selection-color);
   font-size: var(--text-sm);
   font-weight: var(--type-weight-display);
+}
+
+.sidebar-profile__avatar.has-image {
+  overflow: hidden;
+  padding: 0;
+}
+
+.sidebar-profile__avatar.has-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .sidebar-profile__identity {

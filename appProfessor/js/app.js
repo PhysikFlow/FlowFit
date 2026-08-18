@@ -1,17 +1,17 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260813-1";
-import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260817-3";
+import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260818-1";
 import { InstallManager } from "../../appAluno/js/core/install.js?v=build-20260816-2";
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260813-2";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6";
-import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260817-2";
+import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260818-1";
 import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260813-2";
 import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260813-1";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "../../appAluno/js/components/custom-select.js?v=build-20260816-1";
 import { createNavigation } from "./core/navigation.js?v=build-20260816-1";
 import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v=build-20260816-1";
-import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260817-3";
+import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260818-1";
 import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=build-20260816-1";
 import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260816-3";
 import { escapeHtml, formatUpdatedAt, formatVolume, initialsFromName, normalizeEmail, normalizeSearch } from "./utils/formatters.js?v=build-20260816-1";
@@ -240,6 +240,7 @@ const workoutReorderAnimations = new Set();
 let removedWorkoutExercise = null;
 let duplicateWorkoutSourceId = "";
 let restoredWorkoutDraftSavedAt = "";
+let publishedTheme = null;
 let themePaletteMode = inferModeFromColor(backgroundInput?.value || DEFAULT_BRAND_THEME.backgroundColor);
 
 const $ = (selector) => document.querySelector(selector);
@@ -717,6 +718,8 @@ const {
   renderLocalBrandAssets,
   handleLocalAssetInput,
   saveCroppedLocalAsset,
+  clearBrandAssets,
+  syncLegacyBrandAssets,
   closeAssetCropDialog,
   disposeAssetCropper,
   setAssetCropZoom,
@@ -726,7 +729,30 @@ const {
   setStatus,
   showToast,
   setText,
-  setThemeStatus
+  setThemeStatus,
+  getRemoteBrandAssets: () => publishedTheme,
+  uploadBrandAsset: (type, blob) => themeRepository.uploadBrandAsset(type, blob),
+  removeBrandAsset: (type) => themeRepository.removeBrandAsset(type),
+  onRemoteBrandAssetChanged: (type, theme) => {
+    publishedTheme = { ...(publishedTheme || {}), ...(theme || {}) };
+    if (type === "logo" && theme?.logoUrl) publishedTheme.logoUrl = theme.logoUrl;
+    if (type === "photo" && theme?.photoUrl) publishedTheme.photoUrl = theme.photoUrl;
+  },
+  setBrandMark: (source) => {
+    document.querySelectorAll("[data-brand-icon], [data-brand-icon-mobile]").forEach((target) => {
+      target.replaceChildren();
+      if (source) {
+        const image = document.createElement("img");
+        image.src = source;
+        image.alt = "";
+        target.append(image);
+        target.classList.add("is-image");
+      } else {
+        target.classList.remove("is-image");
+        target.innerHTML = svgIcon("dumbbell");
+      }
+    });
+  }
 });
 const readTheme = () => ({
   brandName: brandInput?.value?.trim() || DEFAULT_BRAND_THEME.brandName,
@@ -738,6 +764,9 @@ const readTheme = () => ({
   fontPreset: fontInput?.value || DEFAULT_BRAND_THEME.fontPreset,
   radiusPreset: radiusInput?.value || DEFAULT_BRAND_THEME.radiusPreset,
   backgroundStyle: backgroundStyleInput?.value || DEFAULT_BRAND_THEME.backgroundStyle,
+  logoFrameEnabled: logoFrameInput
+    ? logoFrameInput.checked
+    : publishedTheme?.logoFrameEnabled ?? readLocalBrandAssets().logoFrameEnabled !== false,
   mode: inferModeFromColor(backgroundInput?.value || DEFAULT_BRAND_THEME.backgroundColor)
 });
 
@@ -2337,7 +2366,7 @@ colorHexPairs.forEach(([color, hex]) => {
 });
 
 logoInput?.addEventListener("change", () => handleLocalAssetInput(logoInput, "logo"));
-logoFrameInput?.addEventListener("change", () => {
+logoFrameInput?.addEventListener("change", async () => {
   const enabled = logoFrameInput.checked;
   const saved = writeLocalBrandAssets({ logoFrameEnabled: enabled });
   logoFrameInput.setAttribute("aria-checked", String(enabled));
@@ -2346,7 +2375,13 @@ logoFrameInput?.addEventListener("change", () => {
     setThemeStatus("Não foi possível salvar a exibição da logo neste navegador.", "warning");
     return;
   }
-  setThemeStatus(enabled ? "Fundo e borda da logo ativados neste navegador." : "Logo sem fundo e borda neste navegador.", "warning");
+  const result = await saveThemeNow({ silent: true });
+  setThemeStatus(
+    result.synced
+      ? enabled ? "Fundo e borda da logo publicados." : "Logo sem fundo e borda publicada."
+      : enabled ? "Fundo e borda ativados localmente; publicação pendente." : "Logo sem fundo e borda localmente; publicação pendente.",
+    result.synced ? "synced" : "warning"
+  );
 });
 photoInput?.addEventListener("change", () => handleLocalAssetInput(photoInput, "photo"));
 assetCropForm?.addEventListener("submit", async (event) => {
@@ -2367,18 +2402,21 @@ assetCropDialog?.addEventListener("cancel", (event) => {
   if (isProcessingLocalAsset()) event.preventDefault();
 });
 assetCropDialog?.addEventListener("close", disposeAssetCropper);
-document.querySelector("[data-clear-brand-assets]")?.addEventListener("click", () => {
-  Platform.storage.set(LOCAL_BRAND_ASSETS_KEY, {});
+document.querySelector("[data-clear-brand-assets]")?.addEventListener("click", async () => {
   if (logoInput) logoInput.value = "";
   if (photoInput) photoInput.value = "";
-  renderLocalBrandAssets();
-  setThemeStatus("Logo e foto locais removidos deste navegador.", "warning");
-  showToast("Logo e foto removidos.");
+  const results = await clearBrandAssets();
+  const remoteFailed = results.some((result) => result && !result.synced);
+  setThemeStatus(
+    remoteFailed ? "Imagens removidas deste aparelho; a remoção na nuvem ficou pendente." : "Logo e foto removidos do app.",
+    remoteFailed ? "warning" : "synced"
+  );
+  showToast(remoteFailed ? "Imagens removidas localmente." : "Logo e foto removidos.");
 });
 document.querySelector("[data-reset-theme]")?.addEventListener("click", async () => {
-  Platform.storage.set(LOCAL_BRAND_ASSETS_KEY, {});
   if (logoInput) logoInput.value = "";
   if (photoInput) photoInput.value = "";
+  await clearBrandAssets();
   fillThemeInputs(DEFAULT_BRAND_THEME);
   applyTheme(DEFAULT_BRAND_THEME);
   renderLocalBrandAssets();
@@ -2833,14 +2871,28 @@ const startAuthenticatedPanel = async () => {
     warnOptionalFeature("tema remoto", error);
   }
   if (!remote) {
+    publishedTheme = null;
     fillThemeInputs(DEFAULT_BRAND_THEME);
     applyTheme(DEFAULT_BRAND_THEME);
-    setThemeStatus("Nenhuma aparência publicada. Ajuste as opções e publique.", "");
+    const migrated = await syncLegacyBrandAssets();
+    setThemeStatus(
+      migrated.some((result) => result?.synced)
+        ? "Imagens locais antigas foram publicadas no app do aluno."
+        : "Nenhuma aparência publicada. Ajuste as opções e publique.",
+      migrated.some((result) => result?.synced) ? "synced" : ""
+    );
     return;
   }
+  publishedTheme = remote;
   fillThemeInputs(remote);
   applyTheme({ mode: remote.mode });
-  setThemeStatus("Aparência publicada carregada.", "synced");
+  const migrated = await syncLegacyBrandAssets();
+  setThemeStatus(
+    migrated.some((result) => result?.synced)
+      ? "Aparência carregada; imagens locais pendentes foram publicadas."
+      : "Aparência publicada carregada.",
+    "synced"
+  );
 };
 
 const boot = async () => {

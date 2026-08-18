@@ -1,5 +1,6 @@
 import { Platform } from "../../core/platform.js?v=build-20260813-1";
-import { LOCAL_BRAND_ASSETS_KEY } from "../../core/brand-theme.js?v=build-20260817-3";
+import { LOCAL_BRAND_ASSETS_KEY } from "../../core/brand-theme.js?v=build-20260818-1";
+import { Theme } from "../../core/theme.js?v=build-20260818-1";
 import { escapeHtml, formatVolume } from "../../utils/formatters.js?v=build-20260816-1";
 
 export const createHomeScreen = ({
@@ -51,7 +52,11 @@ export const createHomeScreen = ({
         `;
       }).join("");
   
-      const assets = Platform.storage.get(LOCAL_BRAND_ASSETS_KEY, {});
+      const localAssets = Platform.storage.get(LOCAL_BRAND_ASSETS_KEY, {});
+      const assets = {
+        ...localAssets,
+        photoDataUrl: localAssets.photoDataUrl || Theme.value.photoUrl || ""
+      };
       const activePhoto = [...coachOptions.querySelectorAll("[data-coach-option-photo]")]
         .find((target) => target.dataset.coachOptionPhoto === String(appState.currentStudent.id || ""));
       if (activePhoto) {
