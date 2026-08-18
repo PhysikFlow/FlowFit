@@ -1393,6 +1393,12 @@ body.has-workout-runner > .toast { visibility: hidden; }
     animation: none;
   }
 
+  .runner-notice.is-showing {
+    animation: none;
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
   .set-button,
   .workout-runner * {
     scroll-behavior: auto;
@@ -2976,6 +2982,54 @@ body.has-workout-runner > .toast { visibility: hidden; }
 
 .runner-action-bar.is-armed .runner-swipe-feedback span {
   transform: scale(1.3);
+}
+
+.runner-notice {
+  position: fixed;
+  z-index: 120;
+  top: calc(env(safe-area-inset-top) + 0.7rem);
+  left: 50%;
+  max-width: min(92vw, 26rem);
+  margin: 0;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  box-shadow: 0 0.6rem 1.8rem rgb(0 0 0 / 0.38);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--type-weight-item-title);
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%) translateY(-0.5rem);
+}
+
+.runner-notice.is-showing {
+  animation: runner-notice-life 1.9s var(--ease-out) forwards;
+}
+
+@keyframes runner-notice-life {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-0.5rem);
+  }
+
+  10% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  78% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-0.3rem);
+  }
 }
 
 .runner-swipe-feedback strong {

@@ -54,6 +54,7 @@ const homeWorkoutLabel = document.querySelector("[data-home-workout-label]");
 const workoutRunner = document.querySelector("[data-workout-runner]");
 const runnerActionBar = document.querySelector("[data-runner-action-bar]");
 const runnerSwipeFeedback = document.querySelector("[data-runner-swipe-feedback]");
+const runnerNotice = document.querySelector("[data-runner-notice]");
 const exerciseSheet = document.querySelector("[data-exercise-sheet]");
 const infoDialog = document.querySelector("[data-info-dialog]");
 const discomfortDialog = document.querySelector("[data-discomfort-dialog]");
@@ -79,6 +80,7 @@ const RUNNER_INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const RUNNER_ACTIVITY_PERSIST_INTERVAL_MS = 30 * 1000;
 const setClickLocks = new Set();
 let runnerSwipe = null;
+let runnerNoticeTimer = null;
 let runnerAdjustHold = null;
 let suppressedRunnerAdjustButton = null;
 let suppressRunnerAdjustClickUntil = 0;
@@ -1009,6 +1011,21 @@ const resetRunnerSwipeVisual = () => {
   updateRunnerPrimaryAction(getActiveSession());
 };
 
+// Feedback transiente no topo do runner (correção de série, descanso pulado).
+const showRunnerNotice = (message) => {
+  if (!runnerNotice) return;
+  runnerNotice.textContent = message;
+  runnerNotice.hidden = false;
+  runnerNotice.classList.remove("is-showing");
+  void runnerNotice.offsetWidth;
+  runnerNotice.classList.add("is-showing");
+  window.clearTimeout(runnerNoticeTimer);
+  runnerNoticeTimer = window.setTimeout(() => {
+    runnerNotice.classList.remove("is-showing");
+    runnerNotice.hidden = true;
+  }, 2000);
+};
+
 const completeCurrentRunnerSet = () => {
   const session = getActiveSession();
   if (!session || session.phase !== SESSION_PHASE.ACTIVE_SET) return false;
@@ -1080,6 +1097,7 @@ const skipCurrentRunnerRest = () => {
   });
   resetRunnerSwipeVisual();
   renderWorkoutRunner();
+  showRunnerNotice("Descanso pulado");
   return true;
 };
 
@@ -1109,6 +1127,7 @@ const correctLastRunnerSet = () => {
   renderAll();
   renderWorkoutRunner();
   Platform.notify("Última série aberta para correção.");
+  showRunnerNotice("↶ Série anterior restaurada");
   return true;
 };
 
