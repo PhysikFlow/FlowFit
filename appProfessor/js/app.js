@@ -835,6 +835,35 @@ const revealStudentSession = () => {
   studentSessionPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
+const sideNavIndicator = document.querySelector("[data-side-nav-indicator]");
+let sideNavIndicatorFrame = 0;
+
+const syncSideNavIndicator = (activeItem, { animate = true } = {}) => {
+  if (!sideNav || !sideNavIndicator || !activeItem) {
+    if (sideNavIndicator) {
+      sideNavIndicator.hidden = true;
+      sideNavIndicator.classList.remove("is-ready");
+    }
+    return;
+  }
+  cancelAnimationFrame(sideNavIndicatorFrame);
+  sideNavIndicatorFrame = requestAnimationFrame(() => {
+    sideNavIndicator.hidden = false;
+    const navRect = sideNav.getBoundingClientRect();
+    const itemRect = activeItem.getBoundingClientRect();
+    const indicatorWidth = Math.max(24, itemRect.width * 0.52);
+    const indicatorLeft = itemRect.left - navRect.left + ((itemRect.width - indicatorWidth) / 2);
+    const shouldPositionImmediately = !animate || !sideNavIndicator.classList.contains("is-ready");
+    sideNavIndicator.classList.toggle("is-positioning", shouldPositionImmediately);
+    sideNavIndicator.style.left = `${indicatorLeft}px`;
+    sideNavIndicator.style.width = `${indicatorWidth}px`;
+    sideNavIndicator.classList.add("is-ready");
+    if (shouldPositionImmediately) {
+      requestAnimationFrame(() => sideNavIndicator.classList.remove("is-positioning"));
+    }
+  });
+};
+
 const { navigate } = createNavigation({
   pages,
   navItems,
@@ -842,7 +871,9 @@ const { navigate } = createNavigation({
   pageTitles,
   onNavigate: (destination) => {
     if (destination !== "students") setStudentSessionOpen(false, { focus: false });
-    sideNav?.querySelector(`[data-nav="${destination}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    const activeItem = sideNav?.querySelector(`[data-nav="${destination}"]`);
+    activeItem?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    syncSideNavIndicator(activeItem);
   }
 });
 
@@ -1955,8 +1986,17 @@ const syncSideNavEdgeFades = () => {
   sideNav.classList.toggle("has-edge-right", scrollLeft < scrollWidth - clientWidth - 4);
 };
 sideNav?.addEventListener("scroll", syncSideNavEdgeFades, { passive: true });
-window.addEventListener("resize", syncSideNavEdgeFades);
+sideNav?.addEventListener("scroll", () => {
+  const activeItem = sideNav.querySelector(".side-nav a.is-active");
+  if (activeItem) syncSideNavIndicator(activeItem, { animate: false });
+}, { passive: true });
+window.addEventListener("resize", () => {
+  syncSideNavEdgeFades();
+  const activeItem = sideNav?.querySelector(".side-nav a.is-active");
+  if (activeItem) syncSideNavIndicator(activeItem, { animate: false });
+});
 syncSideNavEdgeFades();
+syncSideNavIndicator(sideNav?.querySelector(".side-nav a.is-active"));
 
 jumpButtons.forEach((button) => button.addEventListener("click", () => {
   navigate(button.dataset.navJump);
