@@ -2301,23 +2301,24 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   .sidebar {
     position: fixed;
     z-index: 55;
-    inset: auto 0 0;
-    display: grid;
-    grid-template-columns: 1fr;
+    left: 50%;
+    bottom: max(0.45rem, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    width: min(calc(100% - 1rem), 34rem);
+    display: flex;
     height: auto;
     max-height: calc(var(--admin-mobile-nav-height) + env(safe-area-inset-bottom));
-    gap: var(--space-2);
+    gap: 0.35rem;
     align-items: center;
     overflow: visible;
-    padding: 0.45rem max(0.5rem, env(safe-area-inset-right)) calc(0.45rem + env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
-    border-top: 1px solid var(--border-subtle);
-    border-right: 0;
-    border-bottom: 0;
+    padding: 0.35rem 0.4rem calc(0.35rem + env(safe-area-inset-bottom));
+    border: 1px solid var(--border-subtle);
+    border-radius: 1.2rem;
     background:
-      linear-gradient(180deg, color-mix(in srgb, var(--surface-overlay) 84%, transparent), var(--surface-overlay)),
+      linear-gradient(180deg, color-mix(in srgb, var(--surface-overlay) 88%, transparent), var(--surface-overlay)),
       var(--surface-page);
-    box-shadow: 0 -1rem 2.6rem rgb(0 0 0 / 0.28);
-    backdrop-filter: blur(22px);
+    box-shadow: 0 0.65rem 2.2rem rgb(0 0 0 / 0.32);
+    backdrop-filter: blur(24px);
   }
 
   .sidebar__brand {
@@ -2327,12 +2328,15 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   .side-nav {
     position: relative;
     display: flex;
-    gap: 0.5rem;
+    gap: 0.3rem;
+    min-width: 0;
+    flex: 1 1 auto;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 0.1rem 0 0.2rem;
+    padding: 0.1rem 0.2rem 0.2rem;
     scrollbar-width: none;
     scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -2344,20 +2348,34 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
     z-index: 1;
     top: 0;
     bottom: 0;
-    width: 2.6rem;
+    width: 2rem;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 160ms ease;
+    transition: opacity 180ms ease;
   }
 
   .side-nav::before {
     left: 0;
-    background: linear-gradient(to right, color-mix(in srgb, var(--surface-overlay) 94%, var(--surface-page)), transparent);
+    background:
+      linear-gradient(
+        to right,
+        var(--surface-overlay) 8%,
+        color-mix(in srgb, var(--surface-overlay) 88%, transparent) 40%,
+        color-mix(in srgb, var(--surface-overlay) 50%, transparent) 72%,
+        transparent
+      );
   }
 
   .side-nav::after {
     right: 0;
-    background: linear-gradient(to left, color-mix(in srgb, var(--surface-overlay) 94%, var(--surface-page)), transparent);
+    background:
+      linear-gradient(
+        to left,
+        var(--surface-overlay) 8%,
+        color-mix(in srgb, var(--surface-overlay) 88%, transparent) 40%,
+        color-mix(in srgb, var(--surface-overlay) 50%, transparent) 72%,
+        transparent
+      );
   }
 
   .side-nav.has-edge-left::before {
@@ -2373,19 +2391,20 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   }
 
   .side-nav a {
-    flex: 0 0 66.67%;
+    flex: 0 0 auto;
     min-width: 0;
-    min-height: 3.55rem;
+    width: 4.5rem;
+    min-height: 3.2rem;
     flex-direction: column;
     justify-content: center;
-    gap: 0.24rem;
-    padding: 0.34rem 0.32rem;
-    border-radius: 1rem;
-    font-size: 0.66rem;
+    gap: 0.18rem;
+    padding: 0.28rem 0.15rem;
+    border-radius: 0.85rem;
+    font-size: 0.62rem;
     letter-spacing: -0.01em;
     line-height: 1.05;
     text-align: center;
-    scroll-snap-align: start;
+    scroll-snap-align: center;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -2411,10 +2430,10 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
     height: 2.35rem;
     place-items: center;
     flex: 0 0 auto;
-    border: 1px solid var(--selection-border);
-    border-radius: 0.92rem;
-    background: var(--selection-soft);
-    color: var(--selection-color);
+    border: 1px solid var(--border-subtle);
+    border-radius: 0.72rem;
+    background: var(--surface-raised);
+    color: var(--text-supporting);
   }
 
   .topbar-profile-link .sidebar-profile__avatar {
@@ -2423,7 +2442,9 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   }
 
   .topbar-profile-link.is-active {
-    border-color: var(--selection-color);
+    border-color: var(--selection-border);
+    background: var(--selection-soft);
+    color: var(--selection-color);
   }
 
   .sidebar-profile-link {
@@ -2431,9 +2452,9 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   }
 
   .sidebar-profile__avatar {
-    width: 2.35rem;
-    height: 2.35rem;
-    border-radius: 0.92rem;
+    width: 2.15rem;
+    height: 2.15rem;
+    border-radius: 0.65rem;
   }
 
   .admin-shell {
@@ -2442,7 +2463,7 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
     padding:
       max(var(--admin-page-padding), env(safe-area-inset-top))
       max(var(--admin-page-padding), env(safe-area-inset-right))
-      calc(var(--admin-mobile-nav-height) + env(safe-area-inset-bottom) + var(--space-5))
+      calc(var(--admin-mobile-nav-height) + env(safe-area-inset-bottom) + var(--space-8))
       max(var(--admin-page-padding), env(safe-area-inset-left));
   }
 
@@ -2754,7 +2775,7 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
 
   .toast {
     right: var(--space-3);
-    bottom: calc(var(--admin-mobile-nav-height) + env(safe-area-inset-bottom) + var(--space-3));
+    bottom: calc(var(--admin-mobile-nav-height) + env(safe-area-inset-bottom) + var(--space-4));
     left: var(--space-3);
     width: auto;
   }
@@ -2793,21 +2814,35 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   .mobile-profile-signout {
     display: inline-flex;
   }
+
+  /* Pill nav: scroll-to-center on tap */
+  @media (hover: hover) and (pointer: fine) {
+    .side-nav a:hover {
+      background: color-mix(in srgb, var(--surface-raised) 85%, transparent);
+      color: var(--text-primary);
+    }
+  }
 }
 
 @media (max-width: 380px) {
   :root {
-    --admin-mobile-nav-height: 4.95rem;
+    --admin-mobile-nav-height: 4.6rem;
+  }
+
+  .sidebar {
+    width: min(calc(100% - 0.75rem), 34rem);
+    border-radius: 1rem;
   }
 
   .side-nav a {
-    min-height: 3.3rem;
-    font-size: 0.61rem;
+    width: 3.8rem;
+    min-height: 2.9rem;
+    font-size: 0.58rem;
   }
 
-  .sidebar-profile__avatar {
-    width: 2.15rem;
-    height: 2.15rem;
+  .topbar-profile-link {
+    width: 2rem;
+    height: 2rem;
   }
 
   .mobile-topbar-brand strong {

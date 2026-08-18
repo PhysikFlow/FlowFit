@@ -840,7 +840,7 @@ const { navigate } = createNavigation({
   pageTitles,
   onNavigate: (destination) => {
     if (destination !== "students") setStudentSessionOpen(false, { focus: false });
-    sideNav?.querySelector(`[data-nav="${destination}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    sideNav?.querySelector(`[data-nav="${destination}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }
 });
 
