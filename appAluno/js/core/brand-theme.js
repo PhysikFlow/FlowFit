@@ -33,10 +33,19 @@ const isValidHex = (value) => /^#[0-9a-f]{6}$/i.test(String(value || ""));
 
 const allowed = (value, options, fallback) => options.includes(value) ? value : fallback;
 
+const SYSTEM_STACK = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
 const FONT_STACKS = {
-  system: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  system: SYSTEM_STACK,
   serif: 'Georgia, "Times New Roman", ui-serif, serif',
-  mono: '"SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace'
+  mono: '"SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace',
+  oswald: `"Oswald", ${SYSTEM_STACK}`,
+  "bebas-neue": `"Bebas Neue", "Oswald", ${SYSTEM_STACK}`,
+  "barlow-condensed": `"Barlow Condensed", ${SYSTEM_STACK}`,
+  rajdhani: `"Rajdhani", ${SYSTEM_STACK}`,
+  teko: `"Teko", "Barlow Condensed", ${SYSTEM_STACK}`,
+  anton: `"Anton", "Oswald", ${SYSTEM_STACK}`,
+  "saira-condensed": `"Saira Condensed", ${SYSTEM_STACK}`
 };
 
 const RADIUS_PRESETS = {
