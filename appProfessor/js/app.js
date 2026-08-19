@@ -13,6 +13,7 @@ import { createNavigation } from "./core/navigation.js?v=build-20260816-1";
 import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v=build-20260816-1";
 import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260818-1";
 import { initAvailabilityCalendar } from "./screens/agenda/availability-calendar.js?v=build-20260818-1";
+import { initExceptionsCard } from "./screens/agenda/exceptions-card.js?v=build-20260818-3";
 import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=build-20260816-1";
 import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260816-3";
 import { escapeHtml, formatUpdatedAt, formatVolume, initialsFromName, normalizeEmail, normalizeSearch } from "./utils/formatters.js?v=build-20260816-1";
@@ -1969,6 +1970,7 @@ const renderAll = () => {
   if (!agendaCalendarReady) {
     agendaCalendarReady = true;
     initAvailabilityCalendar(document.querySelector("[data-agenda-calendar]"));
+    initExceptionsCard(document.querySelector("[data-agenda-exceptions]"));
   }
 };
 
