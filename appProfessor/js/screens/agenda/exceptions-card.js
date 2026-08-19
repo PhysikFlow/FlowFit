@@ -356,14 +356,14 @@ export function initExceptionsCard(container) {
             <span class="exc-label">O que muda nessa data?</span>
             <div class="exc-type-options">
               <label class="exc-type-card">
-                <input type="radio" name="excType" value="off" checked>
+                <input type="radio" id="excTypeOff" name="excType" value="off" checked>
                 <div>
                   <strong>Não vou atender</strong>
                   <span>Bloqueia o dia inteiro. Ideal para folga, viagem, feriado ou compromisso.</span>
                 </div>
               </label>
               <label class="exc-type-card">
-                <input type="radio" name="excType" value="custom">
+                <input type="radio" id="excTypeCustom" name="excType" value="custom">
                 <div>
                   <strong>Vou atender em outros horários</strong>
                   <span>Substitui somente os horários desse dia, sem mexer na rotina semanal.</span>
