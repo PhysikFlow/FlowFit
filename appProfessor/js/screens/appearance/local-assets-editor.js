@@ -43,7 +43,7 @@ export const createLocalAssetsEditor = ({
     const logoFrameEnabled = assets.logoFrameEnabled !== undefined
       ? assets.logoFrameEnabled !== false
       : remote.logoFrameEnabled !== false;
-    setBrandMark?.(logoSource);
+    setBrandMark?.(logoSource, logoFrameEnabled);
     document.querySelectorAll("[data-coach-initials]").forEach((target) => {
       target.replaceChildren();
       if (photoSource) {

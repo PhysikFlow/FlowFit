@@ -743,7 +743,7 @@ const {
     if (type === "logo" && theme?.logoUrl) publishedTheme.logoUrl = theme.logoUrl;
     if (type === "photo" && theme?.photoUrl) publishedTheme.photoUrl = theme.photoUrl;
   },
-  setBrandMark: (source) => {
+  setBrandMark: (source, frameEnabled) => {
     document.querySelectorAll("[data-brand-icon], [data-brand-icon-mobile]").forEach((target) => {
       target.replaceChildren();
       if (source) {
@@ -752,8 +752,10 @@ const {
         image.alt = "";
         target.append(image);
         target.classList.add("is-image");
+        target.classList.toggle("is-frameless", frameEnabled === false);
       } else {
         target.classList.remove("is-image");
+        target.classList.remove("is-frameless");
         target.innerHTML = svgIcon("dumbbell");
       }
     });

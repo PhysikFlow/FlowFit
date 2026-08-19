@@ -196,6 +196,18 @@ body.is-auth-locked {
   background: var(--selection-soft);
 }
 
+.sidebar__brand [data-brand-icon].is-image.is-frameless,
+.mobile-topbar-brand [data-brand-icon-mobile].is-image.is-frameless {
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.sidebar__brand [data-brand-icon].is-image.is-frameless img,
+.mobile-topbar-brand [data-brand-icon-mobile].is-image.is-frameless img {
+  object-fit: contain;
+}
+
 .sidebar__brand [data-brand-icon] img,
 .mobile-topbar-brand [data-brand-icon-mobile] img {
   width: 100%;
