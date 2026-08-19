@@ -21,13 +21,12 @@ const WEEKDAYS = [
 ];
 
 function escHtml(str) {
-  return String(str).replace(/[&<>\"']/g, (c) =>
+  return String(str).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
   );
 }
 
 function parseDate(val) {
-  // val = "YYYY-MM-DD"
   const [y, m, d] = val.split("-").map(Number);
   return new Date(y, m - 1, d, 12, 0, 0);
 }
@@ -54,6 +53,11 @@ function todayValue() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function formatRangeText(ranges) {
+  if (!ranges || !ranges.length) return "";
+  return ranges.map((r) => `${r.start}–${r.end}`).join(" · ");
+}
+
 // ── Storage ────────────────────────────────────────────────────────
 const STORAGE_KEY = "prof_schedule_exceptions";
 
@@ -69,13 +73,60 @@ function saveExceptions(list) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 }
 
+// ── Validation ─────────────────────────────────────────────────────
+function validateRanges(ranges) {
+  for (let i = 0; i < ranges.length; i++) {
+    const r = ranges[i];
+    if (!r.start || !r.end) {
+      return { ok: false, message: "Preencha o início e o fim de todos os períodos." };
+    }
+    if (r.start >= r.end) {
+      return { ok: false, message: "O horário final deve ser depois do horário inicial." };
+    }
+  }
+  return { ok: true };
+}
+
 // ── Init ───────────────────────────────────────────────────────────
 export function initExceptionsCard(container) {
   if (!container) return;
 
   let exceptions = loadExceptions();
   let editingId = null;
+  let openMenuCleanup = null;
 
+  // ── Toast ──────────────────────────────────────────────────────
+  function showToast(msg, actionLabel, onAction) {
+    const toast = container.querySelector(".exc-toast");
+    if (!toast) return;
+
+    const actionBtn = toast.querySelector(".exc-toast-action");
+    toast.querySelector(".exc-toast-msg").textContent = msg;
+
+    if (actionLabel && onAction) {
+      actionBtn.textContent = actionLabel;
+      actionBtn.hidden = false;
+      actionBtn.onclick = () => {
+        onAction();
+        hideToast();
+      };
+    } else {
+      actionBtn.hidden = true;
+      actionBtn.onclick = null;
+    }
+
+    toast.classList.add("show");
+    clearTimeout(container._toastTimer);
+    container._toastTimer = setTimeout(hideToast, 4200);
+  }
+
+  function hideToast() {
+    const toast = container.querySelector(".exc-toast");
+    if (toast) toast.classList.remove("show");
+    clearTimeout(container._toastTimer);
+  }
+
+  // ── Render list ────────────────────────────────────────────────
   function renderList() {
     const listEl = container.querySelector(".exc-list");
     if (!listEl) return;
@@ -85,14 +136,14 @@ export function initExceptionsCard(container) {
       return;
     }
 
-    // Sort by date ascending
     const sorted = [...exceptions].sort((a, b) => a.date.localeCompare(b.date));
 
     listEl.innerHTML = sorted.map((ex) => {
-      const badgeClass = ex.type === "off" ? "exc-badge--off" : "exc-badge--changed";
-      const badgeText = ex.type === "off"
+      const isOff = ex.type === "off";
+      const badgeClass = isOff ? "exc-badge--off" : "exc-badge--changed";
+      const badgeText = isOff
         ? "Indisponível o dia todo"
-        : (ex.ranges || []).map((r) => `${r.start}–${r.end}`).join(" · ") || "Sem horários";
+        : formatRangeText(ex.ranges) || "Sem horários";
 
       return `<article class="exc-item" data-exc-id="${ex.id}">
         <div class="exc-date-box">
@@ -101,17 +152,172 @@ export function initExceptionsCard(container) {
         </div>
         <div class="exc-info">
           <p class="exc-title">${formatWeekday(ex.date)}</p>
-          <p class="exc-desc">${escHtml(ex.note || "")}</p>
-          <span class="exc-badge ${badgeClass}">${badgeText}</span>
+          <span class="exc-badge ${badgeClass}">${escHtml(badgeText)}</span>
         </div>
-        <button class="exc-more icon-button" type="button" data-exc-action="menu" data-exc-id="${ex.id}" aria-label="Ações">
+        <button class="exc-more icon-button" type="button" data-exc-action="menu" data-exc-id="${ex.id}" aria-label="Ações da exceção" aria-haspopup="true" aria-expanded="false">
           ${svgIcon("dots")}
         </button>
       </article>`;
     }).join("");
   }
 
+  // ── Contextual menu ────────────────────────────────────────────
+  function closeMenu() {
+    const existing = container.querySelector(".exc-menu");
+    if (existing) existing.remove();
+    if (openMenuCleanup) {
+      openMenuCleanup();
+      openMenuCleanup = null;
+    }
+  }
+
+  function openMenu(anchorBtn, ex) {
+    closeMenu();
+
+    const menu = document.createElement("div");
+    menu.className = "exc-menu";
+    menu.setAttribute("role", "menu");
+    menu.innerHTML = `
+      <button class="exc-menu-item" type="button" role="menuitem" data-exc-menu-action="edit">Editar</button>
+      <button class="exc-menu-item exc-menu-item--danger" type="button" role="menuitem" data-exc-menu-action="delete">Excluir</button>
+    `;
+
+    container.appendChild(menu);
+
+    // Position: try to place below and aligned right to the anchor
+    const btnRect = anchorBtn.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const menuWidth = 10;
+    let top = btnRect.bottom - containerRect.top + 4;
+    let left = btnRect.right - containerRect.left - menuWidth;
+
+    // Prevent overflow right
+    if (left + menuWidth > containerRect.width) {
+      left = containerRect.width - menuWidth - 4;
+    }
+    // Prevent overflow left
+    if (left < 0) left = 4;
+
+    // If menu would overflow bottom, show above
+    if (btnRect.bottom + 80 > window.innerHeight) {
+      top = btnRect.top - containerRect.top - 72;
+    }
+
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+
+    anchorBtn.setAttribute("aria-expanded", "true");
+
+    // Close handlers
+    const onDocClick = (e) => {
+      if (!menu.contains(e.target) && e.target !== anchorBtn && !anchorBtn.contains(e.target)) {
+        closeMenu();
+      }
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") closeMenu();
+    };
+
+    document.addEventListener("click", onDocClick, true);
+    document.addEventListener("keydown", onKey);
+    openMenuCleanup = () => {
+      document.removeEventListener("click", onDocClick, true);
+      document.removeEventListener("keydown", onKey);
+      anchorBtn.setAttribute("aria-expanded", "false");
+    };
+
+    // Menu item clicks
+    menu.querySelector("[data-exc-menu-action='edit']").addEventListener("click", () => {
+      closeMenu();
+      openSheet(ex);
+    });
+
+    menu.querySelector("[data-exc-menu-action='delete']").addEventListener("click", () => {
+      closeMenu();
+      showDeleteConfirm(ex);
+    });
+
+    // Focus first item
+    menu.querySelector("[data-exc-menu-action='edit']").focus();
+  }
+
+  // ── Delete confirmation (inline) ───────────────────────────────
+  function showDeleteConfirm(ex) {
+    const existing = container.querySelector(".exc-delete-confirm");
+    if (existing) existing.remove();
+
+    const dateFormatted = formatDateBR(ex.date);
+    const weekday = formatWeekday(ex.date);
+
+    const el = document.createElement("div");
+    el.className = "exc-delete-confirm";
+    el.setAttribute("role", "alertdialog");
+    el.setAttribute("aria-modal", "true");
+    el.setAttribute("aria-labelledby", "exc-delete-title");
+    el.innerHTML = `
+      <div class="exc-delete-confirm__inner">
+        <p class="exc-delete-confirm__title" id="exc-delete-title">Excluir esta exceção?</p>
+        <p class="exc-delete-confirm__detail">${dateFormatted} — ${weekday}</p>
+        <p class="exc-delete-confirm__copy">A disponibilidade semanal normal voltará a valer nessa data.</p>
+        <div class="exc-delete-confirm__actions">
+          <button class="exc-delete-cancel button" type="button">Cancelar</button>
+          <button class="exc-delete-ok button" type="button">Excluir</button>
+        </div>
+      </div>
+    `;
+
+    container.appendChild(el);
+
+    // Animate in
+    requestAnimationFrame(() => el.classList.add("show"));
+
+    // Focus the cancel button by default (safe default)
+    el.querySelector(".exc-delete-cancel").focus();
+
+    const cleanup = () => {
+      el.classList.remove("show");
+      setTimeout(() => el.remove(), 200);
+      document.removeEventListener("keydown", onKey);
+    };
+
+    const onKey = (e) => {
+      if (e.key === "Escape") cleanup();
+    };
+    document.addEventListener("keydown", onKey);
+
+    el.querySelector(".exc-delete-cancel").addEventListener("click", cleanup);
+
+    el.querySelector(".exc-delete-ok").addEventListener("click", () => {
+      cleanup();
+      performDelete(ex);
+    });
+
+    // Close on backdrop click
+    el.addEventListener("click", (e) => {
+      if (e.target === el) cleanup();
+    });
+  }
+
+  function performDelete(ex) {
+    const removed = exceptions.find((e) => e.id === ex.id);
+    exceptions = exceptions.filter((e) => e.id !== ex.id);
+    saveExceptions(exceptions);
+    renderList();
+    if (removed) {
+      showToast("Exceção removida.", "Desfazer", () => {
+        exceptions.push(removed);
+        exceptions.sort((a, b) => a.date.localeCompare(b.date));
+        saveExceptions(exceptions);
+        renderList();
+        showToast("Exceção restaurada.");
+      });
+    }
+  }
+
+  // ── Sheet ──────────────────────────────────────────────────────
   function openSheet(prefill) {
+    closeMenu();
+
     const backdrop = container.querySelector(".exc-backdrop");
     if (!backdrop) return;
 
@@ -124,22 +330,40 @@ export function initExceptionsCard(container) {
     const rangesEl = backdrop.querySelector("#excRanges");
     const previewEl = backdrop.querySelector(".exc-preview");
     const titleEl = backdrop.querySelector(".exc-sheet-title");
+    const subEl = backdrop.querySelector(".exc-sheet-sub");
+    const submitBtn = backdrop.querySelector(".exc-save");
+    const errorEl = backdrop.querySelector(".exc-validation-error");
 
-    // Reset
-    titleEl.textContent = editingId ? "Editar exceção" : "Adicionar exceção";
+    // Clear previous errors
+    if (errorEl) {
+      errorEl.textContent = "";
+      errorEl.hidden = true;
+    }
+
+    // Title & button text
+    if (editingId) {
+      titleEl.textContent = "Editar exceção";
+      subEl.textContent = "Altere os dados dessa exceção.";
+      submitBtn.textContent = "Salvar alterações";
+    } else {
+      titleEl.textContent = "Adicionar exceção";
+      subEl.textContent = "Escolha uma data e defina como sua disponibilidade será diferente nesse dia.";
+      submitBtn.textContent = "Salvar exceção";
+    }
+
+    // Date
     dateInput.value = prefill?.date || todayValue();
 
+    // Type
     if (prefill?.type === "custom") {
       typeCustom.checked = true;
     } else {
       typeOff.checked = true;
     }
 
-    // Populate ranges
+    // Ranges
     if (prefill?.ranges?.length) {
-      rangesEl.innerHTML = prefill.ranges.map((r) =>
-        `<div class="exc-range"><input type="time" value="${r.start}"><span>até</span><input type="time" value="${r.end}"><button class="exc-remove-range icon-button" type="button" aria-label="Remover período">✕</button></div>`
-      ).join("");
+      rangesEl.innerHTML = prefill.ranges.map((r) => rangeRowHTML(r.start, r.end)).join("");
     } else {
       rangesEl.innerHTML = defaultRangesHTML();
     }
@@ -148,6 +372,9 @@ export function initExceptionsCard(container) {
     updatePreview();
     backdrop.classList.add("open");
     backdrop.setAttribute("aria-hidden", "false");
+
+    // Focus first interactive element
+    setTimeout(() => dateInput.focus(), 100);
   }
 
   function closeSheet() {
@@ -158,9 +385,17 @@ export function initExceptionsCard(container) {
     editingId = null;
   }
 
+  function rangeRowHTML(start, end) {
+    return `<div class="exc-range">
+      <input type="time" value="${escHtml(start || "")}">
+      <span>até</span>
+      <input type="time" value="${escHtml(end || "")}">
+      <button class="exc-remove-range icon-button" type="button" aria-label="Remover período">${svgIcon("notification")}</button>
+    </div>`;
+  }
+
   function defaultRangesHTML() {
-    return `<div class="exc-range"><input type="time" value="08:00"><span>até</span><input type="time" value="11:00"><button class="exc-remove-range icon-button" type="button" aria-label="Remover período">✕</button></div>
-<div class="exc-range"><input type="time" value="16:00"><span>até</span><input type="time" value="19:00"><button class="exc-remove-range icon-button" type="button" aria-label="Remover período">✕</button></div>`;
+    return rangeRowHTML("08:00", "11:00") + rangeRowHTML("16:00", "19:00");
   }
 
   function selectedType() {
@@ -192,13 +427,22 @@ export function initExceptionsCard(container) {
     hoursPanel.classList.toggle("show", type === "custom");
 
     if (type === "off") {
-      previewEl.textContent = `Em ${dateFormatted}, sua agenda ficará indisponível o dia todo.`;
+      previewEl.innerHTML = `<strong>${dateFormatted}</strong><br>Você não estará disponível nessa data.`;
     } else {
       const ranges = currentRanges();
-      const text = ranges.length
-        ? ranges.map((r) => `${r.start}–${r.end}`).join(" · ")
-        : "nenhum horário definido";
-      previewEl.textContent = `Em ${dateFormatted}, somente estes horários ficarão disponíveis: ${text}.`;
+      if (ranges.length) {
+        const parts = ranges.map((r) => `das ${r.start} às ${r.end}`);
+        let text;
+        if (parts.length === 1) {
+          text = `Você estará disponível ${parts[0]}.`;
+        } else {
+          const last = parts.pop();
+          text = `Você estará disponível ${parts.join(", ")} e ${last}.`;
+        }
+        previewEl.innerHTML = `<strong>${dateFormatted}</strong><br>${text}`;
+      } else {
+        previewEl.innerHTML = `<strong>${dateFormatted}</strong><br>Defina ao menos um período disponível.`;
+      }
     }
   }
 
@@ -218,13 +462,50 @@ export function initExceptionsCard(container) {
     });
   }
 
+  function clearValidation() {
+    const backdrop = container.querySelector(".exc-backdrop");
+    const errorEl = backdrop?.querySelector(".exc-validation-error");
+    if (errorEl) {
+      errorEl.textContent = "";
+      errorEl.hidden = true;
+    }
+  }
+
+  function showValidation(msg) {
+    const backdrop = container.querySelector(".exc-backdrop");
+    const errorEl = backdrop?.querySelector(".exc-validation-error");
+    if (errorEl) {
+      errorEl.textContent = msg;
+      errorEl.hidden = false;
+    }
+  }
+
   function handleSave() {
     const backdrop = container.querySelector(".exc-backdrop");
     if (!backdrop) return;
 
+    clearValidation();
+
     const dateInput = backdrop.querySelector("#excDate");
     const type = selectedType();
     const ranges = currentRanges();
+
+    if (!dateInput.value) {
+      showValidation("Selecione uma data para a exceção.");
+      return;
+    }
+
+    if (type === "custom") {
+      if (!ranges.length) {
+        showValidation("Adicione pelo menos um período disponível.");
+        return;
+      }
+      const validation = validateRanges(ranges);
+      if (!validation.ok) {
+        showValidation(validation.message);
+        return;
+      }
+    }
 
     if (editingId) {
       const idx = exceptions.findIndex((e) => e.id === editingId);
@@ -237,33 +518,18 @@ export function initExceptionsCard(container) {
         date: dateInput.value,
         type,
         ranges,
-        note: type === "off" ? "Exceção adicionada à disponibilidade semanal" : "Horário diferente da rotina semanal",
+        note: "",
       });
     }
 
+    const isEditing = Boolean(editingId);
     saveExceptions(exceptions);
     closeSheet();
     renderList();
-    showToast("Exceção salva.");
+    showToast(isEditing ? "Exceção atualizada." : "Exceção salva.");
   }
 
-  function handleDelete(id) {
-    exceptions = exceptions.filter((e) => e.id !== id);
-    saveExceptions(exceptions);
-    renderList();
-    showToast("Exceção removida.");
-  }
-
-  function showToast(msg) {
-    const toast = container.querySelector(".exc-toast");
-    if (!toast) return;
-    toast.textContent = msg;
-    toast.classList.add("show");
-    clearTimeout(container._toastTimer);
-    container._toastTimer = setTimeout(() => toast.classList.remove("show"), 2200);
-  }
-
-  // ── Bind events ──────────────────────────────────────────────────
+  // ── Event binding ──────────────────────────────────────────────
   function bindEvents() {
     const backdrop = container.querySelector(".exc-backdrop");
 
@@ -276,55 +542,55 @@ export function initExceptionsCard(container) {
     // Save
     backdrop?.querySelector(".exc-save")?.addEventListener("click", handleSave);
 
-    // Close on backdrop click
+    // Close sheet on backdrop click
     backdrop?.addEventListener("click", (e) => {
       if (e.target === backdrop) closeSheet();
     });
 
+    // Escape to close sheet
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && backdrop?.classList.contains("open")) {
+        closeSheet();
+      }
+    });
+
     // Type radio change
     backdrop?.querySelectorAll('input[name="excType"]').forEach((radio) => {
-      radio.addEventListener("change", updatePreview);
+      radio.addEventListener("change", () => {
+        clearValidation();
+        updatePreview();
+      });
     });
 
     // Date change
-    backdrop?.querySelector("#excDate")?.addEventListener("input", updatePreview);
+    backdrop?.querySelector("#excDate")?.addEventListener("input", () => {
+      clearValidation();
+      updatePreview();
+    });
 
     // Add range
     backdrop?.querySelector(".exc-add-range")?.addEventListener("click", () => {
       const ranges = backdrop.querySelector("#excRanges");
       if (!ranges) return;
-      ranges.insertAdjacentHTML(
-        "beforeend",
-        `<div class="exc-range"><input type="time" value="09:00"><span>até</span><input type="time" value="12:00"><button class="exc-remove-range icon-button" type="button" aria-label="Remover período">✕</button></div>`
-      );
+      ranges.insertAdjacentHTML("beforeend", rangeRowHTML("09:00", "12:00"));
       bindRanges();
       updatePreview();
     });
 
-    // List delegation — edit / delete
+    // List delegation — menu
     container.querySelector(".exc-list")?.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-exc-action]");
+      const btn = e.target.closest("[data-exc-action='menu']");
       if (!btn) return;
 
       const id = btn.dataset.excId;
-      const action = btn.dataset.excAction;
+      const ex = exceptions.find((x) => x.id === id);
+      if (!ex) return;
 
-      if (action === "menu") {
-        const ex = exceptions.find((x) => x.id === id);
-        if (!ex) return;
-
-        // Simple prompt-based action for now
-        const choice = confirm("OK = Editar  |  Cancelar = Excluir");
-        if (choice) {
-          openSheet(ex);
-        } else {
-          handleDelete(id);
-        }
-      }
+      openMenu(btn, ex);
     });
   }
 
-  // ── Render ───────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────
   function render() {
     container.innerHTML = `
       <div class="exc-card card">
@@ -345,7 +611,7 @@ export function initExceptionsCard(container) {
         <div class="exc-sheet" role="dialog" aria-modal="true">
           <div class="exc-handle"></div>
           <h2 class="exc-sheet-title">Adicionar exceção</h2>
-          <p class="exc-sheet-sub">Escolha uma data e diga apenas o que será diferente naquele dia.</p>
+          <p class="exc-sheet-sub">Escolha uma data e defina como sua disponibilidade será diferente nesse dia.</p>
 
           <div class="exc-field">
             <label class="exc-label" for="excDate">Data</label>
@@ -353,20 +619,20 @@ export function initExceptionsCard(container) {
           </div>
 
           <div class="exc-field">
-            <span class="exc-label">O que muda nessa data?</span>
+            <span class="exc-label">Como será esse dia?</span>
             <div class="exc-type-options">
               <label class="exc-type-card">
                 <input type="radio" id="excTypeOff" name="excType" value="off" checked>
                 <div>
-                  <strong>Não vou atender</strong>
-                  <span>Bloqueia o dia inteiro. Ideal para folga, viagem, feriado ou compromisso.</span>
+                  <strong>Indisponível o dia todo</strong>
+                  <span>Não haverá atendimento nessa data.</span>
                 </div>
               </label>
               <label class="exc-type-card">
                 <input type="radio" id="excTypeCustom" name="excType" value="custom">
                 <div>
-                  <strong>Vou atender em outros horários</strong>
-                  <span>Substitui somente os horários desse dia, sem mexer na rotina semanal.</span>
+                  <strong>Horários específicos</strong>
+                  <span>Defina os horários em que você estará disponível.</span>
                 </div>
               </label>
             </div>
@@ -374,14 +640,16 @@ export function initExceptionsCard(container) {
 
           <div class="exc-hours-panel" id="excHoursPanel">
             <div class="exc-hours-head">
-              <strong>Horários disponíveis nesse dia</strong>
+              <strong>Horários disponíveis</strong>
             </div>
             <div id="excRanges">
-              <div class="exc-range"><input type="time" value="08:00"><span>até</span><input type="time" value="11:00"><button class="exc-remove-range icon-button" type="button" aria-label="Remover período">✕</button></div>
-              <div class="exc-range"><input type="time" value="16:00"><span>até</span><input type="time" value="19:00"><button class="exc-remove-range icon-button" type="button" aria-label="Remover período">✕</button></div>
+              <div class="exc-range"><input type="time" value="08:00"><span>até</span><input type="time" value="11:00"><button class="exc-remove-range icon-button" type="button" aria-label="Remover período">${svgIcon("notification")}</button></div>
+              <div class="exc-range"><input type="time" value="16:00"><span>até</span><input type="time" value="19:00"><button class="exc-remove-range icon-button" type="button" aria-label="Remover período">${svgIcon("notification")}</button></div>
             </div>
-            <button class="exc-add-range" type="button">+ Adicionar outro período</button>
+            <button class="exc-add-range" type="button">+ Adicionar horário</button>
           </div>
+
+          <p class="exc-validation-error" hidden></p>
 
           <div class="exc-preview" id="excPreview"></div>
 
@@ -392,7 +660,10 @@ export function initExceptionsCard(container) {
         </div>
       </div>
 
-      <div class="exc-toast" role="status"></div>
+      <div class="exc-toast" role="status">
+        <span class="exc-toast-msg"></span>
+        <button class="exc-toast-action" type="button" hidden></button>
+      </div>
     `;
 
     renderList();

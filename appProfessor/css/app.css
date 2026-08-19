@@ -4449,6 +4449,7 @@ body { color: var(--text-primary); font-weight: var(--type-weight-body); }
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--space-2);
+}
 
 .exc-hours-head strong {
   font-size: var(--text-sm);
@@ -4519,6 +4520,7 @@ body { color: var(--text-primary); font-weight: var(--type-weight-body); }
 .exc-actions .button {
   min-height: 2.8rem;
   font-weight: var(--type-weight-button);
+}
 
 .exc-cancel {
   border: 1px solid var(--border-default);
@@ -4547,6 +4549,146 @@ body { color: var(--text-primary); font-weight: var(--type-weight-body); }
 .exc-toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+.exc-toast-action {
+  margin-left: var(--space-2);
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--type-weight-emphasis);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  flex-shrink: 0;
+}
+
+.exc-toast-action:hover { background: rgb(255 255 255 / 0.1); }
+
+/* ── Validation error ───────────────────────────────────────────── */
+
+.exc-validation-error {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--status-danger-soft);
+  color: var(--status-danger);
+  font-size: var(--text-xs);
+  line-height: var(--line-height-copy);
+}
+
+/* ── Contextual menu ────────────────────────────────────────────── */
+
+.exc-menu {
+  position: absolute;
+  z-index: 40;
+  min-width: 8rem;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.2);
+  padding: var(--space-1) 0;
+  animation: exc-menu-in 0.12s ease-out;
+}
+
+@keyframes exc-menu-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.exc-menu-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.exc-menu-item:hover,
+.exc-menu-item:focus-visible {
+  background: var(--surface-raised);
+  outline: none;
+}
+
+.exc-menu-item--danger { color: var(--status-danger); }
+
+.exc-menu-item--danger:hover,
+.exc-menu-item--danger:focus-visible {
+  background: var(--status-danger-soft);
+}
+
+/* ── Delete confirmation ─────────────────────────────────────────── */
+
+.exc-delete-confirm {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.4);
+  z-index: 45;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: var(--space-4);
+}
+
+.exc-delete-confirm.show { opacity: 1; }
+
+.exc-delete-confirm__inner {
+  width: min(100%, 22rem);
+  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  background: var(--surface-card);
+  box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 0.25);
+  color: var(--text-primary);
+  animation: exc-menu-in 0.15s ease-out;
+}
+
+.exc-delete-confirm__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--type-weight-section-title);
+}
+
+.exc-delete-confirm__detail {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--type-weight-item-title);
+}
+
+.exc-delete-confirm__copy {
+  margin: 0 0 var(--space-4);
+  color: var(--text-supporting);
+  font-size: var(--text-sm);
+  line-height: var(--line-height-copy);
+}
+
+.exc-delete-confirm__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.exc-delete-cancel {
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-primary);
+}
+
+.exc-delete-ok {
+  background: var(--status-danger);
+  color: #fff;
+  border: 1px solid var(--status-danger);
 }
 
 @media (min-width: 700px) {

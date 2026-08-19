@@ -67,6 +67,15 @@ const iconPaths = {
     '<path d="m7 7 10 10" />',
     '<path d="m17 7-10 10" />'
   ],
+  plus: [
+    '<path d="M12 5v14" />',
+    '<path d="M5 12h14" />'
+  ],
+  dots: [
+    '<circle cx="12" cy="6" r="1.5" />',
+    '<circle cx="12" cy="12" r="1.5" />',
+    '<circle cx="12" cy="18" r="1.5" />'
+  ],
   palette: [
     '<circle cx="12" cy="12" r="8" />',
     '<circle cx="9" cy="10" r=".8" />',
