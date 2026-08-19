@@ -232,14 +232,17 @@ export function initDatePicker(nativeInput) {
   const monthLabel = popover.querySelector(".dp-month-label");
   const daysGrid = popover.querySelector(".dp-days-grid");
 
-  // Assemble
+  // Assemble — save reference before moving nativeInput
+  const originalParent = nativeInput.parentNode;
+  const originalNext = nativeInput.nextSibling;
+
   wrapper.appendChild(desktop);
   wrapper.appendChild(nativeInput);
   wrapper.appendChild(popover);
 
   // Insert wrapper where the native input was
-  if (nativeInput.parentNode) {
-    nativeInput.parentNode.insertBefore(wrapper, nativeInput);
+  if (originalParent) {
+    originalParent.insertBefore(wrapper, originalNext);
   }
 
   /* ── Calendar render ────────────────────────────────── */
