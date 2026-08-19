@@ -9,6 +9,7 @@ import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLi
 import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260813-1";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "../../appAluno/js/components/custom-select.js?v=build-20260816-1";
+import { initAllDatePickers, refreshDatePicker } from "../../appAluno/js/core/date-picker.js?v=build-20260819-1";
 import { createNavigation } from "./core/navigation.js?v=build-20260816-1";
 import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v=build-20260816-1";
 import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260818-1";
@@ -20,6 +21,7 @@ import { escapeHtml, formatUpdatedAt, formatVolume, initialsFromName, normalizeE
 import { createProfessorViewState } from "./state/view-state.js?v=build-20260816-1";
 
 initCustomSelects();
+initAllDatePickers();
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -1407,7 +1409,10 @@ const loadWorkoutForEditing = (workout) => {
   if (titleInput) titleInput.value = workoutToEditableTitle(workout);
   if (templateInput) templateInput.value = workout.focus || templateInput.value;
   refreshCustomSelects(workoutForm);
-  if (startsAtInput) startsAtInput.value = formatDateForInput(workout.startsAt || workout.updatedAt);
+  if (startsAtInput) {
+    startsAtInput.value = formatDateForInput(workout.startsAt || workout.updatedAt);
+    refreshDatePicker(startsAtInput);
+  }
   workoutDraftExercises = (workout.exercises || []).map((exercise, index) => toDraftExercise(exercise, index));
   if (blocksInput) blocksInput.value = workoutToEditableBlocks(workout);
   workoutDraftTextSignature = blocksInput?.value || "";
@@ -1914,6 +1919,7 @@ const openDuplicateWorkoutDialog = (workout) => {
   renderDuplicateWorkoutStudents(workout.studentId);
   duplicateWorkoutForm.elements.namedItem("title").value = `${workout.title} - cópia`;
   duplicateWorkoutForm.elements.namedItem("startsAt").value = workoutDateInputValue(new Date());
+  refreshDatePicker(duplicateWorkoutForm.elements.namedItem("startsAt"));
   setStatus(duplicateWorkoutStatus, "Escolha o destino e confirme a nova cópia.", "");
   if (!duplicateWorkoutDialog.open) duplicateWorkoutDialog.showModal();
   window.setTimeout(() => duplicateWorkoutForm.elements.namedItem("title")?.focus(), 80);

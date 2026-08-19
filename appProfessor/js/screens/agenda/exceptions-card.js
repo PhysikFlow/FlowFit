@@ -9,6 +9,7 @@
  *   initExceptionsCard(document.querySelector("[data-agenda-exceptions]"));
  */
 import { svgIcon } from "../../../../appAluno/js/core/icons.js?v=build-20260818-1";
+import { initAllDatePickers, refreshDatePicker } from "../../../../appAluno/js/core/date-picker.js?v=build-20260819-1";
 
 const MONTHS = [
   "JAN", "FEV", "MAR", "ABR", "MAI", "JUN",
@@ -353,6 +354,7 @@ export function initExceptionsCard(container) {
 
     // Date
     dateInput.value = prefill?.date || todayValue();
+    refreshDatePicker(dateInput);
 
     // Type
     if (prefill?.type === "custom") {
@@ -665,6 +667,9 @@ export function initExceptionsCard(container) {
         <button class="exc-toast-action" type="button" hidden></button>
       </div>
     `;
+
+    // Enhance date inputs with the hybrid date picker
+    initAllDatePickers(container);
 
     renderList();
     bindEvents();

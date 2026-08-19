@@ -12,6 +12,7 @@ import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "./components/custom-select.js?v=build-20260816-1";
 import { initRunnerWheelPickers } from "./components/wheel-picker.js?v=build-20260816-2";
 import { initInstallUi } from "./components/install-ui.js?v=build-20260816-3";
+import { initAllDatePickers } from "./core/date-picker.js?v=build-20260819-1";
 import { createAgendaScreen } from "./screens/agenda/agenda-screen.js?v=build-20260816-1";
 import { createEvolutionScreen } from "./screens/evolution/evolution-screen.js?v=build-20260816-1";
 import { createHistoryScreen } from "./screens/history/history-screen.js?v=build-20260816-1";
@@ -28,6 +29,7 @@ import {
 initCustomSelects();
 const runnerWheels = initRunnerWheelPickers();
 initInstallUi();
+initAllDatePickers();
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
