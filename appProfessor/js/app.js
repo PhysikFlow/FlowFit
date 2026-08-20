@@ -233,6 +233,7 @@ let authAction = "signin";
 let authenticatedSessionDetected = false;
 let coachAccessTimer = null;
 let panelBootstrapPromise = null;
+let storageSyncTimer = null;
 let authStateVersion = 0;
 let isSigningOut = false;
 let editingWorkoutId = "";
@@ -2854,7 +2855,8 @@ cancelWorkoutEditButton?.addEventListener("click", () => {
 });
 
 window.addEventListener("hashchange", () => navigate(location.hash.slice(1), false));
-window.addEventListener("storage", (event) => {
+const applyStorageSync = (event) => {
+  if (panelBootstrapPromise) return;
   if (event.key === PUBLISHED_WORKOUTS_KEY) {
     applyPublishedWorkouts(workoutRepository.listPublishedWorkouts());
     setWorkoutSyncStatus("Treinos atualizados por outra aba.", "synced");
@@ -2869,6 +2871,11 @@ window.addEventListener("storage", (event) => {
     }));
     setStudentSyncStatus("Execuções atualizadas por outra aba.", "synced");
   }
+};
+window.addEventListener("storage", (event) => {
+  if (!event.key) return;
+  clearTimeout(storageSyncTimer);
+  storageSyncTimer = window.setTimeout(() => applyStorageSync(event), 120);
 });
 
 authForm?.addEventListener("click", async (event) => {
@@ -3081,9 +3088,11 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
   setText("[data-auth-user]", authContext.email);
   if (authUser) authUser.title = authContext.email;
   if (!isRevalidate) {
-    students = [];
-    workouts = [];
-    workoutSessions = [];
+    students = studentRepository.listStudents();
+    workouts = workoutRepository.listPublishedWorkouts();
+    workoutSessions = sessionRepository.listCachedSessions({
+      coachId: authContext?.coachId || ""
+    });
     viewState.selectedStudentId = "";
     renderAll();
   }
@@ -3118,6 +3127,14 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
   }
   if (isStale()) return false;
   if (!remote) {
+    const cachedTheme = await themeRepository.getCachedBrandTheme().catch(() => null);
+    if (cachedTheme) {
+      publishedTheme = cachedTheme;
+      fillThemeInputs(cachedTheme);
+      applyTheme({ mode: cachedTheme.mode });
+      setThemeStatus("Aparência carregada do cache local.", "warning");
+      return true;
+    }
     publishedTheme = null;
     fillThemeInputs(DEFAULT_BRAND_THEME);
     applyTheme(DEFAULT_BRAND_THEME);

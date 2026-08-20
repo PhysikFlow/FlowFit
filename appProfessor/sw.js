@@ -1,10 +1,10 @@
-const CACHE_NAME = "flowfit-professor-v61";
+const CACHE_NAME = "flowfit-professor-v62";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./css/app.css?v=build-20260817-8",
-  "./js/app.js?v=build-20260818-1",
+  "./css/app.css?v=build-20260818-3",
+  "./js/app.js?v=build-20260818-3",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/core/navigation.js?v=build-20260816-1",
   "./js/screens/dashboard/dashboard-screen.js?v=build-20260816-1",
@@ -25,6 +25,7 @@ const APP_SHELL = [
   "../appAluno/css/tokens.css?v=build-20260816-1",
   "../appAluno/css/components.css?v=build-20260816-2",
   "../appAluno/css/fonts.css?v=build-20260817-1",
+  "../appAluno/css/date-picker.css?v=build-20260819-1",
   "../appAluno/assets/fonts/anton-400.woff2",
   "../appAluno/assets/fonts/barlow-condensed-400.woff2",
   "../appAluno/assets/fonts/barlow-condensed-500.woff2",
@@ -52,14 +53,33 @@ const APP_SHELL = [
   "../appAluno/js/core/brand-theme.js?v=build-20260818-1",
   "../appAluno/js/core/install.js?v=build-20260816-2",
   "../appAluno/js/core/icons.js?v=build-20260809-6",
-  "../appAluno/js/core/platform.js?v=build-20260809-6",
+  "../appAluno/js/core/platform.js?v=build-20260813-1",
+  "../appAluno/js/core/date-picker.js?v=build-20260819-1",
   "../appAluno/js/core/supabase.js?v=build-20260812-5",
   "../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6",
   "../appAluno/js/data/repositories/student-repository.js?v=build-20260813-2",
   "../appAluno/js/data/repositories/theme-repository.js?v=build-20260818-1",
   "../appAluno/js/data/repositories/workout-repository.js?v=build-20260813-2",
-  "../appAluno/js/data/repositories/session-repository.js?v=build-20260812-5"
+  "../appAluno/js/data/repositories/session-repository.js?v=build-20260813-1",
+  "./js/screens/agenda/availability-calendar.js?v=build-20260818-1",
+  "./js/screens/agenda/exceptions-card.js?v=build-20260818-3"
 ];
+
+const matchCachedRequest = async (request) => {
+  const cache = await caches.open(CACHE_NAME);
+  const exact = await cache.match(request);
+  if (exact) return exact;
+
+  const url = new URL(request.url);
+  const isVersionedAsset = url.pathname.endsWith(".js")
+    || url.pathname.endsWith(".css")
+    || url.pathname.endsWith(".webmanifest");
+  if (!isVersionedAsset || !url.search) return null;
+
+  const keys = await cache.keys();
+  const matchedKey = keys.find((cachedRequest) => new URL(cachedRequest.url).pathname === url.pathname);
+  return matchedKey ? cache.match(matchedKey) : null;
+};
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
@@ -103,7 +123,7 @@ const networkFirst = async (request) => {
     }
     return response;
   } catch {
-    const cached = await caches.match(request);
+    const cached = await matchCachedRequest(request);
     if (cached) return cached;
     if (request.mode === "navigate") {
       const appShell = await caches.match("./index.html");

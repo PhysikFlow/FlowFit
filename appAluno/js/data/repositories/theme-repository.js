@@ -157,6 +157,17 @@ export const themeRepository = {
     return readCachedTheme({ ...cacheContext, allowLegacy: authRepository.canWriteAsCoach(authContext) });
   },
 
+  async getCachedBrandTheme(coachId = "") {
+    const authContext = await authRepository.getAuthContext();
+    const resolvedCoachId = String(coachId || (authRepository.canWriteAsCoach(authContext) ? authContext.coachId : "")).trim();
+    if (!resolvedCoachId) return null;
+    return readCachedTheme({
+      userId: authContext?.user?.id || "anonymous",
+      coachId: resolvedCoachId,
+      allowLegacy: authRepository.canWriteAsCoach(authContext)
+    });
+  },
+
   // Salva o tema localmente (otimista) e tenta sincronizar com a nuvem.
   async saveBrandTheme(theme) {
     const normalized = normalizeBrandTheme(theme);

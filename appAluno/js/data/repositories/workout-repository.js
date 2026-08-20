@@ -4,6 +4,7 @@ import { DEMO_COACH_ID } from "../../config.js?v=build-20260809-6";
 import { authRepository } from "./auth-repository.js?v=build-20260812-5";
 
 export const PUBLISHED_WORKOUTS_KEY = "flowfit.published-workouts";
+const MAX_LOCAL_PUBLISHED_WORKOUTS = 120;
 
 const STUDENTS_TABLE = "students";
 const PLANS_TABLE = "workout_plans";
@@ -224,7 +225,7 @@ const mergeWorkoutLists = (...lists) => {
   });
   return [...merged.values()]
     .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
-    .slice(0, 40);
+    .slice(0, MAX_LOCAL_PUBLISHED_WORKOUTS);
 };
 
 export const parseExerciseLine = (line, index = 0, workoutId = "workout") => {
