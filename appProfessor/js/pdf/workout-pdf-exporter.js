@@ -2,7 +2,7 @@ import {
   buildWorkoutPdfFileName,
   createWorkoutPdf,
   downloadWorkoutPdf
-} from "./workout-pdf-generator.js?v=build-20260820-1";
+} from "./workout-pdf-generator.js?v=build-20260820-2";
 
 const parseSets = (prescription) => {
   const match = String(prescription || "").match(/\d+/);

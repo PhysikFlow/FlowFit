@@ -89,17 +89,6 @@ const parsePrescription = (value) => {
   };
 };
 
-const exerciseDetail = (exercise) => {
-  const details = [];
-  const rest = cleanText(exercise?.rest);
-  if (rest) details.push(/\bdescanso\b/i.test(rest) ? rest : `${rest.replace(/\s*s$/i, "")} s descanso`);
-  const tempo = cleanText(exercise?.tempo);
-  if (tempo) details.push(`cadência ${tempo}`);
-  const rir = cleanText(exercise?.rir);
-  if (rir) details.push(/^rir\b/i.test(rir) ? rir : `RIR ${rir}`);
-  return details.join(" • ");
-};
-
 const exerciseGuidance = (exercise) => {
   const instruction = cleanText(exercise?.instructions);
   if (instruction) return instruction;
@@ -150,160 +139,193 @@ export const createWorkoutPdf = async (sourceContext = {}) => {
   const colors = {
     accent: rgb(accentRaw.r, accentRaw.g, accentRaw.b),
     accentRaw,
-    accentSoft: mixWithWhite(accentRaw, 0.88),
-    dark: rgb(0.09, 0.09, 0.105),
-    text: rgb(0.09, 0.09, 0.105),
-    muted: rgb(0.43, 0.43, 0.48),
-    darkMuted: rgb(0.74, 0.74, 0.78),
-    line: rgb(0.90, 0.90, 0.92),
-    soft: rgb(0.97, 0.97, 0.976),
-    card: rgb(0.992, 0.992, 0.996),
+    accentSoft: mixWithWhite(accentRaw, 0.91),
+    dark: rgb(0.075, 0.08, 0.095),
+    text: rgb(0.10, 0.105, 0.12),
+    muted: rgb(0.40, 0.415, 0.46),
+    darkMuted: rgb(0.72, 0.73, 0.77),
+    line: rgb(0.875, 0.885, 0.91),
+    soft: rgb(0.965, 0.97, 0.98),
+    rowAlternate: rgb(0.982, 0.985, 0.992),
     white: rgb(1, 1, 1)
   };
   let page;
   let y;
 
+  const totalWidth = pageWidth - PAGE_MARGIN * 2;
+  const columns = {
+    number: PAGE_MARGIN + 12,
+    exercise: PAGE_MARGIN + 46,
+    prescription: PAGE_MARGIN + 287,
+    rest: PAGE_MARGIN + 365,
+    control: PAGE_MARGIN + 430
+  };
+
+  const drawTableHeader = (top) => {
+    const height = 23;
+    page.drawRectangle({ x: PAGE_MARGIN, y: top - height, width: totalWidth, height, color: colors.dark });
+    page.drawRectangle({ x: PAGE_MARGIN, y: top - height, width: 4, height, color: colors.accent });
+    const labels = [
+      ["#", columns.number],
+      ["EXERCÍCIO", columns.exercise],
+      ["SÉRIES / REPS", columns.prescription],
+      ["DESCANSO", columns.rest],
+      ["CONTROLE", columns.control]
+    ];
+    labels.forEach(([label, x]) => page.drawText(label, {
+      x, y: top - 15, size: 6.3, font: bold, color: colors.darkMuted
+    }));
+    return top - height;
+  };
+
   const drawContinuationHeader = () => {
-    page.drawText(fitText(context.brandName.toUpperCase(), bold, 8, 240), {
-      x: PAGE_MARGIN, y: pageHeight - 35, size: 8, font: bold, color: colors.text
+    page.drawText(fitText(context.brandName.toUpperCase(), bold, 8.2, 240), {
+      x: PAGE_MARGIN, y: pageHeight - 34, size: 8.2, font: bold, color: colors.text
     });
-    const label = "FICHA DE TREINO";
+    const label = `FICHA DE TREINO - ${context.studentName.toUpperCase()}`;
     page.drawText(label, {
-      x: pageWidth - PAGE_MARGIN - bold.widthOfTextAtSize(label, 7), y: pageHeight - 35, size: 7, font: bold, color: colors.muted
+      x: pageWidth - PAGE_MARGIN - bold.widthOfTextAtSize(label, 6.5), y: pageHeight - 34, size: 6.5, font: bold, color: colors.muted
     });
-    page.drawText(fitText(context.title, bold, 15, pageWidth - PAGE_MARGIN * 2), {
-      x: PAGE_MARGIN, y: pageHeight - 59, size: 15, font: bold, color: colors.text
+    page.drawText(fitText(context.title, bold, 16, totalWidth), {
+      x: PAGE_MARGIN, y: pageHeight - 61, size: 16, font: bold, color: colors.text
+    });
+    page.drawText(fitText(context.focus, regular, 7.4, totalWidth), {
+      x: PAGE_MARGIN, y: pageHeight - 76, size: 7.4, font: regular, color: colors.muted
     });
     page.drawLine({
-      start: { x: PAGE_MARGIN, y: pageHeight - 74 }, end: { x: pageWidth - PAGE_MARGIN, y: pageHeight - 74 }, thickness: 0.7, color: colors.line
+      start: { x: PAGE_MARGIN, y: pageHeight - 88 }, end: { x: pageWidth - PAGE_MARGIN, y: pageHeight - 88 }, thickness: 0.7, color: colors.line
     });
-    page.drawText("EXERCÍCIOS", { x: PAGE_MARGIN, y: pageHeight - 98, size: 10, font: bold, color: colors.text });
-    y = pageHeight - 114;
+    page.drawText("CONTINUAÇÃO", { x: PAGE_MARGIN, y: pageHeight - 108, size: 6.4, font: bold, color: colors.muted });
+    y = drawTableHeader(pageHeight - 119);
   };
 
   const addPage = (continuation = false) => {
     page = pdfDoc.addPage(A4);
-    page.drawRectangle({ x: 0, y: pageHeight - 7, width: pageWidth, height: 7, color: colors.accent });
+    page.drawRectangle({ x: 0, y: pageHeight - 5, width: pageWidth, height: 5, color: colors.accent });
     y = pageHeight - PAGE_MARGIN;
     if (continuation) drawContinuationHeader();
   };
 
   const ensureSpace = (height) => {
-    if (y - height >= 58) return;
+    if (y - height >= 55) return;
     addPage(true);
   };
 
   addPage();
 
   const headerX = PAGE_MARGIN;
-  const headerWidth = pageWidth - PAGE_MARGIN * 2;
-  const headerHeight = 132;
-  const headerTop = pageHeight - 28;
+  const headerWidth = totalWidth;
+  const headerHeight = 129;
+  const headerTop = pageHeight - 24;
   const headerY = headerTop - headerHeight;
+  page.drawRectangle({ x: headerX, y: headerY, width: headerWidth, height: headerHeight, color: colors.dark });
+  page.drawRectangle({ x: headerX, y: headerY, width: 6, height: headerHeight, color: colors.accent });
   drawRoundedRect(page, {
-    x: headerX, y: headerY, width: headerWidth, height: headerHeight, radius: 16, color: { r: 0.09, g: 0.09, b: 0.105 }
-  });
-  page.drawEllipse({
-    x: pageWidth - PAGE_MARGIN - 60, y: headerTop - 60, xScale: 60, yScale: 60, color: colors.accent, opacity: 0.48
-  });
-  drawRoundedRect(page, {
-    x: PAGE_MARGIN + 18, y: headerTop - 45, width: 30, height: 30, radius: 9, color: accentRaw
+    x: PAGE_MARGIN + 21, y: headerTop - 43, width: 27, height: 27, radius: 6, color: accentRaw
   });
   page.drawText(cleanText(context.brandName[0], "F").toUpperCase(), {
-    x: PAGE_MARGIN + 28, y: headerTop - 35, size: 11, font: bold, color: colors.white
+    x: PAGE_MARGIN + 30, y: headerTop - 34, size: 10, font: bold, color: colors.white
   });
-  page.drawText(fitText(context.brandName.toUpperCase(), bold, 8.4, 230), {
-    x: PAGE_MARGIN + 58, y: headerTop - 28, size: 8.4, font: bold, color: colors.white
+  page.drawText(fitText(context.brandName.toUpperCase(), bold, 8, 230), {
+    x: PAGE_MARGIN + 58, y: headerTop - 26, size: 8, font: bold, color: colors.white
   });
-  page.drawText(fitText(`${context.coachName} • ${context.coachRole}`, regular, 7.2, 260), {
-    x: PAGE_MARGIN + 58, y: headerTop - 42, size: 7.2, font: regular, color: colors.darkMuted
+  page.drawText(fitText(`${context.coachName} - ${context.coachRole}`, regular, 6.8, 280), {
+    x: PAGE_MARGIN + 58, y: headerTop - 39, size: 6.8, font: regular, color: colors.darkMuted
   });
   const documentLabel = "FICHA DE TREINO";
   page.drawText(documentLabel, {
-    x: pageWidth - PAGE_MARGIN - 18 - bold.widthOfTextAtSize(documentLabel, 7.1), y: headerTop - 30, size: 7.1, font: bold, color: colors.darkMuted
+    x: pageWidth - PAGE_MARGIN - 20 - bold.widthOfTextAtSize(documentLabel, 6.8), y: headerTop - 28, size: 6.8, font: bold, color: colors.darkMuted
   });
-  page.drawText(fitText(context.focus.toUpperCase(), bold, 7, headerWidth - 36), {
-    x: PAGE_MARGIN + 18, y: headerTop - 70, size: 7, font: bold, color: colors.darkMuted
+  page.drawText(fitText(context.focus.toUpperCase(), bold, 6.6, headerWidth - 44), {
+    x: PAGE_MARGIN + 21, y: headerTop - 67, size: 6.6, font: bold, color: colors.darkMuted
   });
-  const titleLines = breakLines(context.title, bold, 20, headerWidth - 36, 2);
+  const titleLines = breakLines(context.title, bold, 22, headerWidth - 44, 2);
   titleLines.forEach((line, index) => page.drawText(line, {
-    x: PAGE_MARGIN + 18, y: headerTop - 94 - index * 22, size: 20, font: bold, color: colors.white
+    x: PAGE_MARGIN + 21, y: headerTop - 94 - index * 23, size: 22, font: bold, color: colors.white
   }));
 
-  y = headerY - 15;
+  y = headerY - 13;
 
-  const metaGap = 7;
-  const metaHeight = 49;
-  const totalWidth = pageWidth - PAGE_MARGIN * 2;
-  const usableMetaWidth = totalWidth - metaGap * 3;
-  const metaWidths = [usableMetaWidth * 0.29, usableMetaWidth * 0.29, usableMetaWidth * 0.17, usableMetaWidth * 0.25];
+  const metaHeight = 57;
+  const metaWidths = [totalWidth * 0.29, totalWidth * 0.27, totalWidth * 0.17, totalWidth * 0.27];
   const metas = [
     ["ALUNO", context.studentName],
     ["PROFESSOR", context.coachName],
     ["DURAÇÃO", context.duration],
     ["OBJETIVO", context.goal]
   ];
+  page.drawRectangle({ x: PAGE_MARGIN, y: y - metaHeight, width: totalWidth, height: metaHeight, color: colors.soft });
   let metaX = PAGE_MARGIN;
   metas.forEach(([label, value], index) => {
-    drawRoundedRect(page, { x: metaX, y: y - metaHeight, width: metaWidths[index], height: metaHeight, radius: 10, color: { r: 0.97, g: 0.97, b: 0.976 } });
-    page.drawText(label, { x: metaX + 12, y: y - 14, size: 6.2, font: bold, color: colors.muted });
-    page.drawText(fitText(value, bold, 9, metaWidths[index] - 24), { x: metaX + 12, y: y - 31, size: 9, font: bold, color: colors.text });
-    metaX += metaWidths[index] + metaGap;
+    if (index > 0) page.drawLine({
+      start: { x: metaX, y: y - metaHeight + 12 }, end: { x: metaX, y: y - 12 }, thickness: 0.55, color: colors.line
+    });
+    page.drawText(label, { x: metaX + 12, y: y - 17, size: 5.9, font: bold, color: colors.muted });
+    page.drawText(fitText(value, bold, 9, metaWidths[index] - 24), { x: metaX + 12, y: y - 36, size: 9, font: bold, color: colors.text });
+    metaX += metaWidths[index];
   });
-  y -= metaHeight + 22;
+  y -= metaHeight + 20;
 
   const totalSets = context.exercises.reduce((sum, exercise) => sum + parsePrescription(exercise.prescription).sets, 0);
-  page.drawText("EXERCÍCIOS", { x: PAGE_MARGIN, y, size: 11, font: bold, color: colors.text });
-  const countLabel = `${context.exercises.length} exercícios • ${totalSets} séries`;
-  const countWidth = regular.widthOfTextAtSize(countLabel, 7.5) + 18;
-  drawRoundedRect(page, {
-    x: pageWidth - PAGE_MARGIN - countWidth, y: y - 5, width: countWidth, height: 19, radius: 9.5, color: { r: 0.955, g: 0.955, b: 0.963 }
-  });
+  page.drawText("PLANO DE EXERCÍCIOS", { x: PAGE_MARGIN, y, size: 10.5, font: bold, color: colors.text });
+  const countLabel = `${context.exercises.length} exercícios - ${totalSets} séries`;
   page.drawText(countLabel, {
-    x: pageWidth - PAGE_MARGIN - countWidth + 9, y: y + 1.5, size: 7.5, font: regular, color: colors.muted
+    x: pageWidth - PAGE_MARGIN - regular.widthOfTextAtSize(countLabel, 7.2), y: y + 0.5, size: 7.2, font: regular, color: colors.muted
   });
-  y -= 17;
+  y = drawTableHeader(y - 12);
 
   for (let index = 0; index < context.exercises.length; index += 1) {
     const exercise = context.exercises[index] || {};
-    const guidanceLines = breakLines(exerciseGuidance(exercise), regular, 7.2, totalWidth - 93, 2);
-    const cardHeight = 60 + guidanceLines.length * 10;
-    ensureSpace(cardHeight + 7);
-    const cardY = y - cardHeight;
-    drawRoundedRect(page, { x: PAGE_MARGIN, y: cardY, width: totalWidth, height: cardHeight, radius: 11, color: { r: 0.992, g: 0.992, b: 0.996 } });
-    drawRoundedRect(page, { x: PAGE_MARGIN + 9, y: cardY + 9, width: 3, height: cardHeight - 18, radius: 1.5, color: accentRaw });
-    drawRoundedRect(page, { x: PAGE_MARGIN + 20, y: y - 40, width: 29, height: 29, radius: 8, color: colors.accentSoft });
-    const number = String(index + 1).padStart(2, "0");
-    page.drawText(number, { x: PAGE_MARGIN + 28.5, y: y - 30, size: 8.2, font: bold, color: colors.accent });
-    page.drawText(fitText(exercise.name || `Exercício ${index + 1}`, bold, 10.2, 270), {
-      x: PAGE_MARGIN + 61, y: y - 20, size: 10.2, font: bold, color: colors.text
+    const guidanceLines = breakLines(exerciseGuidance(exercise), regular, 6.8, totalWidth - 58, 2);
+    const rowHeight = 49 + guidanceLines.length * 9;
+    ensureSpace(rowHeight);
+    const rowY = y - rowHeight;
+    if (index % 2 === 1) page.drawRectangle({ x: PAGE_MARGIN, y: rowY, width: totalWidth, height: rowHeight, color: colors.rowAlternate });
+    page.drawLine({
+      start: { x: PAGE_MARGIN, y: rowY }, end: { x: pageWidth - PAGE_MARGIN, y: rowY }, thickness: 0.45, color: colors.line
     });
-    page.drawText(fitText(exercise.target || "Personalizado", regular, 7.3, 250), {
-      x: PAGE_MARGIN + 61, y: y - 35, size: 7.3, font: regular, color: colors.muted
+    drawRoundedRect(page, { x: columns.number - 4, y: y - 34, width: 25, height: 25, radius: 5, color: colors.accentSoft });
+    const number = String(index + 1).padStart(2, "0");
+    page.drawText(number, { x: columns.number + 2, y: y - 25.5, size: 7.4, font: bold, color: colors.accent });
+    page.drawText(fitText(exercise.name || `Exercício ${index + 1}`, bold, 9.4, 225), {
+      x: columns.exercise, y: y - 18, size: 9.4, font: bold, color: colors.text
+    });
+    page.drawText(fitText(exercise.target || "Personalizado", regular, 6.6, 220), {
+      x: columns.exercise, y: y - 32, size: 6.6, font: regular, color: colors.muted
     });
     const prescription = parsePrescription(exercise.prescription).display;
-    page.drawText(prescription, {
-      x: pageWidth - PAGE_MARGIN - 15 - bold.widthOfTextAtSize(prescription, 12.5), y: y - 20, size: 12.5, font: bold, color: colors.text
+    page.drawText(fitText(prescription, bold, 10, 68), {
+      x: columns.prescription, y: y - 22, size: 10, font: bold, color: colors.text
     });
-    const detail = exerciseDetail(exercise);
-    if (detail) page.drawText(fitText(detail, regular, 6.8, 190), {
-      x: pageWidth - PAGE_MARGIN - 15 - regular.widthOfTextAtSize(fitText(detail, regular, 6.8, 190), 6.8),
-      y: y - 35, size: 6.8, font: regular, color: colors.muted
+    const rest = cleanText(exercise.rest, "-");
+    page.drawText(fitText(rest, regular, 7.2, 54), {
+      x: columns.rest, y: y - 22, size: 7.2, font: regular, color: colors.text
+    });
+    const tempo = cleanText(exercise.tempo);
+    const rir = cleanText(exercise.rir);
+    page.drawText(fitText(tempo ? `Cad. ${tempo}` : "Cad. -", regular, 6.6, 82), {
+      x: columns.control, y: y - 17, size: 6.6, font: regular, color: colors.text
+    });
+    page.drawText(fitText(rir ? (/^rir\b/i.test(rir) ? rir : `RIR ${rir}`) : "RIR -", regular, 6.6, 82), {
+      x: columns.control, y: y - 30, size: 6.6, font: regular, color: colors.muted
     });
     guidanceLines.forEach((line, lineIndex) => page.drawText(line, {
-      x: PAGE_MARGIN + 61, y: y - 51 - lineIndex * 10, size: 7.2, font: regular, color: colors.muted
+      x: columns.exercise, y: y - 45 - lineIndex * 9, size: 6.8, font: regular, color: colors.muted
     }));
-    y = cardY - 7;
+    y = rowY;
   }
 
-  ensureSpace(48);
-  y -= 3;
-  page.drawText("PRESCRIÇÃO", { x: PAGE_MARGIN, y, size: 6.4, font: bold, color: colors.muted });
-  page.drawText(fitText(context.coachName, bold, 9.5, 260), { x: PAGE_MARGIN, y: y - 16, size: 9.5, font: bold, color: colors.text });
-  page.drawText(fitText(context.coachRole, regular, 7.4, 260), { x: PAGE_MARGIN, y: y - 29, size: 7.4, font: regular, color: colors.muted });
+  ensureSpace(58);
+  y -= 18;
+  page.drawLine({
+    start: { x: PAGE_MARGIN, y }, end: { x: pageWidth - PAGE_MARGIN, y }, thickness: 1.1, color: colors.accent
+  });
+  page.drawText("PRESCRIÇÃO RESPONSÁVEL", { x: PAGE_MARGIN, y: y - 17, size: 6.2, font: bold, color: colors.muted });
+  page.drawText(fitText(context.coachName, bold, 9.2, 260), { x: PAGE_MARGIN, y: y - 34, size: 9.2, font: bold, color: colors.text });
+  page.drawText(fitText(context.coachRole, regular, 7, 260), { x: PAGE_MARGIN, y: y - 47, size: 7, font: regular, color: colors.muted });
   const generated = `Gerado em ${new Intl.DateTimeFormat("pt-BR").format(context.generatedAt)}`;
   page.drawText(generated, {
-    x: pageWidth - PAGE_MARGIN - regular.widthOfTextAtSize(generated, 7.4), y: y - 16, size: 7.4, font: regular, color: colors.muted
+    x: pageWidth - PAGE_MARGIN - regular.widthOfTextAtSize(generated, 7), y: y - 34, size: 7, font: regular, color: colors.muted
   });
 
   const pages = pdfDoc.getPages();
@@ -312,16 +334,16 @@ export const createWorkoutPdf = async (sourceContext = {}) => {
     currentPage.drawLine({
       start: { x: PAGE_MARGIN, y: footerY + 15 }, end: { x: pageWidth - PAGE_MARGIN, y: footerY + 15 }, thickness: 0.55, color: colors.line
     });
-    currentPage.drawText(fitText(`${context.coachName} • ${context.coachRole}`, regular, 7.5, 280), {
-      x: PAGE_MARGIN, y: footerY, size: 7.5, font: regular, color: colors.muted
+    currentPage.drawText(fitText(`${context.coachName} - ${context.coachRole}`, regular, 7, 285), {
+      x: PAGE_MARGIN, y: footerY, size: 7, font: regular, color: colors.muted
     });
-    const pageLabel = `${context.brandName} • Página ${index + 1} de ${pages.length}`;
+    const pageLabel = `${context.brandName} - Página ${index + 1} de ${pages.length}`;
     currentPage.drawText(pageLabel, {
-      x: pageWidth - PAGE_MARGIN - regular.widthOfTextAtSize(pageLabel, 7.5), y: footerY, size: 7.5, font: regular, color: colors.muted
+      x: pageWidth - PAGE_MARGIN - regular.widthOfTextAtSize(pageLabel, 7), y: footerY, size: 7, font: regular, color: colors.muted
     });
   });
 
-  pdfDoc.setTitle(`${context.title} — ${context.studentName}`);
+  pdfDoc.setTitle(`${context.title} - ${context.studentName}`);
   pdfDoc.setAuthor(context.coachName);
   pdfDoc.setSubject("Ficha de treino");
   pdfDoc.setCreator("FlowFit");

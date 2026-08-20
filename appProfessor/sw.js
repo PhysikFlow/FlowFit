@@ -1,17 +1,17 @@
-const CACHE_NAME = "flowfit-professor-v64";
+const CACHE_NAME = "flowfit-professor-v65";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./css/app.css?v=build-20260820-1",
-  "./js/app.js?v=build-20260820-2",
+  "./js/app.js?v=build-20260820-3",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/core/navigation.js?v=build-20260816-1",
   "./js/screens/dashboard/dashboard-screen.js?v=build-20260816-1",
   "./js/screens/appearance/local-assets-editor.js?v=build-20260818-1",
   "./js/screens/workouts/workouts-screen.js?v=build-20260816-1",
-  "./js/pdf/workout-pdf-exporter.js?v=build-20260820-1",
-  "./js/pdf/workout-pdf-generator.js?v=build-20260820-1",
+  "./js/pdf/workout-pdf-exporter.js?v=build-20260820-2",
+  "./js/pdf/workout-pdf-generator.js?v=build-20260820-2",
   "./js/screens/students/students-screen.js?v=build-20260816-3",
   "./js/state/view-state.js?v=build-20260816-1",
   "./js/utils/formatters.js?v=build-20260816-1",

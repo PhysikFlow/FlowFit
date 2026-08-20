@@ -17,7 +17,7 @@ import { initAvailabilityCalendar } from "./screens/agenda/availability-calendar
 import { initExceptionsCard } from "./screens/agenda/exceptions-card.js?v=build-20260818-3";
 import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=build-20260816-1";
 import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260816-3";
-import { createWorkoutPdfExporter } from "./pdf/workout-pdf-exporter.js?v=build-20260820-1";
+import { createWorkoutPdfExporter } from "./pdf/workout-pdf-exporter.js?v=build-20260820-2";
 import { escapeHtml, formatUpdatedAt, formatVolume, initialsFromName, normalizeEmail, normalizeSearch } from "./utils/formatters.js?v=build-20260816-1";
 import { createProfessorViewState } from "./state/view-state.js?v=build-20260816-1";
 import { createRefreshCoordinator } from "../../appAluno/js/core/refresh-coordinator.js?v=build-20260820-1";
