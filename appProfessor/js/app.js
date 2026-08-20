@@ -17,6 +17,7 @@ import { initAvailabilityCalendar } from "./screens/agenda/availability-calendar
 import { initExceptionsCard } from "./screens/agenda/exceptions-card.js?v=build-20260818-3";
 import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=build-20260816-1";
 import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260816-3";
+import { createWorkoutPdfExporter } from "./pdf/workout-pdf-exporter.js?v=build-20260820-1";
 import { escapeHtml, formatUpdatedAt, formatVolume, initialsFromName, normalizeEmail, normalizeSearch } from "./utils/formatters.js?v=build-20260816-1";
 import { createProfessorViewState } from "./state/view-state.js?v=build-20260816-1";
 
@@ -590,6 +591,28 @@ const getCoachPublicName = () => authContext?.profile?.name
   || authContext?.user?.user_metadata?.display_name
   || authContext?.email
   || "seu personal";
+
+const workoutPdfExporter = createWorkoutPdfExporter({
+  getContext: (workout) => {
+    const student = students.find((item) => item.id === workout.studentId)
+      || students.find((item) => item.studentKey === workout.studentKey)
+      || { name: workout.owner };
+    const profile = authContext?.profile || {};
+    const theme = normalizeBrandTheme(readTheme());
+    return {
+      workout,
+      student,
+      brandName: theme.brandName,
+      coachName: getCoachPublicName(),
+      coachRole: profile.headline || "Personal trainer",
+      coachCref: profile.cref || "",
+      accent: theme.accent,
+      generatedAt: new Date()
+    };
+  },
+  setStatus,
+  showToast
+});
 
 const buildInviteMessage = (student) => {
   if (!student?.inviteToken) return "";
@@ -2807,7 +2830,11 @@ document.addEventListener("click", async (event) => {
     const workoutId = workoutPdf.dataset.workoutPdf;
     const workout = workouts.find((item) => item.id === workoutId);
     workoutPdf.closest("details")?.removeAttribute("open");
-    showToast("Exportação para PDF em breve.");
+    if (!workout) {
+      showToast("Treino não encontrado para exportação.");
+      return;
+    }
+    workoutPdfExporter.open(workout);
     return;
   }
 

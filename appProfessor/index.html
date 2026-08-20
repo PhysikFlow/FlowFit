@@ -19,9 +19,9 @@
     <link rel="stylesheet" href="../appAluno/css/fonts.css?v=build-20260817-1" />
     <link rel="stylesheet" href="vendor/cropperjs/cropper.min.css?v=1.6.2" />
     <link rel="stylesheet" href="../appAluno/css/date-picker.css?v=build-20260819-1" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260818-3" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260820-1" />
     <script defer src="vendor/cropperjs/cropper.min.js?v=1.6.2"></script>
-    <script type="module" src="js/app.js?v=build-20260818-3"></script>
+    <script type="module" src="js/app.js?v=build-20260820-1"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title" aria-busy="true">
@@ -320,6 +320,40 @@
             </label>
             <button class="button button--block" type="submit">Criar cópia</button>
             <p class="form-status" data-duplicate-workout-status></p>
+          </form>
+        </dialog>
+
+        <dialog class="app-dialog workout-pdf-dialog" data-workout-pdf-dialog aria-labelledby="workout-pdf-dialog-title">
+          <form class="dialog-form workout-pdf-form" data-workout-pdf-form>
+            <button class="icon-button dialog-form__close" type="button" data-close-workout-pdf aria-label="Fechar exportação de PDF">×</button>
+            <span class="eyebrow">Exportar treino</span>
+            <h2 id="workout-pdf-dialog-title">Baixar ficha em PDF</h2>
+            <p class="workout-pdf-intro">O arquivo será montado com os dados atuais deste treino e baixado diretamente.</p>
+
+            <section class="workout-pdf-summary" aria-label="Resumo do PDF">
+              <header class="workout-pdf-summary__head">
+                <span class="workout-pdf-summary__mark" aria-hidden="true">PDF</span>
+                <div>
+                  <h3 data-workout-pdf-title>Treino</h3>
+                  <p><span data-workout-pdf-student>Aluno</span> · <span data-workout-pdf-focus>Prescrição personalizada</span></p>
+                </div>
+              </header>
+              <dl class="workout-pdf-summary__stats">
+                <div><dt>Exercícios</dt><dd data-workout-pdf-exercises>0</dd></div>
+                <div><dt>Séries</dt><dd data-workout-pdf-sets>0</dd></div>
+                <div><dt>Duração</dt><dd data-workout-pdf-duration>0 min</dd></div>
+              </dl>
+              <div class="workout-pdf-summary__file">
+                <span>Nome do arquivo</span>
+                <strong data-workout-pdf-file>treino-flowfit.pdf</strong>
+              </div>
+            </section>
+
+            <p class="form-status" data-workout-pdf-status aria-live="polite">Revise o resumo e baixe a ficha do treino.</p>
+            <footer class="workout-pdf-actions">
+              <button class="button button--quiet" type="button" data-close-workout-pdf>Cancelar</button>
+              <button class="button" type="submit" data-workout-pdf-download>Baixar PDF</button>
+            </footer>
           </form>
         </dialog>
 
