@@ -2326,6 +2326,7 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
     transition: transform 300ms var(--ease-out);
     overflow-y: auto;
     overscroll-behavior: contain;
+    touch-action: pan-y;
     padding: var(--space-4);
     border-right: 1px solid var(--border-subtle);
     background: var(--surface-overlay);

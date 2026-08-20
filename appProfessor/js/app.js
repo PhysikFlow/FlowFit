@@ -2026,6 +2026,106 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && isDrawerOpen) setDrawerOpen(false);
 });
 
+/* ── Swipe-to-open / swipe-to-close drawer ──────────────────── */
+(() => {
+  const EDGE_ZONE = 28;
+  const THRESHOLD = 50;
+  const DOMINANCE = 1.2;
+  let tracking = false;
+  let startX = 0;
+  let startY = 0;
+  let dx = 0;
+  let dirLocked = false;
+  let swiping = false;
+  let opening = false;
+  let sidebarWidth = 0;
+
+  const isInteractive = (el) => el.closest(
+    "input, textarea, select, button, a, [role=\"button\"], [data-nav], .workout-builder, dialog, details, .student-session-panel, .toast"
+  );
+
+  const measureSidebar = () => {
+    sidebarWidth = drawerSidebar?.getBoundingClientRect().width || 0;
+  };
+
+  document.addEventListener("touchstart", (event) => {
+    if (!drawerSidebar || window.matchMedia("(min-width: 761px)").matches) return;
+    const touch = event.touches[0];
+    if (isInteractive(touch.target)) return;
+
+    if (!isDrawerOpen && touch.clientX > EDGE_ZONE) return;
+
+    tracking = true;
+    startX = touch.clientX;
+    startY = touch.clientY;
+    dx = 0;
+    dirLocked = false;
+    swiping = false;
+    opening = false;
+    measureSidebar();
+  }, { passive: true });
+
+  document.addEventListener("touchmove", (event) => {
+    if (!tracking) return;
+    const touch = event.touches[0];
+    const rawDx = touch.clientX - startX;
+    const rawDy = touch.clientY - startY;
+
+    if (!dirLocked) {
+      if (Math.abs(rawDx) < 8 && Math.abs(rawDy) < 8) return;
+
+      const horizontalDominant = Math.abs(rawDx) > Math.abs(rawDy) * DOMINANCE;
+      const horizontalSwipe = isDrawerOpen
+        ? rawDx < 0 && horizontalDominant
+        : rawDx > 0 && horizontalDominant && startX < EDGE_ZONE;
+
+      if (!horizontalSwipe) {
+        tracking = false;
+        return;
+      }
+
+      dirLocked = true;
+      swiping = true;
+      opening = !isDrawerOpen;
+      if (opening) setDrawerOpen(true);
+      if (drawerSidebar) {
+        drawerSidebar.style.transition = "none";
+      }
+    }
+
+    if (!swiping) return;
+    event.preventDefault();
+
+    dx = touch.clientX - startX;
+    const offset = Math.max(-sidebarWidth, Math.min(0, dx));
+    drawerSidebar.style.transform = `translateX(${offset}px)`;
+  }, { passive: false });
+
+  const finishSwipe = () => {
+    if (!tracking) return;
+    tracking = false;
+    if (!swiping) return;
+    swiping = false;
+
+    if (drawerSidebar) {
+      drawerSidebar.style.transition = "";
+      drawerSidebar.style.transform = "";
+    }
+
+    const completeOpen = dx > THRESHOLD * 0.5 || dx > sidebarWidth * 0.35;
+    const completeClose = dx < -THRESHOLD * 0.5 || dx < -sidebarWidth * 0.35;
+
+    if (opening) {
+      setDrawerOpen(completeOpen);
+    } else {
+      setDrawerOpen(!completeClose);
+    }
+  };
+
+  document.addEventListener("touchend", finishSwipe, { passive: true });
+  document.addEventListener("touchcancel", finishSwipe, { passive: true });
+})();
+
 const syncSideNavEdgeFades = () => {
   if (!sideNav) return;
   const { scrollLeft, scrollWidth, clientWidth } = sideNav;
