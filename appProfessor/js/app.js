@@ -232,7 +232,7 @@ let authContext = null;
 let authAction = "signin";
 let authenticatedSessionDetected = false;
 let coachAccessTimer = null;
-let coachAccessRevalidationPromise = null;
+let panelBootstrapPromise = null;
 let authStateVersion = 0;
 let isSigningOut = false;
 let editingWorkoutId = "";
@@ -1930,6 +1930,7 @@ const openDuplicateWorkoutDialog = (workout) => {
 
 const closeDuplicateWorkoutDialog = () => {
   duplicateWorkoutSourceId = "";
+  duplicateWorkoutForm?.reset();
   if (duplicateWorkoutDialog?.open) duplicateWorkoutDialog.close();
 };
 
@@ -2970,11 +2971,22 @@ document.querySelector("[data-sign-out]")?.addEventListener("click", signOutProf
 document.querySelector("[data-profile-sign-out]")?.addEventListener("click", signOutProfessor);
 authGateSignOut?.addEventListener("click", signOutProfessor);
 
-const startAuthenticatedPanel = async () => {
+const startAuthenticatedPanel = async ({ mode = "bootstrap" } = {}) => {
+  if (isSigningOut) return false;
+  if (panelBootstrapPromise) return panelBootstrapPromise;
+
+  panelBootstrapPromise = startAuthenticatedPanelInternal({ mode }).finally(() => {
+    panelBootstrapPromise = null;
+  });
+  return panelBootstrapPromise;
+};
+
+const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
+  const isRevalidate = mode === "revalidate";
   if (isSigningOut) return false;
   const stateVersion = authStateVersion;
   const isStale = () => isSigningOut || stateVersion !== authStateVersion;
-  setAuthChecking(true);
+  if (!isRevalidate) setAuthChecking(true);
   let session = null;
   try {
     session = await getSessionAfterAuthReturn();
@@ -3068,17 +3080,20 @@ const startAuthenticatedPanel = async () => {
   if (coachAccessMessage) coachAccessMessage.textContent = coachAccess.message || "Regularize o acesso para evitar uma suspensão.";
   setText("[data-auth-user]", authContext.email);
   if (authUser) authUser.title = authContext.email;
-  students = [];
-  workouts = [];
-  workoutSessions = [];
-  viewState.selectedStudentId = "";
-  renderAll();
+  if (!isRevalidate) {
+    students = [];
+    workouts = [];
+    workoutSessions = [];
+    viewState.selectedStudentId = "";
+    renderAll();
+  }
 
   const refreshResults = await Promise.allSettled([
     refreshStudents({ silent: true }),
     refreshPublishedWorkouts({ silent: true }),
     refreshWorkoutSessions({ silent: true })
   ]);
+  if (isStale()) return false;
   refreshResults.forEach((result, index) => {
     if (result.status === "rejected") {
       const resources = ["alunos", "treinos", "sessões"];
@@ -3086,10 +3101,14 @@ const startAuthenticatedPanel = async () => {
     }
   });
 
-  const pendingWorkoutDraft = Platform.storage.get(getWorkoutDraftStorageKey(), null);
-  if (pendingWorkoutDraft?.builderOpen && pendingWorkoutDraft.savedAt !== restoredWorkoutDraftSavedAt) {
-    restoreStoredWorkoutDraft({ open: true });
+  if (!isRevalidate) {
+    const pendingWorkoutDraft = Platform.storage.get(getWorkoutDraftStorageKey(), null);
+    if (pendingWorkoutDraft?.builderOpen && pendingWorkoutDraft.savedAt !== restoredWorkoutDraftSavedAt) {
+      restoreStoredWorkoutDraft({ open: true });
+    }
   }
+
+  if (isRevalidate) return true;
 
   let remote = null;
   try {
@@ -3097,6 +3116,7 @@ const startAuthenticatedPanel = async () => {
   } catch (error) {
     warnOptionalFeature("tema remoto", error);
   }
+  if (isStale()) return false;
   if (!remote) {
     publishedTheme = null;
     fillThemeInputs(DEFAULT_BRAND_THEME);
@@ -3108,7 +3128,7 @@ const startAuthenticatedPanel = async () => {
         : "Nenhuma aparência publicada. Ajuste as opções e publique.",
       migrated.some((result) => result?.synced) ? "synced" : ""
     );
-    return;
+    return true;
   }
   publishedTheme = remote;
   fillThemeInputs(remote);
@@ -3120,6 +3140,7 @@ const startAuthenticatedPanel = async () => {
       : "Aparência publicada carregada.",
     "synced"
   );
+  return true;
 };
 
 const boot = async () => {
@@ -3188,11 +3209,11 @@ const initializeOptionalPwaFeatures = () => {
 
 const revalidateCoachAccess = () => {
   if (isSigningOut || !authenticatedSessionDetected) return Promise.resolve(false);
-  if (coachAccessRevalidationPromise) return coachAccessRevalidationPromise;
-  coachAccessRevalidationPromise = startAuthenticatedPanel()
-    .catch((error) => rememberProfessorFailure("coach-access-revalidation", error))
-    .finally(() => { coachAccessRevalidationPromise = null; });
-  return coachAccessRevalidationPromise;
+  return startAuthenticatedPanel({ mode: "revalidate" })
+    .catch((error) => {
+      rememberProfessorFailure("coach-access-revalidation", error);
+      return false;
+    });
 };
 
 window.addEventListener("focus", () => revalidateCoachAccess());
