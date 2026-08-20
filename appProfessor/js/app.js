@@ -43,6 +43,7 @@ const textHexInput = document.querySelector("[data-text-hex]");
 const fontInput = document.querySelector("[data-font-input]");
 const radiusInput = document.querySelector("[data-radius-input]");
 const backgroundStyleInput = document.querySelector("[data-background-style-input]");
+const backdropBlurInput = document.querySelector("[data-backdrop-blur-input]");
 const logoInput = document.querySelector("[data-logo-input]");
 const logoFrameInput = document.querySelector("[data-logo-frame-input]");
 const photoInput = document.querySelector("[data-photo-input]");
@@ -1967,6 +1968,17 @@ const applyTheme = (overrides = {}) => {
 };
 
 let agendaCalendarReady = false;
+const BACKDROP_BLUR_KEY = "flowfit-professor-backdrop-blur";
+const applyBackdropBlurPreference = () => {
+  const enabled = Platform.storage.get(BACKDROP_BLUR_KEY, true);
+  document.body.classList.toggle("no-backdrop-blur", !enabled);
+  if (backdropBlurInput) {
+    backdropBlurInput.checked = enabled;
+    backdropBlurInput.setAttribute("aria-checked", String(enabled));
+  }
+};
+applyBackdropBlurPreference();
+
 const renderAll = () => {
   renderIcons();
   renderCoachProfile();
@@ -2386,6 +2398,13 @@ themePaletteModeButtons.forEach((button) => button.addEventListener("click", () 
   themePaletteMode = button.dataset.themePaletteMode === "light" ? "light" : "dark";
   renderThemePalettes();
 }));
+
+backdropBlurInput?.addEventListener("change", () => {
+  const enabled = backdropBlurInput.checked;
+  backdropBlurInput.setAttribute("aria-checked", String(enabled));
+  Platform.storage.set(BACKDROP_BLUR_KEY, enabled);
+  document.body.classList.toggle("no-backdrop-blur", !enabled);
+});
 
 colorHexPairs.forEach(([color, hex]) => {
   const syncFromColor = () => {

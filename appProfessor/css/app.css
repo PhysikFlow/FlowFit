@@ -3266,6 +3266,15 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   backdrop-filter: blur(3px);
 }
 
+/* Performance toggle: remove heavy fullscreen backdrop blurs */
+body.no-backdrop-blur .app-dialog::backdrop,
+body.no-backdrop-blur .student-session-backdrop:not([hidden]) {
+  backdrop-filter: none;
+}
+body.no-backdrop-blur .student-session-panel__head {
+  backdrop-filter: none;
+}
+
 .dialog-form {
   position: relative;
   display: grid;
