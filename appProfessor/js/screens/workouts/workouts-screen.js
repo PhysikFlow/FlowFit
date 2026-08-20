@@ -62,6 +62,7 @@ export const createWorkoutsScreen = ({
               <summary class="icon-button" aria-label="Mais ações para ${escapeHtml(workout.title)}">•••</summary>
               <div class="action-menu__popover action-menu__popover--end">
                 <button type="button" data-workout-duplicate="${escapeHtml(workout.id)}">Duplicar treino</button>
+                <button type="button" data-workout-pdf="${escapeHtml(workout.id)}">PDF</button>
                 <button class="is-danger" type="button" data-workout-archive="${escapeHtml(workout.id)}">Arquivar</button>
               </div>
             </details>

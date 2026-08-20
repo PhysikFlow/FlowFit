@@ -2800,6 +2800,15 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const workoutPdf = event.target.closest("[data-workout-pdf]");
+  if (workoutPdf) {
+    const workoutId = workoutPdf.dataset.workoutPdf;
+    const workout = workouts.find((item) => item.id === workoutId);
+    workoutPdf.closest("details")?.removeAttribute("open");
+    showToast("Exportação para PDF em breve.");
+    return;
+  }
+
   const workoutArchive = event.target.closest("[data-workout-archive]");
   if (workoutArchive) {
     const workout = workouts.find((item) => item.id === workoutArchive.dataset.workoutArchive);
@@ -2817,6 +2826,23 @@ document.addEventListener("click", async (event) => {
     applyPublishedWorkouts(workouts.filter((item) => item.id !== workout.id));
     setWorkoutSyncStatus("Treino arquivado. O histórico do aluno foi preservado.", "synced");
     showToast("Treino arquivado.");
+  }
+});
+
+// ── Close action menus on outside click ──────────────────────
+document.addEventListener("click", (event) => {
+  const clickedMenu = event.target.closest(".action-menu");
+  document.querySelectorAll(".action-menu[open]").forEach((openMenu) => {
+    if (!clickedMenu || !openMenu.contains(clickedMenu)) {
+      openMenu.removeAttribute("open");
+    }
+  });
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    document.querySelectorAll(".action-menu[open]").forEach((openMenu) => {
+      openMenu.removeAttribute("open");
+    });
   }
 });
 
