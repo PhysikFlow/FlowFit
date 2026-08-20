@@ -1999,6 +1999,33 @@ navItems.forEach((item) => item.addEventListener("click", (event) => {
   navigate(item.dataset.nav);
 }));
 
+/* ── Mobile drawer sidebar ─────────────────────────────────────── */
+const drawerSidebar = document.querySelector(".sidebar");
+const drawerBackdrop = document.querySelector("[data-drawer-backdrop]");
+const drawerToggle = document.querySelector("[data-drawer-toggle]");
+let isDrawerOpen = false;
+
+const setDrawerOpen = (open) => {
+  isDrawerOpen = Boolean(open);
+  drawerSidebar?.classList.toggle("is-open", isDrawerOpen);
+  if (drawerBackdrop) drawerBackdrop.hidden = !isDrawerOpen;
+  drawerToggle?.setAttribute("aria-expanded", String(isDrawerOpen));
+  document.body.classList.toggle("is-drawer-open", isDrawerOpen);
+};
+
+drawerToggle?.addEventListener("click", () => setDrawerOpen(!isDrawerOpen));
+drawerBackdrop?.addEventListener("click", () => setDrawerOpen(false));
+
+drawerSidebar?.addEventListener("click", (event) => {
+  if (event.target.closest("[data-nav]")) {
+    window.setTimeout(() => setDrawerOpen(false), 80);
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && isDrawerOpen) setDrawerOpen(false);
+});
+
 const syncSideNavEdgeFades = () => {
   if (!sideNav) return;
   const { scrollLeft, scrollWidth, clientWidth } = sideNav;

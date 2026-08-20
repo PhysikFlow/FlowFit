@@ -58,6 +58,11 @@ const iconPaths = {
     '<path d="M4 12h.01" />',
     '<path d="M4 18h.01" />'
   ],
+  menu: [
+    '<path d="M4 7h16" />',
+    '<path d="M4 12h16" />',
+    '<path d="M4 17h16" />'
+  ],
   message: [
     '<path d="M5 5h14v10H8l-3 4V5Z" />'
   ],
