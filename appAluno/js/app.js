@@ -4,10 +4,10 @@ import { Theme } from "./core/theme.js?v=build-20260818-1";
 import { svgIcon } from "./core/icons.js?v=build-20260810-7";
 import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260818-1";
 import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260812-6";
-import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260813-2";
-import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260818-1";
-import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260813-2";
-import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260813-1";
+import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260820-1";
+import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260820-1";
+import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260820-1";
+import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260820-1";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "./components/custom-select.js?v=build-20260816-1";
 import { initRunnerWheelPickers } from "./components/wheel-picker.js?v=build-20260816-2";
@@ -20,6 +20,7 @@ import { createHomeScreen } from "./screens/home/home-screen.js?v=build-20260818
 import { createNotificationsScreen } from "./screens/notifications/notifications-screen.js?v=build-20260816-1";
 import { createStudentAppState } from "./state/app-state.js?v=build-20260816-1";
 import { createWorkoutSessionState } from "./state/workout-session-state.js?v=build-20260816-1";
+import { createRefreshCoordinator } from "./core/refresh-coordinator.js?v=build-20260820-1";
 import {
   escapeHtml, formatClock, formatMonthYear, formatSetPerformance,
   formatWorkoutDuration, formatWorkoutElapsed, parseLoadKg, parseReps,
@@ -123,6 +124,14 @@ const appState = createStudentAppState({ emptyStudent, emptyWorkout });
 const PENDING_INVITE_KEY = "flowfit.pending-student-invite";
 const ACTIVE_STUDENT_KEY = "flowfit.active-student";
 const ACTIVE_WORKOUT_KEY = "flowfit.active-workout";
+const STUDENT_REFRESH_MAX_AGE = Object.freeze({
+  theme: 10 * 60_000,
+  workouts: 2 * 60_000,
+  sessions: 5 * 60_000
+});
+const studentRefresh = createRefreshCoordinator();
+let runtimeAuthContext = null;
+let foregroundRefreshPromise = null;
 
 const getInviteContext = () => {
   try {
@@ -489,22 +498,40 @@ const syncBrandAssets = () => {
 
 const applyPublishedBrandTheme = async () => {
   try {
-    const remote = await themeRepository.fetchBrandTheme(appState.currentStudent?.coachId || "");
+    const remote = await themeRepository.fetchBrandTheme(appState.currentStudent?.coachId || "", {
+      authContext: runtimeAuthContext
+    });
     if (!remote?.accent || !remote?.brandName) {
       Theme.reset();
       syncThemeControls();
-      return;
+      return remote;
     }
     Theme.apply(remote);
     syncThemeControls();
+    return remote;
   } catch {
     // Mantem o tema local atual se o repositório remoto/cache falhar.
+    return undefined;
   }
 };
 
-const refreshPublishedWorkout = async ({ silent = false } = {}) => {
+const applyCachedBrandTheme = async () => {
+  try {
+    const cached = await themeRepository.getCachedBrandTheme(appState.currentStudent?.coachId || "", {
+      authContext: runtimeAuthContext
+    });
+    if (cached?.accent && cached?.brandName) {
+      Theme.apply(cached);
+      syncThemeControls();
+    }
+    return cached;
+  } catch {
+    return null;
+  }
+};
+
+const applyPublishedWorkoutResult = (result, { silent = false, forceRender = false } = {}) => {
   const previousWorkoutId = appState.currentWorkout.id;
-  const result = await workoutRepository.fetchWorkoutsForCurrentStudent(appState.currentStudent);
   appState.availableWorkouts = result.workouts || [];
   appState.upcomingWorkouts = result.upcomingWorkouts || [];
   const preferredWorkoutId = Platform.storage.get(`${ACTIVE_WORKOUT_KEY}:${appState.currentStudent.id}`, "");
@@ -522,8 +549,20 @@ const refreshPublishedWorkout = async ({ silent = false } = {}) => {
     setClickLocks.clear();
     if (!silent && appState.currentWorkout.id !== emptyWorkout.id) Platform.notify("Seu personal publicou um novo treino.");
   }
-  if (changed || result.synced) renderAll();
+  if (forceRender || changed || result.synced) renderAll();
   return result;
+};
+
+const hydratePublishedWorkoutFromCache = () => applyPublishedWorkoutResult(
+  workoutRepository.listWorkoutsForCurrentStudent(appState.currentStudent),
+  { silent: true, forceRender: true }
+);
+
+const refreshPublishedWorkout = async ({ silent = false } = {}) => {
+  const result = await workoutRepository.fetchWorkoutsForCurrentStudent(appState.currentStudent, {
+    authContext: runtimeAuthContext
+  });
+  return applyPublishedWorkoutResult(result, { silent });
 };
 
 const syncOnboarding = () => {
@@ -1454,14 +1493,33 @@ const refreshStudentSessionHistory = async () => {
   const result = await sessionRepository.fetchStudentSessions({
     studentId: appState.currentStudent.id,
     coachId: appState.currentStudent.coachId,
-    limit: 30
+    limit: 30,
+    authContext: runtimeAuthContext
   });
   appState.previousSessions = result.sessions || [];
   Store.setSessions(appState.previousSessions);
   return result;
 };
 
+const refreshStudentRemoteData = ({ force = false } = {}) => Promise.allSettled([
+  studentRefresh.run("theme", applyPublishedBrandTheme, {
+    force,
+    maxAgeMs: STUDENT_REFRESH_MAX_AGE.theme,
+    isSuccess: (value) => value !== undefined
+  }),
+  studentRefresh.run("workouts", () => refreshPublishedWorkout({ silent: true }), {
+    force,
+    maxAgeMs: STUDENT_REFRESH_MAX_AGE.workouts
+  }),
+  studentRefresh.run("sessions", refreshStudentSessionHistory, {
+    force,
+    maxAgeMs: STUDENT_REFRESH_MAX_AGE.sessions
+  })
+]);
+
 const startAuthenticatedApp = async () => {
+  runtimeAuthContext = null;
+  studentRefresh.invalidate();
   setAuthChecking(true);
   const session = await authRepository.getSession();
   if (!session?.user) {
@@ -1567,6 +1625,7 @@ const startAuthenticatedApp = async () => {
     setAuthStatus("A conta autenticada não tem permissão para acessar a área do aluno.", "warning");
     return false;
   }
+  runtimeAuthContext = authContext;
 
   const studentResult = linkedStudentResult || await studentRepository.fetchCurrentStudent({
     preferredStudentId: claimedStudentId
@@ -1595,14 +1654,18 @@ const startAuthenticatedApp = async () => {
   await activateStudentStore();
 
   appState.currentWorkout = emptyWorkout;
-  await applyPublishedBrandTheme();
-  await refreshPublishedWorkout({ silent: true });
-  await refreshStudentSessionHistory();
-  const retriedSessions = await retryPendingSessions();
+  appState.previousSessions = Store.state.sessions || [];
+  studentRefresh.invalidate();
+  await applyCachedBrandTheme();
+  hydratePublishedWorkoutFromCache();
   renderAll();
   syncOnboarding();
   setAuthChecking(false);
   navigate(location.hash.slice(1) || "home", false);
+
+  await refreshStudentRemoteData({ force: true });
+  const retriedSessions = await retryPendingSessions();
+  renderAll();
 
   if (studentResult.multiple) {
     setAuthStatus("Acesso ativo. No perfil, toque no card do personal para alternar.", "synced");
@@ -1619,7 +1682,8 @@ const startAuthenticatedApp = async () => {
 const switchStudentAccess = async (studentId) => {
   const student = appState.studentAccesses.find((item) => item.id === studentId);
   if (!student || student.id === appState.currentStudent.id) return;
-  const authContext = await authRepository.getAuthContext();
+  const authContext = runtimeAuthContext || await authRepository.getAuthContext();
+  runtimeAuthContext = authContext;
   appState.currentStudent = toRuntimeStudent(student, authContext);
   Platform.storage.set(`${ACTIVE_STUDENT_KEY}:${authContext?.user?.id || "user"}`, appState.currentStudent.id);
   await activateStudentStore();
@@ -1628,9 +1692,16 @@ const switchStudentAccess = async (studentId) => {
   appState.currentWorkout = emptyWorkout;
   focusedExerciseId = "";
   setClickLocks.clear();
-  await applyPublishedBrandTheme();
-  await refreshPublishedWorkout({ silent: true });
-  await refreshStudentSessionHistory();
+  studentRefresh.invalidate();
+  await applyCachedBrandTheme();
+  hydratePublishedWorkoutFromCache();
+  appState.previousSessions = sessionRepository.listCachedSessions({
+    studentId: appState.currentStudent.id,
+    coachId: appState.currentStudent.coachId
+  });
+  Store.setSessions(appState.previousSessions);
+  renderAll();
+  await refreshStudentRemoteData({ force: true });
   const retriedSessions = await retryPendingSessions();
   renderAll();
   if (retriedSessions > 0) {
@@ -2361,6 +2432,9 @@ onboardingForm?.addEventListener("submit", async (event) => {
 
 const signOut = async () => {
   await authRepository.signOut();
+  runtimeAuthContext = null;
+  foregroundRefreshPromise = null;
+  studentRefresh.invalidate();
   activateAnonymousStore();
   Theme.reset();
   appState.currentStudent = emptyStudent;
@@ -2403,26 +2477,36 @@ window.addEventListener("resize", () => {
 window.addEventListener("app:notify", (event) => showToast(event.detail));
 window.addEventListener("app:theme", syncThemeControls);
 window.addEventListener("storage", (event) => {
-  if (event.key?.startsWith(REMOTE_THEME_KEY) || event.key === LEGACY_REMOTE_THEME_KEY) applyPublishedBrandTheme();
+  if (event.key?.startsWith(REMOTE_THEME_KEY) || event.key === LEGACY_REMOTE_THEME_KEY) {
+    applyCachedBrandTheme();
+    studentRefresh.markFresh("theme");
+  }
   if (event.key === LOCAL_BRAND_ASSETS_KEY) syncBrandAssets();
   if (event.key === PUBLISHED_WORKOUTS_KEY) {
-    refreshPublishedWorkout();
+    hydratePublishedWorkoutFromCache();
+    studentRefresh.markFresh("workouts");
   }
 });
 
-let foregroundRefreshAt = 0;
 const refreshOnForeground = async () => {
-  if (!Store.state.onboarded || !appState.currentStudent?.coachId || Date.now() - foregroundRefreshAt < 1500) return;
-  foregroundRefreshAt = Date.now();
-  await applyPublishedBrandTheme();
-  await refreshPublishedWorkout({ silent: true });
-  await refreshStudentSessionHistory();
-  const retriedSessions = await retryPendingSessions();
-  if (retriedSessions > 0) {
-    renderAll();
-    if (!workoutRunner.hidden) renderWorkoutRunner();
-    Platform.notify(`${retriedSessions} ${retriedSessions === 1 ? "treino pendente enviado" : "treinos pendentes enviados"}.`);
-  }
+  if (!Store.state.onboarded || !appState.currentStudent?.coachId) return false;
+  if (foregroundRefreshPromise) return foregroundRefreshPromise;
+  foregroundRefreshPromise = (async () => {
+    const remoteResults = await refreshStudentRemoteData();
+    const refreshed = remoteResults.some((result) => result.status === "fulfilled" && result.value?.executed);
+    const retriedSessions = await retryPendingSessions();
+    if (refreshed || retriedSessions > 0) {
+      renderAll();
+      if (!workoutRunner.hidden) renderWorkoutRunner();
+    }
+    if (retriedSessions > 0) {
+      Platform.notify(`${retriedSessions} ${retriedSessions === 1 ? "treino pendente enviado" : "treinos pendentes enviados"}.`);
+    }
+    return refreshed || retriedSessions > 0;
+  })().finally(() => {
+    foregroundRefreshPromise = null;
+  });
+  return foregroundRefreshPromise;
 };
 
 const restoreRunnerOnForeground = () => {
@@ -2444,6 +2528,10 @@ window.addEventListener("pageshow", () => {
   restoreRunnerOnForeground();
 });
 window.addEventListener("focus", refreshOnForeground);
+window.addEventListener("online", () => {
+  studentRefresh.invalidate();
+  refreshOnForeground();
+});
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     refreshOnForeground();

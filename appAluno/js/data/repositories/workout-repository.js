@@ -539,9 +539,9 @@ export const workoutRepository = {
     }
   },
 
-  async fetchPublishedWorkouts({ studentId = "", coachId = "" } = {}) {
+  async fetchPublishedWorkouts({ studentId = "", coachId = "", authContext: providedAuthContext } = {}) {
     const client = await getSupabase();
-    const authContext = await authRepository.getAuthContext();
+    const authContext = providedAuthContext || await authRepository.getAuthContext();
     const resolvedCoachId = String(coachId || (authRepository.canWriteAsCoach(authContext) ? authContext.coachId : "")).trim();
     const resolvedStudentId = String(studentId || "").trim();
     const localWorkouts = this.listPublishedWorkouts().filter((workout) => (
@@ -593,9 +593,9 @@ export const workoutRepository = {
     };
   },
 
-  async fetchWorkoutsForCurrentStudent(student) {
+  async fetchWorkoutsForCurrentStudent(student, { authContext } = {}) {
     if (!student?.id || !student?.coachId) return { synced: false, reason: "student-scope-required", workouts: [] };
-    const result = await this.fetchPublishedWorkouts({ studentId: student.id, coachId: student.coachId });
+    const result = await this.fetchPublishedWorkouts({ studentId: student.id, coachId: student.coachId, authContext });
     const now = Date.now();
     const publishedWorkouts = (result.workouts || [])
       .filter((item) => item.status === "published");
@@ -608,6 +608,25 @@ export const workoutRepository = {
       .filter((item) => workoutStartTimestamp(item.startsAt || item.updatedAt) > now)
       .sort((a, b) => workoutStartTimestamp(a.startsAt || a.updatedAt) - workoutStartTimestamp(b.startsAt || b.updatedAt));
     return { ...result, workouts, upcomingWorkouts };
+  },
+
+  listWorkoutsForCurrentStudent(student) {
+    if (!student?.id || !student?.coachId) return { synced: false, reason: "student-scope-required", workouts: [], upcomingWorkouts: [] };
+    const now = Date.now();
+    const publishedWorkouts = this.listPublishedWorkouts().filter((item) => (
+      item.status === "published"
+      && item.studentId === student.id
+      && item.coachId === student.coachId
+    ));
+    const workouts = publishedWorkouts
+      .filter((item) => workoutStartTimestamp(item.startsAt || item.updatedAt) <= now)
+      .sort((a, b) => a.code.localeCompare(b.code, "pt-BR", { numeric: true })
+        || a.title.localeCompare(b.title, "pt-BR")
+        || new Date(b.publishedAt || b.updatedAt || 0) - new Date(a.publishedAt || a.updatedAt || 0));
+    const upcomingWorkouts = publishedWorkouts
+      .filter((item) => workoutStartTimestamp(item.startsAt || item.updatedAt) > now)
+      .sort((a, b) => workoutStartTimestamp(a.startsAt || a.updatedAt) - workoutStartTimestamp(b.startsAt || b.updatedAt));
+    return { synced: false, source: "cache", workouts, upcomingWorkouts };
   },
 
   async archivePublishedWorkout(workoutId) {

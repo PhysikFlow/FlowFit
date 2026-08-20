@@ -2,11 +2,11 @@ import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260813-1";
 import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260818-1";
 import { InstallManager } from "../../appAluno/js/core/install.js?v=build-20260816-2";
-import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260813-2";
+import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260820-1";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6";
-import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260818-1";
-import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260813-2";
-import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260813-1";
+import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260820-1";
+import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260820-1";
+import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260820-1";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "../../appAluno/js/components/custom-select.js?v=build-20260816-1";
 import { initAllDatePickers, refreshDatePicker } from "../../appAluno/js/core/date-picker.js?v=build-20260819-1";
@@ -20,6 +20,7 @@ import { createStudentsScreen } from "./screens/students/students-screen.js?v=bu
 import { createWorkoutPdfExporter } from "./pdf/workout-pdf-exporter.js?v=build-20260820-1";
 import { escapeHtml, formatUpdatedAt, formatVolume, initialsFromName, normalizeEmail, normalizeSearch } from "./utils/formatters.js?v=build-20260816-1";
 import { createProfessorViewState } from "./state/view-state.js?v=build-20260816-1";
+import { createRefreshCoordinator } from "../../appAluno/js/core/refresh-coordinator.js?v=build-20260820-1";
 
 initCustomSelects();
 initAllDatePickers();
@@ -129,6 +130,12 @@ const ACCOUNT_PLAN = {
 
 const WORKOUT_DRAFT_STORAGE_PREFIX = "flowfit.professor.workout-draft";
 const WORKOUT_DRAFT_SAVE_DELAY_MS = 420;
+const PANEL_REFRESH_MAX_AGE = Object.freeze({
+  access: 5 * 60_000,
+  students: 5 * 60_000,
+  workouts: 3 * 60_000,
+  sessions: 2 * 60_000
+});
 const DRAFT_EXERCISE_DETAIL_FIELDS = [
   "target",
   "load",
@@ -248,6 +255,8 @@ let removedWorkoutExercise = null;
 let duplicateWorkoutSourceId = "";
 let restoredWorkoutDraftSavedAt = "";
 let publishedTheme = null;
+let lastCoachAccessResult = null;
+const panelRefresh = createRefreshCoordinator();
 let themePaletteMode = inferModeFromColor(backgroundInput?.value || DEFAULT_BRAND_THEME.backgroundColor);
 
 const $ = (selector) => document.querySelector(selector);
@@ -533,7 +542,10 @@ const scheduleCoachAccessCheck = (nextTransitionAt) => {
   const delay = new Date(nextTransitionAt).getTime() - Date.now() + 1000;
   if (!Number.isFinite(delay)) return;
   coachAccessTimer = setTimeout(
-    () => revalidateCoachAccess(),
+    () => {
+      panelRefresh.invalidate("coach-access");
+      revalidateCoachAccess();
+    },
     Math.max(1000, Math.min(delay, 2147483647))
   );
 };
@@ -1056,7 +1068,8 @@ const updateDataStatus = (status) => {
 const refreshStudents = async ({ silent = false } = {}) => {
   if (!silent) setStudentSyncStatus("Buscando alunos...", "");
   updateDataStatus("Sincronizando");
-  const result = await studentRepository.fetchStudents();
+  const result = await studentRepository.fetchStudents({ authContext });
+  if (result.synced) panelRefresh.markFresh("students");
   viewState.dataStatus = result.synced ? "Online" : "Local";
   applyStudents(result.students);
   setStudentSyncStatus(
@@ -1069,7 +1082,8 @@ const refreshStudents = async ({ silent = false } = {}) => {
 const refreshPublishedWorkouts = async ({ silent = false } = {}) => {
   if (!silent) setWorkoutSyncStatus("Buscando treinos publicados...", "");
   updateDataStatus("Sincronizando");
-  const result = await workoutRepository.fetchPublishedWorkouts();
+  const result = await workoutRepository.fetchPublishedWorkouts({ authContext });
+  if (result.synced) panelRefresh.markFresh("workouts");
   viewState.dataStatus = result.synced ? "Online" : viewState.dataStatus;
   applyPublishedWorkouts(result.workouts);
   setWorkoutSyncStatus(
@@ -1082,7 +1096,8 @@ const refreshPublishedWorkouts = async ({ silent = false } = {}) => {
 const refreshWorkoutSessions = async ({ silent = false } = {}) => {
   if (!silent) setStudentSyncStatus("Buscando execuções dos alunos...", "");
   updateDataStatus("Sincronizando");
-  const result = await sessionRepository.fetchCoachSessions();
+  const result = await sessionRepository.fetchCoachSessions({ authContext });
+  if (result.synced) panelRefresh.markFresh("sessions");
   viewState.dataStatus = result.synced ? "Online" : viewState.dataStatus;
   applyWorkoutSessions(result.sessions);
   if (!silent) {
@@ -1093,6 +1108,21 @@ const refreshWorkoutSessions = async ({ silent = false } = {}) => {
   }
   return result;
 };
+
+const refreshPanelData = ({ force = false } = {}) => Promise.allSettled([
+  panelRefresh.run("students", () => refreshStudents({ silent: true }), {
+    force,
+    maxAgeMs: PANEL_REFRESH_MAX_AGE.students
+  }),
+  panelRefresh.run("workouts", () => refreshPublishedWorkouts({ silent: true }), {
+    force,
+    maxAgeMs: PANEL_REFRESH_MAX_AGE.workouts
+  }),
+  panelRefresh.run("sessions", () => refreshWorkoutSessions({ silent: true }), {
+    force,
+    maxAgeMs: PANEL_REFRESH_MAX_AGE.sessions
+  })
+]);
 
 const renderIcons = () => {
   document.querySelectorAll("[data-icon]").forEach((target) => {
@@ -2985,6 +3015,8 @@ const signOutProfessor = async () => {
   } finally {
     authenticatedSessionDetected = false;
     authContext = null;
+    lastCoachAccessResult = null;
+    panelRefresh.invalidate();
     students = [];
     workouts = [];
     workoutSessions = [];
@@ -3048,11 +3080,14 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
   }
   authenticatedSessionDetected = true;
 
-  const profileResult = await authRepository.ensureProfile({
-    role: "coach",
-    name: session.user.user_metadata?.display_name || session.user.email,
-    coachStatus: authRepository.coachStatus.PENDING
-  });
+  const canReuseAuthContext = isRevalidate && authContext?.user?.id === session.user.id;
+  const profileResult = canReuseAuthContext
+    ? { synced: true, profile: authContext.profile }
+    : await authRepository.ensureProfile({
+      role: "coach",
+      name: session.user.user_metadata?.display_name || session.user.email,
+      coachStatus: authRepository.coachStatus.PENDING
+    });
   if (isStale()) return false;
   if (profileResult.roleMismatch) {
     await authRepository.signOut();
@@ -3078,12 +3113,26 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
     return;
   }
 
-  authContext = await authRepository.getAuthContext();
+  authContext = canReuseAuthContext
+    ? {
+      ...authContext,
+      session,
+      user: session.user,
+      coachId: session.user.id,
+      email: normalizeEmail(session.user.email)
+    }
+    : await authRepository.getAuthContext();
   if (isStale()) return false;
 
-  const accessResult = await authRepository.getOwnCoachAccess();
+  const accessRefresh = await panelRefresh.run("coach-access", () => authRepository.getOwnCoachAccess(), {
+    force: !isRevalidate || !lastCoachAccessResult,
+    maxAgeMs: PANEL_REFRESH_MAX_AGE.access,
+    isSuccess: (value) => value?.ok === true
+  });
+  if (accessRefresh.executed) lastCoachAccessResult = accessRefresh.value;
+  const accessResult = accessRefresh.value || lastCoachAccessResult;
   if (isStale()) return false;
-  if (!accessResult.ok) {
+  if (!accessResult?.ok) {
     setAuthLocked(true);
     setAuthChecking(false);
     showAuthenticatedAccessState({
@@ -3124,11 +3173,7 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
     renderAll();
   }
 
-  const refreshResults = await Promise.allSettled([
-    refreshStudents({ silent: true }),
-    refreshPublishedWorkouts({ silent: true }),
-    refreshWorkoutSessions({ silent: true })
-  ]);
+  const refreshResults = await refreshPanelData({ force: !isRevalidate });
   if (isStale()) return false;
   refreshResults.forEach((result, index) => {
     if (result.status === "rejected") {
@@ -3148,13 +3193,13 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
 
   let remote = null;
   try {
-    remote = await themeRepository.fetchBrandTheme();
+    remote = await themeRepository.fetchBrandTheme("", { authContext });
   } catch (error) {
     warnOptionalFeature("tema remoto", error);
   }
   if (isStale()) return false;
   if (!remote) {
-    const cachedTheme = await themeRepository.getCachedBrandTheme().catch(() => null);
+    const cachedTheme = await themeRepository.getCachedBrandTheme("", { authContext }).catch(() => null);
     if (cachedTheme) {
       publishedTheme = cachedTheme;
       fillThemeInputs(cachedTheme);
@@ -3253,6 +3298,11 @@ const initializeOptionalPwaFeatures = () => {
 
 const revalidateCoachAccess = () => {
   if (isSigningOut || !authenticatedSessionDetected) return Promise.resolve(false);
+  const everythingFresh = panelRefresh.isFresh("coach-access", PANEL_REFRESH_MAX_AGE.access)
+    && panelRefresh.isFresh("students", PANEL_REFRESH_MAX_AGE.students)
+    && panelRefresh.isFresh("workouts", PANEL_REFRESH_MAX_AGE.workouts)
+    && panelRefresh.isFresh("sessions", PANEL_REFRESH_MAX_AGE.sessions);
+  if (everythingFresh) return Promise.resolve(false);
   return startAuthenticatedPanel({ mode: "revalidate" })
     .catch((error) => {
       rememberProfessorFailure("coach-access-revalidation", error);
@@ -3261,6 +3311,10 @@ const revalidateCoachAccess = () => {
 };
 
 window.addEventListener("focus", () => revalidateCoachAccess());
+window.addEventListener("online", () => {
+  panelRefresh.invalidate();
+  revalidateCoachAccess();
+});
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") revalidateCoachAccess();
 });

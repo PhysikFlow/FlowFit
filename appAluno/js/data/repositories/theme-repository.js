@@ -109,9 +109,9 @@ const updateAssetMetadata = async (client, authContext, fields) => {
 
 export const themeRepository = {
   // Retorna o tema de marca branca (ou null). Busca na nuvem e cai no cache local.
-  async fetchBrandTheme(coachId = "") {
+  async fetchBrandTheme(coachId = "", { authContext: providedAuthContext } = {}) {
     const client = await getSupabase();
-    const authContext = await authRepository.getAuthContext();
+    const authContext = providedAuthContext || await authRepository.getAuthContext();
     const resolvedCoachId = String(coachId || (authRepository.canWriteAsCoach(authContext) ? authContext.coachId : "")).trim();
     const cacheContext = {
       userId: authContext?.user?.id || "anonymous",
@@ -157,8 +157,8 @@ export const themeRepository = {
     return readCachedTheme({ ...cacheContext, allowLegacy: authRepository.canWriteAsCoach(authContext) });
   },
 
-  async getCachedBrandTheme(coachId = "") {
-    const authContext = await authRepository.getAuthContext();
+  async getCachedBrandTheme(coachId = "", { authContext: providedAuthContext } = {}) {
+    const authContext = providedAuthContext || await authRepository.getAuthContext();
     const resolvedCoachId = String(coachId || (authRepository.canWriteAsCoach(authContext) ? authContext.coachId : "")).trim();
     if (!resolvedCoachId) return null;
     return readCachedTheme({

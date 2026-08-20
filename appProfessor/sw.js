@@ -1,10 +1,10 @@
-const CACHE_NAME = "flowfit-professor-v63";
+const CACHE_NAME = "flowfit-professor-v64";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./css/app.css?v=build-20260820-1",
-  "./js/app.js?v=build-20260820-1",
+  "./js/app.js?v=build-20260820-2",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/core/navigation.js?v=build-20260816-1",
   "./js/screens/dashboard/dashboard-screen.js?v=build-20260816-1",
@@ -57,13 +57,14 @@ const APP_SHELL = [
   "../appAluno/js/core/install.js?v=build-20260816-2",
   "../appAluno/js/core/icons.js?v=build-20260809-6",
   "../appAluno/js/core/platform.js?v=build-20260813-1",
+  "../appAluno/js/core/refresh-coordinator.js?v=build-20260820-1",
   "../appAluno/js/core/date-picker.js?v=build-20260819-1",
   "../appAluno/js/core/supabase.js?v=build-20260812-5",
   "../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6",
-  "../appAluno/js/data/repositories/student-repository.js?v=build-20260813-2",
-  "../appAluno/js/data/repositories/theme-repository.js?v=build-20260818-1",
-  "../appAluno/js/data/repositories/workout-repository.js?v=build-20260813-2",
-  "../appAluno/js/data/repositories/session-repository.js?v=build-20260813-1",
+  "../appAluno/js/data/repositories/student-repository.js?v=build-20260820-1",
+  "../appAluno/js/data/repositories/theme-repository.js?v=build-20260820-1",
+  "../appAluno/js/data/repositories/workout-repository.js?v=build-20260820-1",
+  "../appAluno/js/data/repositories/session-repository.js?v=build-20260820-1",
   "./js/screens/agenda/availability-calendar.js?v=build-20260818-1",
   "./js/screens/agenda/exceptions-card.js?v=build-20260818-3"
 ];

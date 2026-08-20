@@ -8,6 +8,9 @@ const SCOPED_SESSIONS_PREFIX = `${WORKOUT_SESSIONS_KEY}:`;
 const SESSIONS_TABLE = "workout_sessions";
 const SET_LOGS_TABLE = "workout_set_logs";
 const FEEDBACK_TABLE = "workout_feedback";
+const SESSION_SELECT = "id, coach_id, student_id, student_key, student_email, workout_id, workout_code, workout_title, workout_version, status, total_sets, completed_sets, volume_kg, duration_seconds, started_at, finished_at, updated_at";
+const SET_LOG_SELECT = "id, session_id, coach_id, workout_id, exercise_id, workout_exercise_id, position, exercise_name, target, prescription, planned_sets, completed_sets, load_kg, reps, volume_kg, rir, notes, set_number, set_kind, completed_at, discomfort, discomfort_note";
+const FEEDBACK_SELECT = "id, session_id, coach_id, student_id, effort, pain, note";
 
 const normalizeText = (value, fallback = "") => {
   const text = String(value ?? "").trim();
@@ -366,7 +369,7 @@ export const sessionRepository = {
     };
   },
 
-  async fetchStudentSessions({ studentId = "", coachId = "", workoutId = "", limit = 20 } = {}) {
+  async fetchStudentSessions({ studentId = "", coachId = "", workoutId = "", limit = 20, authContext: providedAuthContext } = {}) {
     const resolvedStudentId = normalizeText(studentId);
     const resolvedCoachId = normalizeText(coachId);
     const resolvedWorkoutId = normalizeText(workoutId);
@@ -376,7 +379,7 @@ export const sessionRepository = {
       && (!resolvedWorkoutId || session.workoutId === resolvedWorkoutId)
     ));
     const client = await getSupabase();
-    const authContext = await authRepository.getAuthContext();
+    const authContext = providedAuthContext || await authRepository.getAuthContext();
     if (!client || !authContext?.user || !authRepository.canAccessStudent(authContext)) {
       return { synced: false, reason: "not-authenticated-as-student", sessions: localSessions };
     }
@@ -387,7 +390,7 @@ export const sessionRepository = {
     try {
       let query = client
         .from(SESSIONS_TABLE)
-        .select("*")
+        .select(SESSION_SELECT)
         .eq("student_id", resolvedStudentId)
         .eq("coach_id", resolvedCoachId)
         .order("finished_at", { ascending: false })
@@ -400,8 +403,8 @@ export const sessionRepository = {
       if (!ids.length) return { synced: true, sessions: localSessions };
 
       const [{ data: logsData, error: logsError }, { data: feedbackData, error: feedbackError }] = await Promise.all([
-        client.from(SET_LOGS_TABLE).select("*").in("session_id", ids).order("position", { ascending: true }),
-        client.from(FEEDBACK_TABLE).select("*").in("session_id", ids)
+        client.from(SET_LOGS_TABLE).select(SET_LOG_SELECT).in("session_id", ids).order("position", { ascending: true }),
+        client.from(FEEDBACK_TABLE).select(FEEDBACK_SELECT).in("session_id", ids)
       ]);
       if (logsError) throw logsError;
       if (feedbackError) throw feedbackError;
@@ -433,9 +436,9 @@ export const sessionRepository = {
     }
   },
 
-  async fetchCoachSessions({ studentId = "", limit = 80 } = {}) {
+  async fetchCoachSessions({ studentId = "", limit = 80, authContext: providedAuthContext } = {}) {
     const client = await getSupabase();
-    const authContext = await authRepository.getAuthContext();
+    const authContext = providedAuthContext || await authRepository.getAuthContext();
     const localSessions = this.listCachedSessions({
       coachId: authContext?.coachId || "",
       studentId: normalizeText(studentId)
@@ -447,7 +450,7 @@ export const sessionRepository = {
     try {
       let query = client
         .from(SESSIONS_TABLE)
-        .select("*")
+        .select(SESSION_SELECT)
         .eq("coach_id", authContext.coachId)
         .order("finished_at", { ascending: false })
         .limit(limit);
@@ -460,8 +463,8 @@ export const sessionRepository = {
       if (!ids.length) return { synced: true, sessions: [] };
 
       const [{ data: logsData, error: logsError }, { data: feedbackData, error: feedbackError }] = await Promise.all([
-        client.from(SET_LOGS_TABLE).select("*").in("session_id", ids).order("position", { ascending: true }),
-        client.from(FEEDBACK_TABLE).select("*").in("session_id", ids)
+        client.from(SET_LOGS_TABLE).select(SET_LOG_SELECT).in("session_id", ids).order("position", { ascending: true }),
+        client.from(FEEDBACK_TABLE).select(FEEDBACK_SELECT).in("session_id", ids)
       ]);
       if (logsError) throw logsError;
       if (feedbackError) throw feedbackError;
