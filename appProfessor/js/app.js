@@ -1998,11 +1998,7 @@ const syncWcoBrandIcon = () => {
   const wcoIcon = document.querySelector("[data-wco-brand-icon]");
   if (sidebarIcon && wcoIcon) {
     wcoIcon.innerHTML = sidebarIcon.innerHTML;
-    wcoIcon.querySelectorAll("img").forEach((img) => {
-      img.style.width = "100%";
-      img.style.height = "100%";
-      img.style.objectFit = "contain";
-    });
+    wcoIcon.className = sidebarIcon.className;
   }
   const wcoName = document.querySelector("[data-wco-brand-name]");
   const brandNameEl = document.querySelector("[data-brand-name]");

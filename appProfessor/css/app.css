@@ -75,22 +75,12 @@ html.wco-active .app-titlebar {
   flex: 0 0 auto;
   width: 1.65rem;
   height: 1.65rem;
-  max-width: 1.65rem;
-  max-height: 1.65rem;
   place-items: center;
   overflow: hidden;
   border: 1px solid var(--selection-border);
   border-radius: var(--radius-sm);
   background: var(--selection-soft);
   color: var(--selection-color);
-}
-
-/* Neutralise any surface-icon sizing classes that JS might copy in */
-.app-titlebar__icon.surface-icon {
-  width: 1.65rem;
-  height: 1.65rem;
-  max-width: 1.65rem;
-  max-height: 1.65rem;
 }
 
 .app-titlebar__icon img {
