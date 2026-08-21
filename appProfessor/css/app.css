@@ -342,12 +342,22 @@ body.is-drawer-open {
     gap: var(--space-4);
     padding-inline: 0.75rem;
     overflow-x: hidden;
-    transition: width 220ms var(--ease-out), box-shadow 220ms var(--ease-out);
+    box-shadow: 0.15rem 0 0.7rem rgb(0 0 0 / 0.04);
+    transition:
+      width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 260ms ease,
+      background-color 220ms ease,
+      border-color 220ms ease;
+    will-change: width;
   }
 
   body.is-sidebar-expanded .sidebar {
     width: var(--admin-sidebar-width);
-    box-shadow: 0.9rem 0 2rem rgb(0 0 0 / 0.08);
+    border-right-color: color-mix(in srgb, var(--selection-color) 22%, var(--border-subtle));
+    background-color: color-mix(in srgb, var(--surface-overlay) 96%, var(--selection-color));
+    box-shadow:
+      1rem 0 2.4rem rgb(0 0 0 / 0.16),
+      0.2rem 0 0.85rem color-mix(in srgb, var(--selection-color) 8%, transparent);
   }
 
   .sidebar__brand {
@@ -368,8 +378,8 @@ body.is-drawer-open {
     opacity: 0;
     visibility: hidden;
     transition:
-      opacity 90ms ease,
-      visibility 0s linear 90ms;
+      opacity 75ms ease,
+      visibility 0s linear 75ms;
   }
 
   body.is-sidebar-expanded .sidebar__brand > div,
@@ -378,8 +388,8 @@ body.is-drawer-open {
     opacity: 1;
     visibility: visible;
     transition:
-      opacity 140ms ease 90ms,
-      visibility 0s linear 90ms;
+      opacity 175ms ease 55ms,
+      visibility 0s linear 55ms;
   }
 
   .sidebar__brand [data-brand-icon] {
@@ -416,14 +426,16 @@ body.is-drawer-open {
 
   .side-nav__label {
     flex: 0 0 auto;
+    position: relative;
+    z-index: 1;
   }
 
-  body:not(.is-sidebar-expanded) .side-nav a.is-active {
+  .side-nav a.is-active {
     border-color: transparent;
     background: transparent;
   }
 
-  body:not(.is-sidebar-expanded) .side-nav a.is-active::before {
+  .side-nav a.is-active::before {
     content: "";
     position: absolute;
     inset-block: 0;
@@ -432,6 +444,11 @@ body.is-drawer-open {
     border: 1px solid var(--selection-border);
     border-radius: var(--radius-sm);
     background: var(--selection-soft);
+    transition: width 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  body.is-sidebar-expanded .side-nav a.is-active::before {
+    width: calc(100% - 0.25rem);
   }
 
   .sidebar-profile-link {
@@ -459,7 +476,8 @@ body.is-drawer-open {
 
   .sidebar__brand > div,
   .side-nav__label,
-  .sidebar-profile__identity {
+  .sidebar-profile__identity,
+  .side-nav a.is-active::before {
     transition-delay: 0s !important;
     transition-duration: 0.01ms !important;
   }
