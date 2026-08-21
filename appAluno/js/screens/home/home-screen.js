@@ -11,7 +11,9 @@ export const createHomeScreen = ({
   const renderStudent = () => {
     const student = appState.currentStudent || emptyStudent;
     document.querySelectorAll("[data-student-name]").forEach((item) => { item.textContent = student.name; });
-    document.querySelectorAll("[data-student-initials]").forEach((item) => { item.textContent = student.initials; });
+    document.querySelectorAll("[data-student-initials]").forEach((item) => {
+      setImageOrText(item, student.photoUrl || "", student.initials, `Foto de ${student.name}`);
+    });
     const studentSince = document.querySelector("[data-student-since]");
     if (studentSince) {
       studentSince.hidden = !student.since;

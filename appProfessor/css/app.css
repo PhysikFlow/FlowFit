@@ -3079,6 +3079,13 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   font-size: var(--text-xs);
 }
 
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
 .activity-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

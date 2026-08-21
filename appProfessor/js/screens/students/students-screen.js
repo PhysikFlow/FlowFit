@@ -175,7 +175,7 @@ export const createStudentsScreen = ({
       return `
         <article class="entity-row student-row" data-student-card="${escapeHtml(student.id)}">
           <div class="entity-row__identity">
-            <span class="avatar">${escapeHtml(student.initials)}</span>
+            <span class="avatar">${student.photoUrl ? `<img src="${escapeHtml(student.photoUrl)}" alt="Foto de ${escapeHtml(student.name)}" loading="lazy">` : escapeHtml(student.initials)}</span>
             <div><h2>${escapeHtml(student.name)}</h2><small>${escapeHtml(accessEmail)}</small></div>
           </div>
           <div class="entity-row__field"><small>Objetivo</small><span>${escapeHtml(student.goal)}</span></div>

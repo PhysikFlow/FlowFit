@@ -38,7 +38,7 @@ export const createDashboardScreen = ({
       const secondary = situation.secondary.length
         ? `+${situation.secondary.length} ${situation.secondary.length === 1 ? "outra situação" : "outras situações"}`
         : "";
-      return `<button class="task-row" type="button" data-task-go="${action === "new-workout" ? "workouts" : "students"}" data-task-action="${action}" data-task-student="${escapeHtml(student.id)}"><span class="avatar avatar--small">${escapeHtml(student.initials)}</span><div><strong>${escapeHtml(student.name)}</strong><small>${escapeHtml(situation.main)}</small></div>${secondary ? `<span class="task-row__secondary">${escapeHtml(secondary)}</span>` : ""}<span class="task-row__arrow">${svgIcon("chevron-right")}</span></button>`;
+      return `<button class="task-row" type="button" data-task-go="${action === "new-workout" ? "workouts" : "students"}" data-task-action="${action}" data-task-student="${escapeHtml(student.id)}"><span class="avatar avatar--small">${student.photoUrl ? `<img src="${escapeHtml(student.photoUrl)}" alt="Foto de ${escapeHtml(student.name)}" loading="lazy">` : escapeHtml(student.initials)}</span><div><strong>${escapeHtml(student.name)}</strong><small>${escapeHtml(situation.main)}</small></div>${secondary ? `<span class="task-row__secondary">${escapeHtml(secondary)}</span>` : ""}<span class="task-row__arrow">${svgIcon("chevron-right")}</span></button>`;
     }).join("");
   };
 

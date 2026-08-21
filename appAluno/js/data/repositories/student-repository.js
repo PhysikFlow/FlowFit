@@ -1,8 +1,18 @@
-import { DEMO_COACH_ID } from "../../config.js?v=build-20260809-6";
+import { DEMO_COACH_ID, SUPABASE_URL } from "../../config.js?v=build-20260809-6";
 import { Platform } from "../../core/platform.js?v=build-20260813-1";
 import { getSupabase } from "../../core/supabase.js?v=build-20260812-5";
 import { authRepository } from "./auth-repository.js?v=build-20260812-5";
 import { studentKeyFromName } from "./workout-repository.js?v=build-20260813-2";
+
+const BRAND_ASSET_BUCKET = "flowfit-brand-assets";
+
+const assetPublicUrl = (path, version = "") => {
+  const safePath = String(path || "").trim();
+  if (!safePath) return "";
+  const encodedPath = safePath.split("/").map((part) => encodeURIComponent(part)).join("/");
+  const base = `${String(SUPABASE_URL).replace(/\/$/, "")}/storage/v1/object/public/${BRAND_ASSET_BUCKET}/${encodedPath}`;
+  return version ? `${base}?v=${encodeURIComponent(version)}` : base;
+};
 
 export const STUDENTS_KEY = "flowfit.students";
 
@@ -25,6 +35,7 @@ const CLOUD_STUDENT_SELECT = [
   "invite_status",
   "invite_expires_at",
   "invite_claimed_at",
+  "photo_path",
   "created_at",
   "updated_at"
 ].join(", ");
@@ -82,6 +93,8 @@ const normalizeStudent = (student) => {
     inviteStatus: normalizeText(student?.inviteStatus, "pending"),
     inviteExpiresAt: normalizeText(student?.inviteExpiresAt, ""),
     inviteClaimedAt: normalizeText(student?.inviteClaimedAt, ""),
+    photoPath: normalizeText(student?.photoPath, ""),
+    photoUrl: normalizeText(student?.photoUrl, ""),
     coachName: normalizeText(student?.coachName, "Personal"),
     coachHeadline: normalizeText(student?.coachHeadline, "Acompanhamento personalizado"),
     createdAt: normalizeText(student?.createdAt, updatedAt),
@@ -115,31 +128,37 @@ const toRow = (student, authContext) => ({
   workout: student.workout,
   adherence: student.adherence,
   next_action: student.nextAction,
+  photo_path: student.photoPath || null,
   created_at: student.createdAt,
   updated_at: student.updatedAt
 });
 
-const toAppStudent = (row) => normalizeStudent({
-  id: row.id,
-  coachId: row.coach_id,
-  studentKey: row.student_key,
-  studentUserId: row.student_user_id,
-  email: row.email,
-  name: row.name,
-  initials: row.initials,
-  goal: row.goal,
-  status: row.status,
-  plan: row.plan,
-  workout: row.workout,
-  adherence: row.adherence,
-  nextAction: row.next_action,
-  inviteToken: row.invite_token,
-  inviteStatus: row.invite_status,
-  inviteExpiresAt: row.invite_expires_at,
-  inviteClaimedAt: row.invite_claimed_at,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at
-});
+const toAppStudent = (row) => {
+  const photoPath = String(row.photo_path || "").trim();
+  return normalizeStudent({
+    id: row.id,
+    coachId: row.coach_id,
+    studentKey: row.student_key,
+    studentUserId: row.student_user_id,
+    email: row.email,
+    name: row.name,
+    initials: row.initials,
+    goal: row.goal,
+    status: row.status,
+    plan: row.plan,
+    workout: row.workout,
+    adherence: row.adherence,
+    nextAction: row.next_action,
+    inviteToken: row.invite_token,
+    inviteStatus: row.invite_status,
+    inviteExpiresAt: row.invite_expires_at,
+    inviteClaimedAt: row.invite_claimed_at,
+    photoPath,
+    photoUrl: assetPublicUrl(photoPath, row.updated_at),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  });
+};
 
 export const createStudentFromProfessorForm = ({ name, email, goal, status }) => {
   const normalizedName = normalizeText(name, "Aluno");
