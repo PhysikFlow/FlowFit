@@ -362,6 +362,26 @@ body.is-drawer-open {
     flex: 0 0 11rem;
   }
 
+  .sidebar__brand > div,
+  .side-nav__label,
+  .sidebar-profile__identity {
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 90ms ease,
+      visibility 0s linear 90ms;
+  }
+
+  body.is-sidebar-expanded .sidebar__brand > div,
+  body.is-sidebar-expanded .side-nav__label,
+  body.is-sidebar-expanded .sidebar-profile__identity {
+    opacity: 1;
+    visibility: visible;
+    transition:
+      opacity 140ms ease 90ms,
+      visibility 0s linear 90ms;
+  }
+
   .sidebar__brand [data-brand-icon] {
     width: 2.5rem;
     height: 2.5rem;
@@ -434,6 +454,13 @@ body.is-drawer-open {
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar {
+    transition-duration: 0.01ms !important;
+  }
+
+  .sidebar__brand > div,
+  .side-nav__label,
+  .sidebar-profile__identity {
+    transition-delay: 0s !important;
     transition-duration: 0.01ms !important;
   }
 }
