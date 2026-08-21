@@ -154,7 +154,7 @@ export const createLocalAssetsEditor = ({
   
   const setAssetCropZoom = (value) => {
     if (!assetCropper || !assetCropZoom) return;
-    const normalized = Math.min(4, Math.max(1, Number(value) || 1));
+    const normalized = Number(value) || 1;
     assetCropZoom.value = String(normalized);
     assetCropper.zoomTo(assetCropBaseRatio * normalized);
   };
@@ -200,14 +200,26 @@ export const createLocalAssetsEditor = ({
         ready() {
           if (!assetCropper || pendingLocalAsset?.objectUrl !== objectUrl) return;
           assetCropBaseRatio = Math.max(0.0001, Number(assetCropper.getImageData()?.ratio) || 1);
-          if (assetCropZoom) assetCropZoom.value = "1";
+          if (assetCropZoom) {
+            const imageData = assetCropper.getImageData();
+            const canvasData = assetCropper.getCanvasData();
+            const containerData = assetCropper.getContainerData();
+            const minZoom = Math.min(
+              containerData.width / imageData.naturalWidth,
+              containerData.height / imageData.naturalHeight
+            );
+            const maxZoom = canvasData.width / imageData.naturalWidth * 4;
+            assetCropZoom.min = minZoom.toFixed(2);
+            assetCropZoom.max = maxZoom.toFixed(2);
+            assetCropZoom.value = "1";
+          }
           if (assetCropConfirm) assetCropConfirm.disabled = false;
           setAssetCropStatus(`Saída quadrada em WebP, até ${spec.maxDimension}×${spec.maxDimension}.`);
         },
         zoom(event) {
           if (!assetCropZoom || !assetCropBaseRatio) return;
           const normalized = Number(event.detail?.ratio || assetCropBaseRatio) / assetCropBaseRatio;
-          assetCropZoom.value = String(Math.min(4, Math.max(1, normalized)));
+          assetCropZoom.value = String(normalized);
         }
       });
     };
