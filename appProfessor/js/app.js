@@ -2065,8 +2065,31 @@ const setDrawerOpen = (open) => {
   drawerSidebar?.classList.toggle("is-open", isDrawerOpen);
   if (drawerBackdrop) drawerBackdrop.hidden = !isDrawerOpen;
   drawerToggle?.setAttribute("aria-expanded", String(isDrawerOpen));
+  drawerToggle?.setAttribute("aria-label", isDrawerOpen ? "Fechar menu" : "Abrir menu");
   document.body.classList.toggle("is-drawer-open", isDrawerOpen);
 };
+
+const desktopSidebarMedia = window.matchMedia("(min-width: 981px) and (hover: hover) and (pointer: fine)");
+const setDesktopSidebarExpanded = (expanded) => {
+  document.body.classList.toggle("is-sidebar-expanded", desktopSidebarMedia.matches && Boolean(expanded));
+};
+
+drawerSidebar?.addEventListener("pointerenter", () => setDesktopSidebarExpanded(true));
+drawerSidebar?.addEventListener("pointerleave", () => {
+  if (!drawerSidebar.contains(document.activeElement)) setDesktopSidebarExpanded(false);
+});
+drawerSidebar?.addEventListener("focusin", () => setDesktopSidebarExpanded(true));
+drawerSidebar?.addEventListener("focusout", () => {
+  window.requestAnimationFrame(() => {
+    if (!drawerSidebar.contains(document.activeElement) && !drawerSidebar.matches(":hover")) {
+      setDesktopSidebarExpanded(false);
+    }
+  });
+});
+desktopSidebarMedia.addEventListener?.("change", () => {
+  setDesktopSidebarExpanded(false);
+  if (desktopSidebarMedia.matches) setDrawerOpen(false);
+});
 
 drawerToggle?.addEventListener("click", () => setDrawerOpen(!isDrawerOpen));
 drawerBackdrop?.addEventListener("click", () => setDrawerOpen(false));
@@ -2083,8 +2106,8 @@ document.addEventListener("keydown", (event) => {
 
 /* ── Swipe-to-open / swipe-to-close drawer ──────────────────── */
 (() => {
-  const EDGE_ZONE = 28;
-  const THRESHOLD = 50;
+  const EDGE_ZONE = 32;
+  const THRESHOLD = 56;
   const DOMINANCE = 1.2;
   let tracking = false;
   let startX = 0;
@@ -2095,7 +2118,7 @@ document.addEventListener("keydown", (event) => {
   let opening = false;
   let sidebarWidth = 0;
 
-  const isInteractive = (el) => el.closest(
+  const isInteractive = (el) => el instanceof Element && el.closest(
     "input, textarea, select, button, a, [role=\"button\"], [data-nav], .workout-builder, dialog, details, .student-session-panel, .toast"
   );
 
@@ -2142,9 +2165,11 @@ document.addEventListener("keydown", (event) => {
       dirLocked = true;
       swiping = true;
       opening = !isDrawerOpen;
+      if (opening && drawerBackdrop) drawerBackdrop.style.opacity = "0";
       if (opening) setDrawerOpen(true);
       if (drawerSidebar) {
         drawerSidebar.style.transition = "none";
+        if (opening) drawerSidebar.style.transform = `translateX(${-sidebarWidth}px)`;
       }
     }
 
@@ -2152,8 +2177,14 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
 
     dx = touch.clientX - startX;
-    const offset = Math.max(-sidebarWidth, Math.min(0, dx));
+    const offset = opening
+      ? Math.max(-sidebarWidth, Math.min(0, -sidebarWidth + Math.max(0, dx)))
+      : Math.max(-sidebarWidth, Math.min(0, dx));
     drawerSidebar.style.transform = `translateX(${offset}px)`;
+    if (drawerBackdrop) {
+      const progress = Math.max(0, Math.min(1, 1 + offset / Math.max(1, sidebarWidth)));
+      drawerBackdrop.style.opacity = String(progress);
+    }
   }, { passive: false });
 
   const finishSwipe = () => {
@@ -2166,9 +2197,10 @@ document.addEventListener("keydown", (event) => {
       drawerSidebar.style.transition = "";
       drawerSidebar.style.transform = "";
     }
+    if (drawerBackdrop) drawerBackdrop.style.opacity = "";
 
-    const completeOpen = dx > THRESHOLD * 0.5 || dx > sidebarWidth * 0.35;
-    const completeClose = dx < -THRESHOLD * 0.5 || dx < -sidebarWidth * 0.35;
+    const completeOpen = dx > THRESHOLD || dx > sidebarWidth * 0.35;
+    const completeClose = dx < -THRESHOLD || dx < -sidebarWidth * 0.35;
 
     if (opening) {
       setDrawerOpen(completeOpen);
