@@ -28,102 +28,9 @@
   --radius-lg: 1.05rem;
   --shadow-card: 0 0.8rem 2.3rem rgb(0 0 0 / 0.2);
   --shadow-accent: 0 0.55rem 1.35rem color-mix(in srgb, var(--selection-color) 18%, transparent);
-
-  /* Window Controls Overlay titlebar height — 0 by default */
-  --desktop-titlebar-height: 0px;
 }
 
-/* ── Window Controls Overlay (WCO) titlebar ──────────────────── */
-html.wco-active {
-  --desktop-titlebar-height: env(titlebar-area-height, 48px);
-}
-
-.app-titlebar {
-  display: none;
-}
-
-html.wco-active .app-titlebar {
-  position: fixed;
-  z-index: 1000;
-  display: flex;
-  left: env(titlebar-area-x, 0px);
-  top: env(titlebar-area-y, 0px);
-  width: env(titlebar-area-width, 100%);
-  height: var(--desktop-titlebar-height);
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-3);
-  box-sizing: border-box;
-  background: var(--surface-page);
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-primary);
-  -webkit-app-region: drag;
-  app-region: drag;
-  user-select: none;
-}
-
-.app-titlebar__drag {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.app-titlebar__icon {
-  display: grid;
-  flex: 0 0 auto;
-  width: 1.65rem;
-  height: 1.65rem;
-  place-items: center;
-  overflow: hidden;
-  border: 1px solid var(--selection-border);
-  border-radius: var(--radius-sm);
-  background: var(--selection-soft);
-  color: var(--selection-color);
-}
-
-.app-titlebar__icon img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.app-titlebar__name {
-  overflow: hidden;
-  font-size: var(--text-sm);
-  font-weight: var(--type-weight-item-title);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* Interactive children must be draggable-exempt */
-.app-titlebar button,
-.app-titlebar a,
-.app-titlebar input,
-.app-titlebar select,
-.app-titlebar [role="button"],
-.app-titlebar [role="link"] {
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
-}
-
-/* Compensate titlebar height in the main grid */
-html.wco-active body {
-  grid-template-rows: var(--desktop-titlebar-height) 1fr;
-}
-
-html.wco-active .sidebar {
-  position: sticky;
-  top: var(--desktop-titlebar-height);
-  height: calc(100vh - var(--desktop-titlebar-height));
-}
-
-html.wco-active .admin-shell {
-  padding-top: var(--admin-page-padding);
-}
-
-/* ── Drawer toggle + backdrop — hidden on desktop, shown on mobile via media query */
+/* Drawer toggle + backdrop — hidden on desktop, shown on mobile via media query */
 .drawer-toggle {
   display: none;
 }
@@ -2540,11 +2447,6 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
     display: block;
     min-height: 100dvh;
   }
-
-  /* Titlebar is not useful on mobile — keep hidden even if JS toggled it */
-  html.wco-active .app-titlebar { display: none; }
-  html.wco-active body { grid-template-rows: none; }
-  html.wco-active .sidebar { top: 0; height: auto; }
 
   body.has-student-session-open {
     overflow: hidden;
