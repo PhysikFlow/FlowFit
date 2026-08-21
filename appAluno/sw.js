@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-aluno-v104";
+const CACHE_NAME = "flowfit-aluno-v105";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -34,7 +34,7 @@ const APP_SHELL = [
   "./assets/fonts/teko-600.woff2",
   "./assets/fonts/teko-700.woff2",
   "./css/app.css?v=build-20260817-7",
-  "./js/app.js?v=build-20260820-2",
+  "./js/app.js?v=build-20260821-1",
   "./js/components/custom-select.js?v=build-20260816-1",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/components/install-ui.js?v=build-20260816-3",
@@ -48,7 +48,7 @@ const APP_SHELL = [
   "./js/state/workout-session-state.js?v=build-20260816-1",
   "./js/utils/formatters.js?v=build-20260816-1",
   "./js/data/repositories/auth-repository.js?v=build-20260812-6",
-  "./js/data/repositories/student-repository.js?v=build-20260820-1",
+  "./js/data/repositories/student-repository.js?v=build-20260821-1",
   "./js/data/repositories/theme-repository.js?v=build-20260820-1",
   "./js/data/repositories/workout-repository.js?v=build-20260820-1",
   "./js/data/repositories/session-repository.js?v=build-20260820-1",

@@ -17,7 +17,7 @@ const assetPublicUrl = (path, version = "") => {
 export const STUDENTS_KEY = "flowfit.students";
 
 const TABLE = "students";
-const CLOUD_STUDENT_SELECT = [
+const CLOUD_STUDENT_BASE_FIELDS = [
   "id",
   "coach_id",
   "student_key",
@@ -35,10 +35,23 @@ const CLOUD_STUDENT_SELECT = [
   "invite_status",
   "invite_expires_at",
   "invite_claimed_at",
-  "photo_path",
   "created_at",
   "updated_at"
-].join(", ");
+];
+const CLOUD_STUDENT_BASE_SELECT = CLOUD_STUDENT_BASE_FIELDS.join(", ");
+const CLOUD_STUDENT_SELECT = [...CLOUD_STUDENT_BASE_FIELDS, "photo_path"].join(", ");
+let supportsStudentPhotoPath = true;
+
+const isMissingPhotoPathColumn = (error) => {
+  if (!error) return false;
+  const details = [error.code, error.message, error.details, error.hint].filter(Boolean).join(" ");
+  return /photo_path/i.test(details) && /(42703|PGRST204|column|schema cache|does not exist)/i.test(details);
+};
+
+const withoutPhotoPath = (row) => {
+  const { photo_path: _photoPath, ...legacyRow } = row;
+  return legacyRow;
+};
 
 const normalizeText = (value, fallback = "") => {
   const text = String(value ?? "").trim();
@@ -203,11 +216,23 @@ export const studentRepository = {
     }
 
     try {
-      const { data, error } = await client
+      const row = toRow(normalized, authContext);
+      const initialRow = supportsStudentPhotoPath ? row : withoutPhotoPath(row);
+      const initialSelect = supportsStudentPhotoPath ? CLOUD_STUDENT_SELECT : CLOUD_STUDENT_BASE_SELECT;
+      let result = await client
         .from(TABLE)
-        .upsert(toRow(normalized, authContext), { onConflict: "id" })
-        .select(CLOUD_STUDENT_SELECT)
+        .upsert(initialRow, { onConflict: "id" })
+        .select(initialSelect)
         .maybeSingle();
+      if (isMissingPhotoPathColumn(result.error)) {
+        supportsStudentPhotoPath = false;
+        result = await client
+          .from(TABLE)
+          .upsert(withoutPhotoPath(row), { onConflict: "id" })
+          .select(CLOUD_STUDENT_BASE_SELECT)
+          .maybeSingle();
+      }
+      const { data, error } = result;
       const syncedStudent = data ? toAppStudent(data) : normalized;
       if (data) this.saveStudent(syncedStudent);
       return { synced: !error, error, student: syncedStudent };
@@ -225,11 +250,21 @@ export const studentRepository = {
     }
 
     try {
-      const { data, error } = await client
+      const initialSelect = supportsStudentPhotoPath ? CLOUD_STUDENT_SELECT : CLOUD_STUDENT_BASE_SELECT;
+      let result = await client
         .from(TABLE)
-        .select(CLOUD_STUDENT_SELECT)
+        .select(initialSelect)
         .eq("coach_id", authContext.coachId)
         .order("name", { ascending: true });
+      if (isMissingPhotoPathColumn(result.error)) {
+        supportsStudentPhotoPath = false;
+        result = await client
+          .from(TABLE)
+          .select(CLOUD_STUDENT_BASE_SELECT)
+          .eq("coach_id", authContext.coachId)
+          .order("name", { ascending: true });
+      }
+      const { data, error } = result;
       if (error) return { synced: false, error, students: localStudents };
 
       const cloudStudents = (data || []).map(toAppStudent);
@@ -246,12 +281,23 @@ export const studentRepository = {
     if (!client || !authContext?.user) return { synced: false, reason: "not-authenticated", student: null };
 
     try {
-      const { data: byUserId, error: userIdError } = await client
+      const initialSelect = supportsStudentPhotoPath ? CLOUD_STUDENT_SELECT : CLOUD_STUDENT_BASE_SELECT;
+      let result = await client
         .from(TABLE)
-        .select(CLOUD_STUDENT_SELECT)
+        .select(initialSelect)
         .eq("student_user_id", authContext.user.id)
         .order("updated_at", { ascending: false })
         .limit(20);
+      if (isMissingPhotoPathColumn(result.error)) {
+        supportsStudentPhotoPath = false;
+        result = await client
+          .from(TABLE)
+          .select(CLOUD_STUDENT_BASE_SELECT)
+          .eq("student_user_id", authContext.user.id)
+          .order("updated_at", { ascending: false })
+          .limit(20);
+      }
+      const { data: byUserId, error: userIdError } = result;
 
       if (userIdError) return { synced: false, error: userIdError, student: null };
 
