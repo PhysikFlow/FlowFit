@@ -35,6 +35,10 @@ export function initWindowControlsOverlay() {
 /**
  * Mirror the sidebar brand icon into the titlebar so they stay in sync.
  * Called once when WCO becomes active and on every geometry change.
+ *
+ * Only copies innerHTML — never overwrites className, because the sidebar
+ * icon uses `surface-icon` (2.15 rem) which would blow past the titlebar's
+ * own constrained sizing (1.65 rem).
  */
 function syncBrandIcon() {
   const sidebarIcon = document.querySelector("[data-brand-icon]");
@@ -44,7 +48,12 @@ function syncBrandIcon() {
 
   if (sidebarIcon && wcoIcon) {
     wcoIcon.innerHTML = sidebarIcon.innerHTML;
-    wcoIcon.className = sidebarIcon.className;
+    /* Ensure any <img> inside the copied markup stays within bounds */
+    wcoIcon.querySelectorAll("img").forEach((img) => {
+      img.style.width = "100%";
+      img.style.height = "100%";
+      img.style.objectFit = "contain";
+    });
   }
 
   if (brandName && wcoName) {
