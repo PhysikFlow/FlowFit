@@ -13,8 +13,7 @@ import { initAllDatePickers, refreshDatePicker } from "../../appAluno/js/core/da
 import { createNavigation } from "./core/navigation.js?v=build-20260816-1";
 import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v=build-20260816-1";
 import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260818-1";
-import { initAvailabilityCalendar } from "./screens/agenda/availability-calendar.js?v=build-20260818-1";
-import { initExceptionsCard } from "./screens/agenda/exceptions-card.js?v=build-20260818-3";
+import { initAgendaPlanner } from "./screens/agenda/agenda-planner.js?v=build-20260821-1";
 import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=build-20260816-1";
 import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260816-3";
 import { createWorkoutPdfExporter } from "./pdf/workout-pdf-exporter.js?v=build-20260820-2";
@@ -2046,8 +2045,7 @@ const renderAll = () => {
   renderThemePalettes({ syncToTheme: true });
   if (!agendaCalendarReady) {
     agendaCalendarReady = true;
-    initAvailabilityCalendar(document.querySelector("[data-agenda-calendar]"));
-    initExceptionsCard(document.querySelector("[data-agenda-exceptions]"));
+    initAgendaPlanner(document.querySelector("[data-agenda-planner]"));
   }
 };
 
