@@ -1,5 +1,6 @@
 import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260813-1";
+import { initWindowControlsOverlay } from "./core/window-controls.js?v=build-20260821-1";
 import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260818-1";
 import { InstallManager } from "../../appAluno/js/core/install.js?v=build-20260816-2";
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260821-1";
@@ -23,6 +24,7 @@ import { createRefreshCoordinator } from "../../appAluno/js/core/refresh-coordin
 
 initCustomSelects();
 initAllDatePickers();
+initWindowControlsOverlay();
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
@@ -1989,6 +1991,20 @@ const closeDuplicateWorkoutDialog = () => {
   if (duplicateWorkoutDialog?.open) duplicateWorkoutDialog.close();
 };
 
+/** Sync the sidebar brand icon into the WCO titlebar. */
+const syncWcoBrandIcon = () => {
+  if (!document.documentElement.classList.contains("wco-active")) return;
+  const sidebarIcon = document.querySelector("[data-brand-icon]");
+  const wcoIcon = document.querySelector("[data-wco-brand-icon]");
+  if (sidebarIcon && wcoIcon) {
+    wcoIcon.innerHTML = sidebarIcon.innerHTML;
+    wcoIcon.className = sidebarIcon.className;
+  }
+  const wcoName = document.querySelector("[data-wco-brand-name]");
+  const brandNameEl = document.querySelector("[data-brand-name]");
+  if (brandNameEl && wcoName) wcoName.textContent = brandNameEl.textContent;
+};
+
 const applyTheme = (overrides = {}) => {
   const {
     brand,
@@ -2020,6 +2036,7 @@ const applyTheme = (overrides = {}) => {
   setText("[data-preview-brand]", nextTheme.brandName);
   setText("[data-preview-tagline]", nextTheme.tagline);
   renderLocalBrandAssets();
+  syncWcoBrandIcon();
   renderInviteTools();
 };
 
