@@ -2106,7 +2106,6 @@ document.addEventListener("keydown", (event) => {
 
 /* ── Swipe-to-open / swipe-to-close drawer ──────────────────── */
 (() => {
-  const EDGE_ZONE = 32;
   const THRESHOLD = 56;
   const DOMINANCE = 1.2;
   let tracking = false;
@@ -2126,12 +2125,14 @@ document.addEventListener("keydown", (event) => {
     sidebarWidth = drawerSidebar?.getBoundingClientRect().width || 0;
   };
 
+  const getEdgeZone = () => Math.min(72, Math.max(52, window.innerWidth * 0.14));
+
   document.addEventListener("touchstart", (event) => {
     if (!drawerSidebar || window.matchMedia("(min-width: 761px)").matches) return;
     const touch = event.touches[0];
     if (isInteractive(touch.target)) return;
 
-    if (!isDrawerOpen && touch.clientX > EDGE_ZONE) return;
+    if (!isDrawerOpen && touch.clientX > getEdgeZone()) return;
 
     tracking = true;
     startX = touch.clientX;
@@ -2155,7 +2156,7 @@ document.addEventListener("keydown", (event) => {
       const horizontalDominant = Math.abs(rawDx) > Math.abs(rawDy) * DOMINANCE;
       const horizontalSwipe = isDrawerOpen
         ? rawDx < 0 && horizontalDominant
-        : rawDx > 0 && horizontalDominant && startX < EDGE_ZONE;
+        : rawDx > 0 && horizontalDominant && startX < getEdgeZone();
 
       if (!horizontalSwipe) {
         tracking = false;
