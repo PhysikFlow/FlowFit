@@ -912,7 +912,9 @@ const { navigate } = createNavigation({
   onNavigate: (destination) => {
     if (destination !== "students") setStudentSessionOpen(false, { focus: false });
     const activeItem = sideNav?.querySelector(`[data-nav="${destination}"]`);
-    activeItem?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    if (window.matchMedia("(min-width: 761px) and (max-width: 980px)").matches) {
+      activeItem?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    }
     syncSideNavIndicator(activeItem);
   }
 });
@@ -2052,6 +2054,7 @@ const renderAll = () => {
 navItems.forEach((item) => item.addEventListener("click", (event) => {
   event.preventDefault();
   navigate(item.dataset.nav);
+  if (event.detail > 0) window.requestAnimationFrame(() => item.blur());
 }));
 
 /* ── Mobile drawer sidebar ─────────────────────────────────────── */
@@ -2072,6 +2075,7 @@ const setDrawerOpen = (open) => {
 const desktopSidebarMedia = window.matchMedia("(min-width: 981px) and (hover: hover) and (pointer: fine)");
 const setDesktopSidebarExpanded = (expanded) => {
   document.body.classList.toggle("is-sidebar-expanded", desktopSidebarMedia.matches && Boolean(expanded));
+  if (desktopSidebarMedia.matches && sideNav) sideNav.scrollLeft = 0;
 };
 
 drawerSidebar?.addEventListener("pointerenter", () => setDesktopSidebarExpanded(true));
