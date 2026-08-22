@@ -15,6 +15,7 @@ export const createStudentsScreen = ({
   renderStudentOptions,
   renderWorkoutPreview
 }) => {
+  const displayName = (student) => String(student?.displayName || student?.name || "Aluno").trim() || "Aluno";
   const studentSessionPanel = document.querySelector("[data-student-session-panel]");
   const studentList = document.querySelector("[data-student-list]");
 
@@ -50,6 +51,7 @@ export const createStudentsScreen = ({
     target.hidden = false;
     viewState.selectedStudentId = selectedStudent.id;
     const sessions = getSessionsForStudent(selectedStudent.id);
+    const contactLine = [selectedStudent.email, selectedStudent.phone].filter(Boolean).join(" · ");
     const totalSessions = sessions.length;
     const lastSession = sessions[0] || null;
     const totalVolume = sessions.reduce((sum, session) => sum + Number(session.volumeKg || 0), 0);
@@ -98,7 +100,8 @@ export const createStudentsScreen = ({
         <div class="student-session-panel__title">
           <button class="button button--quiet" type="button" data-student-session-close>${svgIcon("chevron-left")} Voltar para alunos</button>
           <span class="eyebrow">Acompanhamento</span>
-          <h2 id="student-session-title">${escapeHtml(selectedStudent.name)}</h2>
+          <h2 id="student-session-title">${escapeHtml(displayName(selectedStudent))}</h2>
+          ${contactLine ? `<p>${escapeHtml(contactLine)}</p>` : ""}
         </div>
         <div class="student-session-panel__actions">
           <button class="button button--quiet" type="button" data-refresh-sessions>Atualizar</button>
@@ -126,7 +129,7 @@ export const createStudentsScreen = ({
     const query = normalizeSearch(viewState.studentSearchQuery);
     const visibleStudents = students.filter((student) => {
       const matchesSearch = !query
-        || normalizeSearch([student.name, student.email, student.goal, student.status].join(" ")).includes(query);
+        || normalizeSearch([displayName(student), student.name, student.email, student.goal, student.status].join(" ")).includes(query);
       const matchesFilter = viewState.studentFilter === "all"
         || (viewState.studentFilter === "without-workout" && !getPublishedWorkoutForStudent(student))
         || (viewState.studentFilter === "invite-pending" && student.inviteStatus !== "accepted" && !isInviteExpired(student))
@@ -171,12 +174,14 @@ export const createStudentsScreen = ({
         : isInviteExpired(student) ? "expired" : "pending";
       const accessLabel = accessState === "active" ? "Acesso ativo" : accessState === "expired" ? "Convite expirado" : "Convite pendente";
       const accessEmail = student.email || "Sem email de acesso";
+      const contactLine = [accessEmail, student.phone].filter(Boolean).join(" · ");
       const statusIsException = student.status && student.status !== "Ativo";
+      const studentName = displayName(student);
       return `
         <article class="entity-row student-row" data-student-card="${escapeHtml(student.id)}">
           <div class="entity-row__identity">
-            <span class="avatar">${student.photoUrl ? `<img src="${escapeHtml(student.photoUrl)}" alt="Foto de ${escapeHtml(student.name)}" loading="lazy">` : escapeHtml(student.initials)}</span>
-            <div><h2>${escapeHtml(student.name)}</h2><small>${escapeHtml(accessEmail)}</small></div>
+            <span class="avatar">${student.photoUrl ? `<img src="${escapeHtml(student.photoUrl)}" alt="Foto de ${escapeHtml(studentName)}" loading="lazy">` : escapeHtml(studentName.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || student.initials)}</span>
+            <div><h2>${escapeHtml(studentName)}</h2><small>${escapeHtml(contactLine)}</small></div>
           </div>
           <div class="entity-row__field"><small>Objetivo</small><span>${escapeHtml(student.goal)}</span></div>
           <div class="entity-row__field"><small>Treino</small><span>${escapeHtml(workoutLabel)}</span></div>
@@ -191,7 +196,7 @@ export const createStudentsScreen = ({
               ? `<button class="button" type="button" data-student-detail="${escapeHtml(student.id)}">Acompanhar</button>`
               : `<button class="button" type="button" data-student-action="${escapeHtml(student.id)}">Criar treino</button>`}
             <details class="action-menu entity-menu">
-              <summary class="icon-button" aria-label="Mais ações para ${escapeHtml(student.name)}">•••</summary>
+              <summary class="icon-button" aria-label="Mais ações para ${escapeHtml(studentName)}">•••</summary>
               <div class="action-menu__popover">
                 <button type="button" data-student-invite="${escapeHtml(student.id)}">Enviar convite</button>
                 ${publishedWorkout ? `<button type="button" data-student-action="${escapeHtml(student.id)}">Editar treino</button>` : ""}

@@ -4,7 +4,8 @@ import { Theme } from "./core/theme.js?v=build-20260818-1";
 import { svgIcon } from "./core/icons.js?v=build-20260810-7";
 import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260818-1";
 import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260812-6";
-import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260821-1";
+import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260822-1";
+import { applyStudentProfile, effectiveStudentName, studentProfileRepository } from "./data/repositories/student-profile-repository.js?v=build-20260822-1";
 import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260820-1";
 import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260820-1";
 import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260820-1";
@@ -17,8 +18,9 @@ import { createAgendaScreen } from "./screens/agenda/agenda-screen.js?v=build-20
 import { createEvolutionScreen } from "./screens/evolution/evolution-screen.js?v=build-20260816-1";
 import { createHistoryScreen } from "./screens/history/history-screen.js?v=build-20260816-1";
 import { createHomeScreen } from "./screens/home/home-screen.js?v=build-20260818-1";
+import { createStudentProfileEditor } from "./screens/profile/student-profile-editor.js?v=build-20260822-1";
 import { createNotificationsScreen } from "./screens/notifications/notifications-screen.js?v=build-20260816-1";
-import { createStudentAppState } from "./state/app-state.js?v=build-20260816-1";
+import { createStudentAppState } from "./state/app-state.js?v=build-20260822-1";
 import { createWorkoutSessionState } from "./state/workout-session-state.js?v=build-20260816-1";
 import { createRefreshCoordinator } from "./core/refresh-coordinator.js?v=build-20260820-1";
 import {
@@ -609,9 +611,13 @@ const toRuntimeStudent = (student, authContext) => {
     };
   }
 
+  const name = effectiveStudentName(student);
   return {
     ...emptyStudent,
     ...student,
+    originalName: student.name,
+    name,
+    initials: name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || student.initials || "AL",
     since: student.createdAt ? formatMonthYear(student.createdAt) : "",
     coach: student.coachName || "Personal",
     frequency: student.plan || "Atendimento"
@@ -627,6 +633,25 @@ const {
   appState, emptyStudent, emptyWorkout, Store, homeWorkoutAction, homeWorkoutLabel,
   coachCard, coachOptions, getCoachInitials, setImageOrText, formatWorkoutAvailability,
   getCurrentExercises, getTotalSets, getActiveSession, getCompletedSessionSets, getSessionTotalSets
+});
+
+const applyAccountProfile = (profile, { render = true } = {}) => {
+  appState.studentProfile = profile || null;
+  appState.studentAccesses = (appState.studentAccesses || []).map((student) => applyStudentProfile(student, profile));
+  const current = appState.studentAccesses.find((student) => student.id === appState.currentStudent?.id)
+    || applyStudentProfile(appState.currentStudent, profile);
+  if (current) appState.currentStudent = toRuntimeStudent(current, runtimeAuthContext);
+  if (render) renderAll();
+};
+
+createStudentProfileEditor({
+  getCurrentStudent: () => appState.currentStudent,
+  getCurrentProfile: () => appState.studentProfile,
+  getAuthContext: () => runtimeAuthContext,
+  setImageOrText,
+  repository: studentProfileRepository,
+  onProfileUpdated: async (profile) => applyAccountProfile(profile),
+  showToast
 });
 const getWorkoutVolume = (session = getActiveSession()) => getSessionEntries(session)
   .reduce((sum, entry) => sum + (Number(entry.loadKg || 0) * Number(entry.reps || 0)), 0);
@@ -1646,6 +1671,7 @@ const startAuthenticatedApp = async () => {
     return false;
   }
 
+  appState.studentProfile = null;
   appState.studentAccesses = (studentResult.students || [studentResult.student]).filter(Boolean);
   const storedStudentId = Platform.storage.get(`${ACTIVE_STUDENT_KEY}:${session.user.id}`, "");
   const selectedStudent = appState.studentAccesses.find((student) => student.id === claimedStudentId)
@@ -1664,6 +1690,14 @@ const startAuthenticatedApp = async () => {
   syncOnboarding();
   setAuthChecking(false);
   navigate(location.hash.slice(1) || "home", false);
+
+  // O perfil e o avatar complementam a tela quando chegam; nunca atrasam a
+  // abertura do app, dos treinos ou do conteúdo já armazenado localmente.
+  const profileUserId = authContext.user.id;
+  void studentProfileRepository.fetchOwnProfile({ authContext }).then((profileResult) => {
+    if (runtimeAuthContext?.user?.id !== profileUserId || !profileResult.profile) return;
+    applyAccountProfile(profileResult.profile);
+  });
 
   await refreshStudentRemoteData({ force: true });
   const retriedSessions = await retryPendingSessions();
@@ -2434,6 +2468,7 @@ onboardingForm?.addEventListener("submit", async (event) => {
 
 const signOut = async () => {
   await authRepository.signOut();
+  studentProfileRepository.clearSignedUrlCache();
   runtimeAuthContext = null;
   foregroundRefreshPromise = null;
   studentRefresh.invalidate();
@@ -2442,6 +2477,7 @@ const signOut = async () => {
   appState.currentStudent = emptyStudent;
   appState.currentWorkout = emptyWorkout;
   appState.studentAccesses = [];
+  appState.studentProfile = null;
   appState.availableWorkouts = [];
   appState.upcomingWorkouts = [];
   focusedExerciseId = "";

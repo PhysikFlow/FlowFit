@@ -57,3 +57,16 @@ somente professores com acesso permitido podem alterar os objetos.
 O app continua guardando uma cópia otimizada local para funcionar offline. A
 cópia local é fallback; quando o upload remoto conclui, o caminho publicado no
 tema é usado por todos os dispositivos.
+
+## Perfil e avatar privado do aluno
+
+`migrations/20260822143000_flowfit_private_student_profiles.sql` cria
+`student_profiles`, separando o nome de exibição e o telefone editáveis do nome
+administrativo salvo pelo personal em `students`. Também cria o bucket privado
+`flowfit-student-avatars`, limitado a WebP de 1 MB. O aluno só altera o próprio
+perfil e o arquivo `<auth.uid()>/avatar.webp`; um personal só pode ler perfis e
+assinar avatares de alunos vinculados a ele.
+
+A migration anterior `20260821120000_flowfit_student_photo_path.sql` permanece
+no histórico por já poder ter sido aplicada, mas sua coluna não é usada como
+fonte da nova funcionalidade. Não edite nem reaplique essa migration antiga.

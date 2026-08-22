@@ -16,9 +16,11 @@
     <link rel="stylesheet" href="css/tokens.css?v=build-20260816-1" />
     <link rel="stylesheet" href="css/components.css?v=build-20260816-2" />
     <link rel="stylesheet" href="css/fonts.css?v=build-20260817-1" />
+    <link rel="stylesheet" href="vendor/cropperjs/cropper.min.css?v=1.6.2" />
     <link rel="stylesheet" href="css/date-picker.css?v=build-20260819-1" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260821-3" />
-    <script type="module" src="js/app.js?v=build-20260821-4"></script>
+    <link rel="stylesheet" href="css/app.css?v=build-20260822-1" />
+    <script defer src="vendor/cropperjs/cropper.min.js?v=1.6.2"></script>
+    <script type="module" src="js/app.js?v=build-20260822-1"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title" aria-busy="true">
@@ -223,11 +225,12 @@
       <section class="page" data-page="profile" aria-labelledby="profile-title">
         <article class="profile-card card">
           <span class="avatar" aria-hidden="true" data-student-initials>AL</span>
-          <div>
+          <div class="profile-card__copy">
             <h1 id="profile-title" data-student-name>Aluno</h1>
             <p class="muted" data-student-since>Vínculo sendo carregado</p>
             <span class="chip" data-student-plan>Sem plano</span>
           </div>
+          <button class="button button--quiet profile-card__edit" type="button" data-profile-edit-open>Editar perfil</button>
         </article>
 
         <section class="profile-summary card" aria-label="Resumo do aluno">
@@ -280,6 +283,79 @@
         <div class="coach-dialog__options" data-coach-options role="group" aria-label="Personais disponíveis"></div>
         <p class="form-status coach-dialog__status" data-coach-dialog-status role="status" aria-live="polite"></p>
       </section>
+    </dialog>
+
+    <dialog class="app-dialog student-profile-dialog" data-student-profile-dialog aria-labelledby="student-profile-dialog-title">
+      <form class="dialog-form student-profile-form" data-student-profile-form>
+        <button class="icon-button dialog-form__close" type="button" data-student-profile-close aria-label="Fechar edição do perfil">×</button>
+        <header>
+          <span class="eyebrow">Sua conta</span>
+          <h2 id="student-profile-dialog-title">Editar perfil</h2>
+          <p>Esses dados aparecem para os seus personais. O cadastro original permanece preservado.</p>
+        </header>
+
+        <div class="student-profile-avatar-editor">
+          <span class="avatar student-profile-avatar-preview" data-student-profile-avatar-preview aria-hidden="true">AL</span>
+          <div>
+            <strong>Foto de perfil</strong>
+            <small>Recorte quadrado, salvo de forma privada em WebP.</small>
+            <div class="student-profile-avatar-actions">
+              <label class="button button--quiet student-profile-file-button">
+                Escolher foto
+                <input type="file" accept="image/png,image/jpeg,image/webp" data-student-profile-photo-input />
+              </label>
+              <button class="text-button text-button--danger" type="button" data-student-profile-photo-remove hidden>Remover</button>
+            </div>
+          </div>
+        </div>
+
+        <label>
+          Nome de exibição
+          <input name="displayName" maxlength="80" autocomplete="name" placeholder="Como você quer ser chamado" />
+          <small>Se ficar vazio, usaremos o nome cadastrado pelo personal.</small>
+        </label>
+        <label>
+          Telefone ou WhatsApp
+          <input name="phone" type="tel" maxlength="30" autocomplete="tel" inputmode="tel" placeholder="(00) 00000-0000" />
+        </label>
+        <label>
+          Email de acesso
+          <input name="email" type="email" readonly data-student-profile-email />
+          <small>O email não é alterado aqui porque identifica seu acesso e seus convites.</small>
+        </label>
+
+        <p class="form-status" data-student-profile-status role="status" aria-live="polite"></p>
+        <footer class="dialog-actions">
+          <button class="button button--quiet" type="button" data-student-profile-close>Cancelar</button>
+          <button class="button" type="submit" data-student-profile-save>Salvar perfil</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog class="app-dialog asset-crop-dialog" data-student-avatar-crop-dialog aria-labelledby="student-avatar-crop-title" aria-describedby="student-avatar-crop-help">
+      <form class="dialog-form asset-crop-form" data-student-avatar-crop-form>
+        <header class="asset-crop-header">
+          <div>
+            <span class="eyebrow">Foto de perfil</span>
+            <h2 id="student-avatar-crop-title">Ajustar recorte</h2>
+          </div>
+          <button class="icon-button" type="button" data-student-avatar-crop-cancel aria-label="Fechar recorte">×</button>
+        </header>
+        <div class="asset-crop-stage">
+          <img data-student-avatar-crop-image alt="Imagem selecionada para recorte" />
+        </div>
+        <div class="asset-crop-zoom" aria-label="Controle de zoom">
+          <button class="icon-button" type="button" data-student-avatar-zoom-out aria-label="Diminuir zoom">−</button>
+          <label><span class="sr-only">Zoom da imagem</span><input type="range" min="0" max="1" step="0.01" value="0" data-student-avatar-zoom /></label>
+          <button class="icon-button" type="button" data-student-avatar-zoom-in aria-label="Aumentar zoom">+</button>
+        </div>
+        <p class="asset-crop-help" id="student-avatar-crop-help">Arraste para reposicionar. Use pinça ou o controle para ampliar.</p>
+        <p class="form-status" data-student-avatar-crop-status role="status" aria-live="polite"></p>
+        <footer class="dialog-actions">
+          <button class="button button--quiet" type="button" data-student-avatar-crop-cancel>Cancelar</button>
+          <button class="button" type="submit" data-student-avatar-crop-confirm>Usar recorte</button>
+        </footer>
+      </form>
     </dialog>
 
     <section class="workout-runner" data-workout-runner hidden aria-labelledby="runner-exercise-name">

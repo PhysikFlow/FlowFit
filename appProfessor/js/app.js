@@ -2,7 +2,8 @@ import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260813-1";
 import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260818-1";
 import { InstallManager } from "../../appAluno/js/core/install.js?v=build-20260816-2";
-import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260821-1";
+import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260822-1";
+import { applyStudentProfile, effectiveStudentName, studentProfileRepository } from "../../appAluno/js/data/repositories/student-profile-repository.js?v=build-20260822-1";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260820-1";
 import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260820-1";
@@ -11,11 +12,11 @@ import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "../../appAluno/js/components/custom-select.js?v=build-20260816-1";
 import { initAllDatePickers, refreshDatePicker } from "../../appAluno/js/core/date-picker.js?v=build-20260819-1";
 import { createNavigation } from "./core/navigation.js?v=build-20260816-1";
-import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v=build-20260816-1";
+import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v=build-20260822-1";
 import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260818-1";
 import { initAgendaPlanner } from "./screens/agenda/agenda-planner.js?v=build-20260821-2";
 import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=build-20260816-1";
-import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260816-3";
+import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260822-1";
 import { createWorkoutPdfExporter } from "./pdf/workout-pdf-exporter.js?v=build-20260820-2";
 import { escapeHtml, formatUpdatedAt, formatVolume, initialsFromName, normalizeEmail, normalizeSearch } from "./utils/formatters.js?v=build-20260816-1";
 import { createProfessorViewState } from "./state/view-state.js?v=build-20260816-1";
@@ -234,6 +235,7 @@ const THEME_PALETTES = [
 
 let themeSaveTimer;
 let students = studentRepository.listStudents();
+let linkedStudentProfiles = new Map();
 let workouts = workoutRepository.listPublishedWorkouts();
 let workoutSessions = [];
 const viewState = createProfessorViewState();
@@ -634,7 +636,7 @@ const buildInviteMessage = (student) => {
     ? `Você também pode entrar diretamente com ${student.email}, sem precisar guardar este link.`
     : "Como seu email não foi cadastrado, use este link no primeiro acesso.";
   return [
-    `Oi, ${student.name}!`,
+    `Oi, ${effectiveStudentName(student)}!`,
     `${getCoachPublicName()} liberou seu acesso ao ${brandName}.`,
     `Acesse: ${getStudentAppUrl(student)}`,
     emailLine,
@@ -1036,7 +1038,9 @@ const syncStudentWorkout = (workout) => {
 };
 
 const applyStudents = (nextStudents) => {
-  students = [...nextStudents].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  students = nextStudents
+    .map((student) => applyStudentProfile(student, linkedStudentProfiles.get(String(student.studentUserId || ""))))
+    .sort((a, b) => effectiveStudentName(a).localeCompare(effectiveStudentName(b), "pt-BR"));
   workouts.forEach(syncStudentWorkout);
   renderStudents();
   renderDashboard();
@@ -1074,12 +1078,21 @@ const refreshStudents = async ({ silent = false } = {}) => {
   const result = await studentRepository.fetchStudents({ authContext });
   if (result.synced) panelRefresh.markFresh("students");
   viewState.dataStatus = result.synced ? "Online" : "Local";
-  applyStudents(result.students);
+  const profileResult = await studentProfileRepository.fetchLinkedProfiles(
+    result.students.map((student) => student.studentUserId),
+    { authContext }
+  );
+  if (profileResult.synced) linkedStudentProfiles = profileResult.byUserId;
+  const enrichedStudents = result.students.map((student) => applyStudentProfile(
+    student,
+    profileResult.byUserId?.get(String(student.studentUserId || ""))
+  ));
+  applyStudents(enrichedStudents);
   setStudentSyncStatus(
     result.synced ? "Alunos atualizados." : "Alunos em modo offline.",
     result.synced ? "synced" : "warning"
   );
-  return result;
+  return { ...result, students: enrichedStudents, profilesSynced: profileResult.synced };
 };
 
 const refreshPublishedWorkouts = async ({ silent = false } = {}) => {
@@ -1231,7 +1244,10 @@ const renderInviteTools = () => {
     return;
   }
 
-  inviteStudentOptions.innerHTML = students.map((student) => `<option value="${escapeHtml(student.id)}" data-icon="${escapeHtml(initialsFromName(student.name))}" data-avatar="true"${student.email ? ` data-description="${escapeHtml(student.email)}"` : ""}>${escapeHtml(student.name)}</option>`).join("");
+  inviteStudentOptions.innerHTML = students.map((student) => {
+    const name = effectiveStudentName(student);
+    return `<option value="${escapeHtml(student.id)}" data-icon="${escapeHtml(initialsFromName(name))}" data-avatar="true"${student.email ? ` data-description="${escapeHtml(student.email)}"` : ""}>${escapeHtml(name)}</option>`;
+  }).join("");
   if (students.some((student) => student.id === previousValue)) inviteStudentOptions.value = previousValue;
 
   const selected = students.find((student) => student.id === inviteStudentOptions.value && student.inviteToken)
@@ -1244,10 +1260,11 @@ const renderInviteTools = () => {
   whatsappInvite.classList.toggle("is-disabled", expired);
   whatsappInvite.setAttribute("aria-disabled", String(expired));
   if (copyInviteButton) copyInviteButton.textContent = expired ? "Gerar novo convite" : "Copiar convite";
-  if (expired) setInviteStatus(`O convite de ${selected.name} expirou. Gere um novo link.`, "warning");
-  else if (selected.inviteStatus === "accepted") setInviteStatus(`${selected.name} já ativou o acesso.`, "synced");
-  else if (selected.email) setInviteStatus(`Link opcional: ${selected.name} também pode entrar diretamente com o email cadastrado.`, "synced");
-  else setInviteStatus(`Convite necessário: o email será definido no primeiro acesso de ${selected.name}.`, "warning");
+  const selectedName = effectiveStudentName(selected);
+  if (expired) setInviteStatus(`O convite de ${selectedName} expirou. Gere um novo link.`, "warning");
+  else if (selected.inviteStatus === "accepted") setInviteStatus(`${selectedName} já ativou o acesso.`, "synced");
+  else if (selected.email) setInviteStatus(`Link opcional: ${selectedName} também pode entrar diretamente com o email cadastrado.`, "synced");
+  else setInviteStatus(`Convite necessário: o email será definido no primeiro acesso de ${selectedName}.`, "warning");
   refreshCustomSelects(inviteStudentOptions);
 };
 
@@ -1266,7 +1283,10 @@ const renderStudentOptions = () => {
   const previousValue = select.value;
   select.disabled = false;
   if (submitButton) submitButton.disabled = false;
-  select.innerHTML = students.map((student) => `<option value="${escapeHtml(student.id)}" data-icon="${escapeHtml(initialsFromName(student.name))}" data-avatar="true"${student.email ? ` data-description="${escapeHtml(student.email)}"` : ""}>${escapeHtml(student.name)}</option>`).join("");
+  select.innerHTML = students.map((student) => {
+    const name = effectiveStudentName(student);
+    return `<option value="${escapeHtml(student.id)}" data-icon="${escapeHtml(initialsFromName(name))}" data-avatar="true"${student.email ? ` data-description="${escapeHtml(student.email)}"` : ""}>${escapeHtml(name)}</option>`;
+  }).join("");
   if (students.some((student) => student.id === previousValue)) select.value = previousValue;
   renderInviteTools();
 };
@@ -1968,9 +1988,12 @@ const { render: renderWorkouts } = createWorkoutsScreen({
 
 const renderDuplicateWorkoutStudents = (selectedStudentId = "") => {
   if (!duplicateWorkoutStudents) return;
-  duplicateWorkoutStudents.innerHTML = students.map((student) => `
-    <option value="${escapeHtml(student.id)}" data-icon="${escapeHtml(initialsFromName(student.name))}" data-avatar="true"${student.email ? ` data-description="${escapeHtml(student.email)}"` : ""} ${student.id === selectedStudentId ? "selected" : ""}>${escapeHtml(student.name)}</option>
-  `).join("");
+  duplicateWorkoutStudents.innerHTML = students.map((student) => {
+    const name = effectiveStudentName(student);
+    return `
+      <option value="${escapeHtml(student.id)}" data-icon="${escapeHtml(initialsFromName(name))}" data-avatar="true"${student.email ? ` data-description="${escapeHtml(student.email)}"` : ""} ${student.id === selectedStudentId ? "selected" : ""}>${escapeHtml(name)}</option>
+    `;
+  }).join("");
 };
 
 const openDuplicateWorkoutDialog = (workout) => {
@@ -3050,11 +3073,13 @@ const signOutProfessor = async () => {
   try {
     await authRepository.signOut();
   } finally {
+    studentProfileRepository.clearSignedUrlCache();
     authenticatedSessionDetected = false;
     authContext = null;
     lastCoachAccessResult = null;
     panelRefresh.invalidate();
     students = [];
+    linkedStudentProfiles = new Map();
     workouts = [];
     workoutSessions = [];
     viewState.selectedStudentId = "";

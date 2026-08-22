@@ -1,18 +1,8 @@
-import { DEMO_COACH_ID, SUPABASE_URL } from "../../config.js?v=build-20260809-6";
+import { DEMO_COACH_ID } from "../../config.js?v=build-20260809-6";
 import { Platform } from "../../core/platform.js?v=build-20260813-1";
 import { getSupabase } from "../../core/supabase.js?v=build-20260812-5";
 import { authRepository } from "./auth-repository.js?v=build-20260812-5";
 import { studentKeyFromName } from "./workout-repository.js?v=build-20260813-2";
-
-const BRAND_ASSET_BUCKET = "flowfit-brand-assets";
-
-const assetPublicUrl = (path, version = "") => {
-  const safePath = String(path || "").trim();
-  if (!safePath) return "";
-  const encodedPath = safePath.split("/").map((part) => encodeURIComponent(part)).join("/");
-  const base = `${String(SUPABASE_URL).replace(/\/$/, "")}/storage/v1/object/public/${BRAND_ASSET_BUCKET}/${encodedPath}`;
-  return version ? `${base}?v=${encodeURIComponent(version)}` : base;
-};
 
 export const STUDENTS_KEY = "flowfit.students";
 
@@ -38,20 +28,7 @@ const CLOUD_STUDENT_BASE_FIELDS = [
   "created_at",
   "updated_at"
 ];
-const CLOUD_STUDENT_BASE_SELECT = CLOUD_STUDENT_BASE_FIELDS.join(", ");
-const CLOUD_STUDENT_SELECT = [...CLOUD_STUDENT_BASE_FIELDS, "photo_path"].join(", ");
-let supportsStudentPhotoPath = true;
-
-const isMissingPhotoPathColumn = (error) => {
-  if (!error) return false;
-  const details = [error.code, error.message, error.details, error.hint].filter(Boolean).join(" ");
-  return /photo_path/i.test(details) && /(42703|PGRST204|column|schema cache|does not exist)/i.test(details);
-};
-
-const withoutPhotoPath = (row) => {
-  const { photo_path: _photoPath, ...legacyRow } = row;
-  return legacyRow;
-};
+const CLOUD_STUDENT_SELECT = CLOUD_STUDENT_BASE_FIELDS.join(", ");
 
 const normalizeText = (value, fallback = "") => {
   const text = String(value ?? "").trim();
@@ -78,7 +55,17 @@ export const initialsFromName = (name) => normalizeText(name, "Aluno")
 
 const readStudents = () => {
   const items = Platform.storage.get(STUDENTS_KEY, []);
-  return Array.isArray(items) ? items : [];
+  if (!Array.isArray(items)) return [];
+  let removedLegacyPhoto = false;
+  const sanitized = items.map((item) => {
+    if (!item || typeof item !== "object") return item;
+    if (!("photoPath" in item) && !("photoUrl" in item)) return item;
+    removedLegacyPhoto = true;
+    const { photoPath: _photoPath, photoUrl: _photoUrl, ...student } = item;
+    return student;
+  });
+  if (removedLegacyPhoto) Platform.storage.set(STUDENTS_KEY, sanitized);
+  return sanitized;
 };
 
 const writeStudents = (students) => Platform.storage.set(STUDENTS_KEY, students);
@@ -106,8 +93,10 @@ const normalizeStudent = (student) => {
     inviteStatus: normalizeText(student?.inviteStatus, "pending"),
     inviteExpiresAt: normalizeText(student?.inviteExpiresAt, ""),
     inviteClaimedAt: normalizeText(student?.inviteClaimedAt, ""),
-    photoPath: normalizeText(student?.photoPath, ""),
-    photoUrl: normalizeText(student?.photoUrl, ""),
+    // Avatares de alunos vivem exclusivamente no bucket privado e recebem
+    // signed URL em memória pelo student-profile-repository.
+    photoPath: "",
+    photoUrl: "",
     coachName: normalizeText(student?.coachName, "Personal"),
     coachHeadline: normalizeText(student?.coachHeadline, "Acompanhamento personalizado"),
     createdAt: normalizeText(student?.createdAt, updatedAt),
@@ -141,13 +130,11 @@ const toRow = (student, authContext) => ({
   workout: student.workout,
   adherence: student.adherence,
   next_action: student.nextAction,
-  photo_path: student.photoPath || null,
   created_at: student.createdAt,
   updated_at: student.updatedAt
 });
 
 const toAppStudent = (row) => {
-  const photoPath = String(row.photo_path || "").trim();
   return normalizeStudent({
     id: row.id,
     coachId: row.coach_id,
@@ -166,8 +153,8 @@ const toAppStudent = (row) => {
     inviteStatus: row.invite_status,
     inviteExpiresAt: row.invite_expires_at,
     inviteClaimedAt: row.invite_claimed_at,
-    photoPath,
-    photoUrl: assetPublicUrl(photoPath, row.updated_at),
+    photoPath: "",
+    photoUrl: "",
     createdAt: row.created_at,
     updatedAt: row.updated_at
   });
@@ -216,23 +203,11 @@ export const studentRepository = {
     }
 
     try {
-      const row = toRow(normalized, authContext);
-      const initialRow = supportsStudentPhotoPath ? row : withoutPhotoPath(row);
-      const initialSelect = supportsStudentPhotoPath ? CLOUD_STUDENT_SELECT : CLOUD_STUDENT_BASE_SELECT;
-      let result = await client
+      const { data, error } = await client
         .from(TABLE)
-        .upsert(initialRow, { onConflict: "id" })
-        .select(initialSelect)
+        .upsert(toRow(normalized, authContext), { onConflict: "id" })
+        .select(CLOUD_STUDENT_SELECT)
         .maybeSingle();
-      if (isMissingPhotoPathColumn(result.error)) {
-        supportsStudentPhotoPath = false;
-        result = await client
-          .from(TABLE)
-          .upsert(withoutPhotoPath(row), { onConflict: "id" })
-          .select(CLOUD_STUDENT_BASE_SELECT)
-          .maybeSingle();
-      }
-      const { data, error } = result;
       const syncedStudent = data ? toAppStudent(data) : normalized;
       if (data) this.saveStudent(syncedStudent);
       return { synced: !error, error, student: syncedStudent };
@@ -250,21 +225,11 @@ export const studentRepository = {
     }
 
     try {
-      const initialSelect = supportsStudentPhotoPath ? CLOUD_STUDENT_SELECT : CLOUD_STUDENT_BASE_SELECT;
-      let result = await client
+      const { data, error } = await client
         .from(TABLE)
-        .select(initialSelect)
+        .select(CLOUD_STUDENT_SELECT)
         .eq("coach_id", authContext.coachId)
         .order("name", { ascending: true });
-      if (isMissingPhotoPathColumn(result.error)) {
-        supportsStudentPhotoPath = false;
-        result = await client
-          .from(TABLE)
-          .select(CLOUD_STUDENT_BASE_SELECT)
-          .eq("coach_id", authContext.coachId)
-          .order("name", { ascending: true });
-      }
-      const { data, error } = result;
       if (error) return { synced: false, error, students: localStudents };
 
       const cloudStudents = (data || []).map(toAppStudent);
@@ -281,23 +246,12 @@ export const studentRepository = {
     if (!client || !authContext?.user) return { synced: false, reason: "not-authenticated", student: null };
 
     try {
-      const initialSelect = supportsStudentPhotoPath ? CLOUD_STUDENT_SELECT : CLOUD_STUDENT_BASE_SELECT;
-      let result = await client
+      const { data: byUserId, error: userIdError } = await client
         .from(TABLE)
-        .select(initialSelect)
+        .select(CLOUD_STUDENT_SELECT)
         .eq("student_user_id", authContext.user.id)
         .order("updated_at", { ascending: false })
         .limit(20);
-      if (isMissingPhotoPathColumn(result.error)) {
-        supportsStudentPhotoPath = false;
-        result = await client
-          .from(TABLE)
-          .select(CLOUD_STUDENT_BASE_SELECT)
-          .eq("student_user_id", authContext.user.id)
-          .order("updated_at", { ascending: false })
-          .limit(20);
-      }
-      const { data: byUserId, error: userIdError } = result;
 
       if (userIdError) return { synced: false, error: userIdError, student: null };
 
