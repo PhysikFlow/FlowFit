@@ -3358,6 +3358,14 @@ body.no-backdrop-blur .student-session-panel__head {
   backdrop-filter: none;
 }
 
+/* ── Frozen backdrop (baked blur) ──────────────────────────────── */
+.frozen-backdrop { position: fixed; inset: 0; z-index: 9999; pointer-events: none; overflow: hidden; animation: frozen-backdrop-in 180ms ease-out; }
+.frozen-backdrop__snapshot { position: absolute; inset: -4%; transform: scale(1.08); transform-origin: center; filter: blur(6px); will-change: transform, filter; }
+.frozen-backdrop__overlay { position: absolute; inset: 0; background: rgb(0 0 0 / 0.56); }
+@keyframes frozen-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+body.has-frozen-backdrop .app-dialog::backdrop,
+body.has-frozen-backdrop .agenda-dialog::backdrop { background: transparent; backdrop-filter: none; }
+
 .dialog-form {
   position: relative;
   display: grid;

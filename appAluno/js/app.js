@@ -26,11 +26,13 @@ import {
   formatWorkoutDuration, formatWorkoutElapsed, parseLoadKg, parseReps,
   parseRestSeconds, parseTotalSets
 } from "./utils/formatters.js?v=build-20260816-1";
+import { installFrozenBackdrop } from "./core/frozen-backdrop.js?v=build-20260821-1";
 
 initCustomSelects();
 const runnerWheels = initRunnerWheelPickers();
 initInstallUi();
 initAllDatePickers();
+installFrozenBackdrop();
 
 const pages = [...document.querySelectorAll("[data-page]")];
 const navItems = [...document.querySelectorAll("[data-nav]")];
