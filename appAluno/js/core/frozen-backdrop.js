@@ -8,8 +8,8 @@
  *
  * Flow:
  *   dialog.showModal()
- *     → clone body children into a snapshot div
- *     → apply CSS filter: blur(6px) to the snapshot (computed once by GPU)
+ *     → clone the visible body roots into a viewport-sized snapshot
+ *     → keep their current screen geometry and blur the static layer
  *     → show snapshot + dark overlay behind the dialog
  *     → dialog.close() → remove snapshot
  */
@@ -32,15 +32,38 @@ function captureAndFreeze() {
   const snapshot = document.createElement("div");
   snapshot.className = "frozen-backdrop__snapshot";
 
-  // Clone visible body children — skip dialogs, the toast, and hidden elements
+  // Preserve each visible root at its current viewport coordinates. Simply
+  // appending clones makes grid/flex roots reflow inside the snapshot and can
+  // leave only the dark overlay visible in the real application layout.
   for (const child of [...document.body.children]) {
+    const childStyle = getComputedStyle(child);
     if (
       child.tagName === "DIALOG" ||
+      child.tagName === "SCRIPT" ||
       child.classList?.contains("frozen-backdrop") ||
       child.classList?.contains("toast") ||
-      child.hidden
+      child.hidden ||
+      childStyle.display === "none" ||
+      childStyle.visibility === "hidden"
     ) continue;
-    snapshot.appendChild(child.cloneNode(true));
+
+    const rect = child.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+
+    const clone = child.cloneNode(true);
+    clone.setAttribute("aria-hidden", "true");
+    Object.assign(clone.style, {
+      position: "absolute",
+      inset: "auto",
+      top: `${rect.top}px`,
+      left: `${rect.left}px`,
+      width: `${rect.width}px`,
+      height: `${rect.height}px`,
+      margin: "0",
+      transform: "none",
+      pointerEvents: "none"
+    });
+    snapshot.appendChild(clone);
   }
 
   const overlay = document.createElement("div");
@@ -50,7 +73,8 @@ function captureAndFreeze() {
   backdrop.appendChild(overlay);
   document.body.appendChild(backdrop);
 
-  // Force a layout reflow so the browser computes the blur once, then mark active
+  // Force layout once. The cloned scene never changes while the dialog is open,
+  // allowing the browser to reuse the same composited blurred layer.
   void backdrop.offsetHeight;
   activeBackdrop = backdrop;
   document.body.classList.add("has-frozen-backdrop");
@@ -76,14 +100,20 @@ export function installFrozenBackdrop() {
   const originalShowModal = HTMLDialogElement.prototype.showModal;
 
   HTMLDialogElement.prototype.showModal = function (...args) {
-    openDialogCount++;
-
     // Freeze on the first dialog only — subsequent dialogs reuse the same snapshot
-    if (openDialogCount === 1) {
+    const isFirstDialog = openDialogCount === 0;
+    if (isFirstDialog) {
       captureAndFreeze();
     }
 
-    const result = originalShowModal.apply(this, args);
+    let result;
+    try {
+      result = originalShowModal.apply(this, args);
+    } catch (error) {
+      if (isFirstDialog) removeFrozenBackdrop();
+      throw error;
+    }
+    openDialogCount++;
 
     this.addEventListener("close", () => {
       openDialogCount = Math.max(0, openDialogCount - 1);
