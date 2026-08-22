@@ -1634,6 +1634,21 @@ body.has-frozen-backdrop .custom-select__menu {
 .student-profile-form > label {
   display: grid;
   gap: var(--space-1);
+  color: var(--text-supporting);
+  font-size: var(--text-xs);
+  font-weight: var(--type-weight-item-title);
+}
+
+.student-profile-form > label > input:not([readonly]):not([type="file"]) {
+  width: 100%;
+  min-height: 2.35rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-weight: var(--type-weight-item-title);
+  padding: 0 var(--space-3);
+  font-size: var(--text-base);
 }
 
 .student-profile-form > label > small,
