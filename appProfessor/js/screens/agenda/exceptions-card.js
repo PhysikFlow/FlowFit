@@ -8,8 +8,8 @@
  *   import { initExceptionsCard } from "./exceptions-card.js";
  *   initExceptionsCard(document.querySelector("[data-agenda-exceptions]"));
  */
-import { svgIcon } from "../../../../appAluno/js/core/icons.js?v=build-20260818-1";
-import { initAllDatePickers, refreshDatePicker } from "../../../../appAluno/js/core/date-picker.js?v=build-20260819-1";
+import { svgIcon } from "../../../../appAluno/js/core/icons.js?v=build-20260822-1";
+import { initAllDatePickers, refreshDatePicker } from "../../../../appAluno/js/core/date-picker.js?v=build-20260822-1";
 
 const MONTHS = [
   "JAN", "FEV", "MAR", "ABR", "MAI", "JUN",
@@ -392,7 +392,7 @@ export function initExceptionsCard(container) {
       <input type="time" value="${escHtml(start || "")}">
       <span>até</span>
       <input type="time" value="${escHtml(end || "")}">
-      <button class="exc-remove-range icon-button" type="button" aria-label="Remover período">${svgIcon("notification")}</button>
+      <button class="exc-remove-range icon-button" type="button" aria-label="Remover período">${svgIcon("x")}</button>
     </div>`;
   }
 
@@ -645,8 +645,8 @@ export function initExceptionsCard(container) {
               <strong>Horários disponíveis</strong>
             </div>
             <div id="excRanges">
-              <div class="exc-range"><input type="time" value="08:00"><span>até</span><input type="time" value="11:00"><button class="exc-remove-range icon-button" type="button" aria-label="Remover período">${svgIcon("notification")}</button></div>
-              <div class="exc-range"><input type="time" value="16:00"><span>até</span><input type="time" value="19:00"><button class="exc-remove-range icon-button" type="button" aria-label="Remover período">${svgIcon("notification")}</button></div>
+              <div class="exc-range"><input type="time" value="08:00"><span>até</span><input type="time" value="11:00"><button class="exc-remove-range icon-button" type="button" aria-label="Remover período">${svgIcon("x")}</button></div>
+              <div class="exc-range"><input type="time" value="16:00"><span>até</span><input type="time" value="19:00"><button class="exc-remove-range icon-button" type="button" aria-label="Remover período">${svgIcon("x")}</button></div>
             </div>
             <button class="exc-add-range" type="button">+ Adicionar horário</button>
           </div>

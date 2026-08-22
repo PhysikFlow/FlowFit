@@ -1,7 +1,7 @@
 import { Platform } from "./core/platform.js?v=build-20260813-1";
 import { SESSION_PHASE, Store } from "./core/store.js?v=build-20260813-1";
 import { Theme } from "./core/theme.js?v=build-20260818-1";
-import { svgIcon } from "./core/icons.js?v=build-20260810-7";
+import { hydrateIcons, svgIcon } from "./core/icons.js?v=build-20260822-1";
 import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260818-1";
 import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260812-6";
 import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260822-1";
@@ -13,7 +13,7 @@ import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "./components/custom-select.js?v=build-20260816-1";
 import { initRunnerWheelPickers } from "./components/wheel-picker.js?v=build-20260816-2";
 import { initInstallUi } from "./components/install-ui.js?v=build-20260816-3";
-import { initAllDatePickers } from "./core/date-picker.js?v=build-20260819-1";
+import { initAllDatePickers } from "./core/date-picker.js?v=build-20260822-1";
 import { createAgendaScreen } from "./screens/agenda/agenda-screen.js?v=build-20260816-1";
 import { createEvolutionScreen } from "./screens/evolution/evolution-screen.js?v=build-20260816-1";
 import { createHistoryScreen } from "./screens/history/history-screen.js?v=build-20260816-1";
@@ -31,6 +31,7 @@ import {
 import { installFrozenBackdrop } from "./core/frozen-backdrop.js?v=build-20260821-3";
 
 initCustomSelects();
+hydrateIcons();
 const runnerWheels = initRunnerWheelPickers();
 initInstallUi();
 initAllDatePickers();

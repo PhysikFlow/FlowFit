@@ -14,13 +14,13 @@
     <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="css/tokens.css?v=build-20260816-1" />
-    <link rel="stylesheet" href="css/components.css?v=build-20260816-2" />
+    <link rel="stylesheet" href="css/components.css?v=build-20260822-1" />
     <link rel="stylesheet" href="css/fonts.css?v=build-20260817-1" />
     <link rel="stylesheet" href="vendor/cropperjs/cropper.min.css?v=1.6.2" />
     <link rel="stylesheet" href="css/date-picker.css?v=build-20260819-1" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260822-1" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260822-2" />
     <script defer src="vendor/cropperjs/cropper.min.js?v=1.6.2"></script>
-    <script type="module" src="js/app.js?v=build-20260822-1"></script>
+    <script type="module" src="js/app.js?v=build-20260822-2"></script>
   </head>
   <body>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title" aria-busy="true">
@@ -68,11 +68,11 @@
         </div>
         <div class="topbar__actions">
           <button class="icon-button notification-button" type="button" aria-label="Abrir notificações" data-go="notifications">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>
+            <span data-ui-icon="bell" aria-hidden="true"></span>
             <span class="badge" data-notification-count>0</span>
           </button>
           <button class="icon-button profile-button" type="button" aria-label="Abrir perfil" data-go="profile">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>
+            <span data-ui-icon="profile" aria-hidden="true"></span>
           </button>
         </div>
       </header>
@@ -82,12 +82,12 @@
           <span class="eyebrow" data-home-workout>Carregando treino</span>
           <h1 id="home-title" data-home-title>Seu próximo treino está aqui.</h1>
           <p data-home-summary>Aguardando seus dados.</p>
-          <button class="button" type="button" data-go="workout" data-home-workout-action disabled><span data-home-workout-label>Aguardando treino</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg></button>
+          <button class="button" type="button" data-go="workout" data-home-workout-action disabled><span data-home-workout-label>Aguardando treino</span><span data-ui-icon="arrow-right" aria-hidden="true"></span></button>
         </article>
 
         <section class="install-invite card" data-install-invite hidden aria-label="Instalar o aplicativo">
           <span class="install-invite__icon" aria-hidden="true">
-            <svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>
+            <span data-ui-icon="download"></span>
           </span>
           <span class="install-invite__copy">
             <strong>Instalar o app</strong>
@@ -244,7 +244,7 @@
           <span class="coach-card__copy"><strong data-coach-name>Personal</strong><small data-coach-headline>Prescrição e acompanhamento do seu treino.</small></span>
           <span class="coach-card__affordance" data-coach-card-affordance hidden aria-hidden="true">
             <small>Trocar</small>
-            <svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+            <span data-ui-icon="chevron-right"></span>
           </span>
         </button>
 
@@ -262,11 +262,11 @@
     </main>
 
     <nav class="bottom-nav" aria-label="Navegação principal">
-      <a class="is-active" href="#home" data-nav="home" aria-current="page"><b aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M4 11 12 4l8 7" /><path d="M6 10v10h12V10" /><path d="M10 20v-6h4v6" /></svg></b><span>Início</span></a>
-      <a href="#workout" data-nav="workout"><b aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M6 7v10" /><path d="M18 7v10" /><path d="M3 9v6" /><path d="M21 9v6" /><path d="M6 12h12" /></svg></b><span>Treino</span></a>
-      <a href="#progress" data-nav="progress"><b aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M4 19V5" /><path d="M4 19h16" /><path d="M8 16v-5" /><path d="M12 16V8" /><path d="M16 16v-7" /></svg></b><span>Evolução</span></a>
-      <a href="#schedule" data-nav="schedule"><b aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M8 3v4" /><path d="M16 3v4" /><path d="M4 9h16" /><path d="M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" /></svg></b><span>Agenda</span></a>
-      <a href="#profile" data-nav="profile"><b aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="8" r="4" /><path d="M5 20a7 7 0 0 1 14 0" /></svg></b><span>Perfil</span></a>
+      <a class="is-active" href="#home" data-nav="home" aria-current="page"><b aria-hidden="true"><span data-nav-icon="home"></span></b><span>Início</span></a>
+      <a href="#workout" data-nav="workout"><b aria-hidden="true"><span data-nav-icon="dumbbell"></span></b><span>Treino</span></a>
+      <a href="#progress" data-nav="progress"><b aria-hidden="true"><span data-nav-icon="chart"></span></b><span>Evolução</span></a>
+      <a href="#schedule" data-nav="schedule"><b aria-hidden="true"><span data-nav-icon="calendar"></span></b><span>Agenda</span></a>
+      <a href="#profile" data-nav="profile"><b aria-hidden="true"><span data-nav-icon="profile"></span></b><span>Perfil</span></a>
       <span class="bottom-nav__indicator" data-bottom-nav-indicator hidden aria-hidden="true"></span>
     </nav>
 
@@ -359,7 +359,7 @@
     <section class="workout-runner" data-workout-runner hidden aria-labelledby="runner-exercise-name">
       <header class="runner-topbar">
         <button class="icon-button runner-exit-trigger" type="button" data-open-runner-exit aria-label="Opções para sair do treino" aria-haspopup="dialog" aria-controls="runner-exit-dialog">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+          <span data-ui-icon="chevron-left" aria-hidden="true"></span>
         </button>
         <div>
           <strong data-runner-workout-title>Treino</strong>
@@ -373,7 +373,7 @@
       <button class="runner-progress card" type="button" data-open-exercise-sheet aria-haspopup="dialog">
         <span class="runner-progress__summary">
           <span><strong data-runner-progress-title>Exercício 1 de 1</strong><small data-runner-progress-copy>0 de 0 séries concluídas</small></span>
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+          <span data-ui-icon="chevron-right" aria-hidden="true"></span>
         </span>
         <span class="runner-exercise-track" role="progressbar" aria-label="Progresso geral das séries" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-runner-exercise-track data-runner-progress-track style="--progress: 0%">
           <span class="runner-exercise-track__rail" aria-hidden="true"><span class="runner-exercise-track__fill"></span></span>
@@ -422,11 +422,11 @@
 
           <div class="runner-secondary-actions" aria-label="Ações secundárias da série">
             <button class="runner-secondary-action runner-correct" type="button" data-correct-last-set hidden>
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 8H5V4" /><path d="M5 8a8 8 0 1 1-1 8" /></svg>
+              <span data-ui-icon="refresh" aria-hidden="true"></span>
               <span>Corrigir última série</span>
             </button>
             <button class="runner-secondary-action" type="button" data-report-discomfort>
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v6" /><path d="M12 17h.01" /></svg>
+              <span data-ui-icon="warning" aria-hidden="true"></span>
               <span>Senti desconforto</span>
             </button>
           </div>
@@ -587,12 +587,12 @@
         <div data-install-guide-ios hidden>
           <div class="install-guide__art" aria-hidden="true">
             <span class="install-guide__art-step">
-              <svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>
+              <span data-ui-icon="download"></span>
               <small>Compartilhar</small>
             </span>
             <b>→</b>
             <span class="install-guide__art-step">
-              <svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M4 11 12 4l8 7" /><path d="M6 10v10h12V10" /><path d="M10 20v-6h4v6" /></svg>
+              <span data-ui-icon="home"></span>
               <small>Tela de início</small>
             </span>
           </div>

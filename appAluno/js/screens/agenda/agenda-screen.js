@@ -1,5 +1,5 @@
 import { Store } from "../../core/store.js?v=build-20260813-1";
-import { svgIcon } from "../../core/icons.js?v=build-20260810-7";
+import { svgIcon } from "../../core/icons.js?v=build-20260822-1";
 import { escapeHtml, formatScheduleTime } from "../../utils/formatters.js?v=build-20260816-1";
 
 const iconByType = { Treino: "dumbbell", Mensagem: "message", Avaliacao: "ruler" };

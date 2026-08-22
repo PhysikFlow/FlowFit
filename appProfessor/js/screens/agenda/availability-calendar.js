@@ -12,7 +12,7 @@
  *   initAvailabilityCalendar(document.querySelector("[data-agenda-calendar]"));
  */
 import { Platform } from "../../../../appAluno/js/core/platform.js?v=build-20260818-1";
-import { svgIcon } from "../../../../appAluno/js/core/icons.js?v=build-20260818-1";
+import { svgIcon } from "../../../../appAluno/js/core/icons.js?v=build-20260822-1";
 
 const DAYS = [
   { key: "mon", label: "Seg" },

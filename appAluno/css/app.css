@@ -2584,7 +2584,8 @@ body.has-frozen-backdrop .custom-select__menu {
   flex: 1 1 auto;
 }
 
-.runner-progress__summary > .icon {
+.runner-progress__summary > .icon,
+.runner-progress__summary > [data-ui-icon] .icon {
   flex: 0 0 auto;
   width: 1rem;
   color: var(--text-disabled);
@@ -3107,7 +3108,6 @@ body.has-frozen-backdrop .custom-select__menu {
   width: 1rem;
   height: 1rem;
   flex: 0 0 auto;
-  stroke-width: 1.8;
 }
 
 .runner-secondary-action:active {

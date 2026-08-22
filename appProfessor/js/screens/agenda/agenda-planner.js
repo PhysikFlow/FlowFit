@@ -1,5 +1,5 @@
 import { Platform } from "../../../../appAluno/js/core/platform.js?v=build-20260813-1";
-import { initAllDatePickers, refreshDatePicker } from "../../../../appAluno/js/core/date-picker.js?v=build-20260819-1";
+import { initAllDatePickers, refreshDatePicker } from "../../../../appAluno/js/core/date-picker.js?v=build-20260822-1";
 
 const STORAGE_KEY = "flowfit.professor.agenda.v2";
 const LEGACY_EXCEPTIONS_KEY = "prof_schedule_exceptions";

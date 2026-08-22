@@ -1,4 +1,4 @@
-import { svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260809-6";
+import { hydrateIcons, svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260822-1";
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260813-1";
 import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260818-1";
 import { InstallManager } from "../../appAluno/js/core/install.js?v=build-20260816-2";
@@ -10,7 +10,7 @@ import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLi
 import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260820-1";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "../../appAluno/js/components/custom-select.js?v=build-20260816-1";
-import { initAllDatePickers, refreshDatePicker } from "../../appAluno/js/core/date-picker.js?v=build-20260819-1";
+import { initAllDatePickers, refreshDatePicker } from "../../appAluno/js/core/date-picker.js?v=build-20260822-1";
 import { createNavigation } from "./core/navigation.js?v=build-20260816-1";
 import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v=build-20260822-1";
 import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260818-1";
@@ -1141,9 +1141,7 @@ const refreshPanelData = ({ force = false } = {}) => Promise.allSettled([
 ]);
 
 const renderIcons = () => {
-  document.querySelectorAll("[data-icon]").forEach((target) => {
-    target.innerHTML = svgIcon(target.dataset.icon);
-  });
+  hydrateIcons();
   setHtml("[data-brand-icon]", svgIcon("dumbbell"));
   setHtml("[data-brand-icon-mobile]", svgIcon("dumbbell"));
 };

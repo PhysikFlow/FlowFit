@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-aluno-v108";
+const CACHE_NAME = "flowfit-aluno-v109";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,9 +7,10 @@ const APP_SHELL = [
   "./assets/icons/icon-512.png",
   "./assets/icons/icon-1024.png",
   "./assets/icons/icon-maskable-512.png",
+  "./assets/icons/phosphor/icons.svg",
   "./assets/pwa/screenshots/login.png",
   "./css/tokens.css?v=build-20260816-1",
-  "./css/components.css?v=build-20260816-2",
+  "./css/components.css?v=build-20260822-1",
   "./css/fonts.css?v=build-20260817-1",
   "./assets/fonts/anton-400.woff2",
   "./assets/fonts/barlow-condensed-400.woff2",
@@ -35,8 +36,8 @@ const APP_SHELL = [
   "./assets/fonts/teko-700.woff2",
   "./vendor/cropperjs/cropper.min.css?v=1.6.2",
   "./vendor/cropperjs/cropper.min.js?v=1.6.2",
-  "./css/app.css?v=build-20260822-1",
-  "./js/app.js?v=build-20260822-1",
+  "./css/app.css?v=build-20260822-2",
+  "./js/app.js?v=build-20260822-2",
   "./js/components/custom-select.js?v=build-20260816-1",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/components/install-ui.js?v=build-20260816-3",
@@ -59,7 +60,8 @@ const APP_SHELL = [
   "./js/config.js?v=build-20260809-6",
   "./js/core/brand-theme.js?v=build-20260818-1",
   "./js/core/install.js?v=build-20260816-2",
-  "./js/core/icons.js?v=build-20260810-7",
+  "./js/core/icons.js?v=build-20260822-1",
+  "./js/core/date-picker.js?v=build-20260822-1",
   "./js/core/platform.js?v=build-20260813-1",
   "./js/core/refresh-coordinator.js?v=build-20260820-1",
   "./js/core/frozen-backdrop.js?v=build-20260821-3",

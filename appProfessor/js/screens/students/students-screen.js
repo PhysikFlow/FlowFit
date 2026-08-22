@@ -1,4 +1,4 @@
-import { svgIcon } from "../../../../appAluno/js/core/icons.js?v=build-20260809-6";
+import { svgIcon } from "../../../../appAluno/js/core/icons.js?v=build-20260822-1";
 import { escapeHtml, formatUpdatedAt, formatVolume, normalizeSearch } from "../../utils/formatters.js?v=build-20260816-1";
 
 export const createStudentsScreen = ({

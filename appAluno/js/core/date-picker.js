@@ -11,6 +11,8 @@
  *   refreshDatePicker(someInput);    // sync desktop UI after programmatic .value change
  */
 
+import { svgIcon } from "./icons.js?v=build-20260822-1";
+
 /* ── Helpers ─────────────────────────────────────────────── */
 
 function startOfDay(date) {
@@ -116,7 +118,7 @@ function parseISODateTime(value) {
 
 /* ── SVG icon ───────────────────────────────────────────── */
 
-const CALENDAR_SVG = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`;
+const CALENDAR_SVG = svgIcon("calendar");
 
 /* ── State store (WeakMap) ──────────────────────────────── */
 

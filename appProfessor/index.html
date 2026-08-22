@@ -15,13 +15,13 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="preload" as="image" type="image/png" href="../appAluno/assets/icons/startup-logo-512.png" fetchpriority="high" />
     <link rel="stylesheet" href="../appAluno/css/tokens.css?v=build-20260816-1" />
-    <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260816-2" />
+    <link rel="stylesheet" href="../appAluno/css/components.css?v=build-20260822-1" />
     <link rel="stylesheet" href="../appAluno/css/fonts.css?v=build-20260817-1" />
     <link rel="stylesheet" href="vendor/cropperjs/cropper.min.css?v=1.6.2" />
     <link rel="stylesheet" href="../appAluno/css/date-picker.css?v=build-20260819-1" />
     <link rel="stylesheet" href="css/app.css?v=build-20260822-1" />
     <script defer src="vendor/cropperjs/cropper.min.js?v=1.6.2"></script>
-    <script type="module" src="js/app.js?v=build-20260822-1"></script>
+    <script type="module" src="js/app.js?v=build-20260822-2"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title" aria-busy="true">
@@ -72,11 +72,11 @@
       </div>
 
       <nav class="side-nav">
-        <a class="is-active" href="#dashboard" data-nav="dashboard" aria-current="page"><span data-icon="chart"></span><span class="side-nav__label">Dashboard</span></a>
-        <a href="#students" data-nav="students"><span data-icon="users"></span><span class="side-nav__label">Alunos</span></a>
-        <a href="#workouts" data-nav="workouts"><span data-icon="dumbbell"></span><span class="side-nav__label">Treinos</span></a>
-        <a href="#agenda" data-nav="agenda"><span data-icon="calendar"></span><span class="side-nav__label">Agenda</span></a>
-        <a href="#appearance" data-nav="appearance"><span data-icon="palette"></span><span class="side-nav__label">Aparência</span></a>
+        <a class="is-active" href="#dashboard" data-nav="dashboard" aria-current="page"><span data-nav-icon="chart"></span><span class="side-nav__label">Dashboard</span></a>
+        <a href="#students" data-nav="students"><span data-nav-icon="users"></span><span class="side-nav__label">Alunos</span></a>
+        <a href="#workouts" data-nav="workouts"><span data-nav-icon="dumbbell"></span><span class="side-nav__label">Treinos</span></a>
+        <a href="#agenda" data-nav="agenda"><span data-nav-icon="calendar"></span><span class="side-nav__label">Agenda</span></a>
+        <a href="#appearance" data-nav="appearance"><span data-nav-icon="palette"></span><span class="side-nav__label">Aparência</span></a>
         <span class="side-nav__indicator" data-side-nav-indicator hidden aria-hidden="true"></span>
       </nav>
 
@@ -95,7 +95,7 @@
       <header class="topbar">
         <div>
           <button class="drawer-toggle" type="button" data-drawer-toggle aria-label="Abrir menu" aria-expanded="false">
-            <span data-icon="menu"></span>
+            <span data-ui-icon="menu"></span>
           </button>
           <span class="mobile-topbar-brand"><span aria-hidden="true" data-brand-icon-mobile></span><strong data-brand-name>FlowFit</strong></span>
           <h1 data-page-title>Dashboard</h1>
@@ -287,7 +287,7 @@
           </form>
           <aside class="workout-preview" data-workout-preview aria-live="polite">
             <div class="workout-preview__head">
-              <span class="surface-icon" aria-hidden="true" data-icon="dumbbell"></span>
+              <span class="surface-icon" aria-hidden="true" data-ui-icon="dumbbell"></span>
               <div>
                 <strong>Prévia do treino</strong>
                 <small>Cole exercícios como “Supino reto 4x10”.</small>
@@ -568,12 +568,12 @@
           <div data-install-guide-ios hidden>
             <div class="install-guide__art" aria-hidden="true">
               <span class="install-guide__art-step">
-                <svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>
+                <span data-ui-icon="download"></span>
                 <small>Compartilhar</small>
               </span>
               <b>→</b>
               <span class="install-guide__art-step">
-                <svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M4 11 12 4l8 7" /><path d="M6 10v10h12V10" /><path d="M10 20v-6h4v6" /></svg>
+                <span data-ui-icon="home"></span>
                 <small>Tela de início</small>
               </span>
             </div>

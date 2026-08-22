@@ -140,11 +140,46 @@ h3 {
   width: 1.18em;
   height: 1.18em;
   flex: none;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
+  fill: currentColor;
+  stroke: none;
+}
+
+[data-ui-icon] {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  line-height: 0;
+}
+
+[data-nav-icon] {
+  display: grid;
+  place-items: center;
+}
+
+[data-nav-icon] > .icon {
+  grid-area: 1 / 1;
+  transition: opacity 150ms ease, transform 180ms var(--ease-out);
+}
+
+.nav-icon__fill {
+  opacity: 0;
+  transform: scale(0.88);
+}
+
+[data-nav].is-active [data-nav-icon] .nav-icon__light {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+[data-nav].is-active [data-nav-icon] .nav-icon__fill {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-nav-icon] > .icon {
+    transition-duration: 0.01ms;
+  }
 }
 
 .icon--muted {
