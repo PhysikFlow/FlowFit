@@ -98,6 +98,7 @@ export const initAgendaPlanner = (container) => {
   let state = loadState();
   let weeklyDraft = emptyWeek();
   let editingDay = "";
+  let copySourceDay = "";
   let editingExceptionId = "";
   let exceptionDraft = null;
   let toastTimer = 0;
@@ -132,7 +133,14 @@ export const initAgendaPlanner = (container) => {
         <div class="agenda-day-row__periods">
           ${periods.length ? periods.map((period) => `<span class="agenda-period agenda-period--${period.type}"><i></i><span>${escapeHtml(periodLabel(period))}</span><small>${typeLabel(period.type)}</small></span>`).join("") : `<span class="agenda-day-row__closed">Sem atendimento</span>`}
         </div>
-        <button class="icon-button agenda-day-row__edit" type="button" data-edit-day="${day.key}" aria-label="Editar ${day.name}">•••</button>
+        <details class="action-menu entity-menu agenda-day-row__menu">
+          <summary class="icon-button agenda-day-row__edit" aria-label="Ações para ${day.name}">•••</summary>
+          <div class="action-menu__popover action-menu__popover--end">
+            <button type="button" data-edit-day="${day.key}">Editar períodos</button>
+            <button type="button" data-copy-day="${day.key}"${periods.length ? "" : " disabled"}>Copiar para outro dia</button>
+            <button class="is-danger" type="button" data-clear-day="${day.key}"${periods.length ? "" : " disabled"}>Marcar sem atendimento</button>
+          </div>
+        </details>
       </article>`;
     }).join("");
   };
@@ -202,7 +210,7 @@ export const initAgendaPlanner = (container) => {
     <input type="time" value="${escapeHtml(period.start)}" data-period-start aria-label="Início do período">
     <span>até</span>
     <input type="time" value="${escapeHtml(period.end)}" data-period-end aria-label="Fim do período">
-    <select data-period-type data-custom-select="off" aria-label="Tipo de disponibilidade">
+    <select data-period-type data-menu-max-height="220" aria-label="Tipo de disponibilidade">
       <option value="direct"${period.type === "direct" ? " selected" : ""}>Reserva direta</option>
       <option value="request"${period.type === "request" ? " selected" : ""}>Sob consulta</option>
     </select>
@@ -221,6 +229,13 @@ export const initAgendaPlanner = (container) => {
     });
   };
 
+  const removeSelectPortals = (root, dialog) => {
+    root?.querySelectorAll(".custom-select__trigger[aria-controls]").forEach((trigger) => {
+      const menu = document.getElementById(trigger.getAttribute("aria-controls"));
+      if (menu && dialog.contains(menu)) menu.remove();
+    });
+  };
+
   const renderDayEditor = () => {
     const dialog = container.querySelector("[data-agenda-day-dialog]");
     const list = dialog?.querySelector("[data-day-periods]");
@@ -228,7 +243,10 @@ export const initAgendaPlanner = (container) => {
     if (!dialog || !list || !day) return;
     dialog.querySelector("[data-day-dialog-title]").textContent = day.name;
     const periods = weeklyDraft[editingDay];
-    dialog.querySelector("[data-day-selector]").value = editingDay;
+    const daySelector = dialog.querySelector("[data-day-selector]");
+    daySelector.value = editingDay;
+    daySelector.dispatchEvent(new Event("input", { bubbles: true }));
+    removeSelectPortals(list, dialog);
     list.innerHTML = periods.length ? periods.map((period, index) => periodEditorRow(period, index, "day")).join("") : `<p class="agenda-editor-empty">Sem períodos — este dia ficará sem atendimento.</p>`;
   };
 
@@ -248,6 +266,7 @@ export const initAgendaPlanner = (container) => {
     dialog.querySelector("[data-exception-date]").value = exceptionDraft.date;
     dialog.querySelector(`[name="agendaExceptionType"][value="${exceptionDraft.type}"]`).checked = true;
     dialog.querySelector("[data-exception-custom]").hidden = exceptionDraft.type !== "custom";
+    removeSelectPortals(periodsTarget, dialog);
     periodsTarget.innerHTML = exceptionDraft.periods.length ? exceptionDraft.periods.map((period, index) => periodEditorRow(period, index, "exception")).join("") : `<p class="agenda-editor-empty">Adicione pelo menos um período.</p>`;
     refreshDatePicker(dialog.querySelector("[data-exception-date]"));
   };
@@ -259,6 +278,19 @@ export const initAgendaPlanner = (container) => {
     renderExceptionEditor();
     container.querySelector("[data-agenda-exception-error]").textContent = "";
     container.querySelector("[data-agenda-exception-dialog]")?.showModal();
+  };
+
+  const openCopyDialog = (sourceDay) => {
+    copySourceDay = sourceDay;
+    const dialog = container.querySelector("[data-agenda-copy-dialog]");
+    const source = DAYS.find((day) => day.key === sourceDay);
+    const select = dialog?.querySelector("[data-copy-target]");
+    if (!dialog || !select || !source) return;
+    dialog.querySelector("[data-copy-source-name]").textContent = source.name;
+    select.innerHTML = DAYS.filter((day) => day.key !== sourceDay)
+      .map((day) => `<option value="${day.key}">${day.name}</option>`).join("");
+    select.dispatchEvent(new Event("input", { bubbles: true }));
+    dialog.showModal();
   };
 
   container.innerHTML = `
@@ -296,11 +328,14 @@ export const initAgendaPlanner = (container) => {
     </div>
 
     <dialog class="agenda-dialog" data-agenda-day-dialog>
-      <form method="dialog"><header><div><h3 data-day-dialog-title>Editar dia</h3><p>Defina os períodos e como cada um será oferecido.</p></div><button class="dialog-close" value="cancel" aria-label="Fechar">×</button></header><div class="agenda-dialog__body"><label class="agenda-dialog__field agenda-dialog__day-selector">Dia da semana<select data-day-selector data-custom-select="off">${DAYS.map((day) => `<option value="${day.key}">${day.name}</option>`).join("")}</select></label><div data-day-periods></div><button class="button button--quiet" type="button" data-add-day-period>+ Adicionar período</button><p class="agenda-dialog__error" data-agenda-day-error></p></div><footer><button class="button button--quiet" value="cancel">Cancelar</button><button class="button button--accent" type="button" data-save-day>Salvar semana</button></footer></form>
+      <form method="dialog"><header><div><h3 data-day-dialog-title>Editar dia</h3><p>Defina os períodos e como cada um será oferecido.</p></div><button class="dialog-close" value="cancel" aria-label="Fechar">×</button></header><div class="agenda-dialog__body"><label class="agenda-dialog__field agenda-dialog__day-selector">Dia da semana<select data-day-selector data-menu-max-height="280">${DAYS.map((day) => `<option value="${day.key}">${day.name}</option>`).join("")}</select></label><div data-day-periods></div><button class="button button--quiet" type="button" data-add-day-period>+ Adicionar período</button><p class="agenda-dialog__error" data-agenda-day-error></p></div><footer><button class="button button--quiet" value="cancel">Cancelar</button><button class="button button--accent" type="button" data-save-day>Salvar semana</button></footer></form>
     </dialog>
 
     <dialog class="agenda-dialog" data-agenda-exception-dialog>
       <form method="dialog"><header><div><h3 data-exception-dialog-title>Adicionar alteração</h3><p>Essa configuração valerá somente na data escolhida.</p></div><button class="dialog-close" value="cancel" aria-label="Fechar">×</button></header><div class="agenda-dialog__body"><label class="agenda-dialog__field">Data<input type="date" data-exception-date></label><fieldset class="agenda-exception-types"><legend>Como será esse dia?</legend><label><input type="radio" name="agendaExceptionType" value="off"><span><strong>Sem atendimento</strong><small>O dia inteiro ficará indisponível.</small></span></label><label><input type="radio" name="agendaExceptionType" value="custom"><span><strong>Horários diferentes</strong><small>Use períodos específicos nesta data.</small></span></label></fieldset><div data-exception-custom hidden><div data-exception-periods></div><button class="button button--quiet" type="button" data-add-exception-period>+ Adicionar período</button></div><p class="agenda-dialog__error" data-agenda-exception-error></p></div><footer><button class="button button--quiet" value="cancel">Cancelar</button><button class="button button--accent" type="button" data-save-exception>Salvar alteração</button></footer></form>
+    </dialog>
+    <dialog class="agenda-dialog agenda-copy-dialog" data-agenda-copy-dialog>
+      <form method="dialog"><header><div><h3>Copiar períodos</h3><p>Reaproveite a configuração de <strong data-copy-source-name></strong>.</p></div><button class="dialog-close" value="cancel" aria-label="Fechar">×</button></header><div class="agenda-dialog__body"><label class="agenda-dialog__field">Copiar para<select data-copy-target data-menu-max-height="280"></select></label><p class="agenda-copy-note">A configuração atual do dia escolhido será substituída.</p></div><footer><button class="button button--quiet" value="cancel">Cancelar</button><button class="button button--accent" type="button" data-confirm-copy>Copiar períodos</button></footer></form>
     </dialog>
     <div class="agenda-toast" data-agenda-toast role="status" aria-live="polite"></div>`;
 
@@ -335,7 +370,21 @@ export const initAgendaPlanner = (container) => {
 
   container.addEventListener("click", (event) => {
     const editDay = event.target.closest("[data-edit-day]");
-    if (editDay) return openDayDialog(editDay.dataset.editDay);
+    if (editDay) {
+      editDay.closest("details")?.removeAttribute("open");
+      return openDayDialog(editDay.dataset.editDay);
+    }
+    const copyDay = event.target.closest("[data-copy-day]");
+    if (copyDay) {
+      copyDay.closest("details")?.removeAttribute("open");
+      return openCopyDialog(copyDay.dataset.copyDay);
+    }
+    const clearDay = event.target.closest("[data-clear-day]");
+    if (clearDay) {
+      clearDay.closest("details")?.removeAttribute("open");
+      state.weekly[clearDay.dataset.clearDay] = [];
+      persist(); renderWeek(); renderPreview(); showToast("Dia marcado como sem atendimento."); return;
+    }
     if (event.target.closest("[data-edit-week]")) return openDayDialog(DAYS[0].key);
     if (event.target.closest("[data-add-exception]")) return openExceptionDialog();
     const editException = event.target.closest("[data-edit-exception]");
@@ -373,6 +422,14 @@ export const initAgendaPlanner = (container) => {
       const last = exceptionDraft.periods.at(-1);
       exceptionDraft.periods.push(normalizePeriod(last ? { start: last.end, end: minutesToTime(Math.min(1439, timeToMinutes(last.end) + 60)), type: last.type } : {}));
       renderExceptionEditor(); return;
+    }
+    if (event.target.closest("[data-confirm-copy]")) {
+      const dialog = container.querySelector("[data-agenda-copy-dialog]");
+      const targetDay = dialog.querySelector("[data-copy-target]").value;
+      if (!copySourceDay || !targetDay) return;
+      state.weekly[targetDay] = clone(state.weekly[copySourceDay] || []);
+      persist(); dialog.close(); renderWeek(); renderPreview();
+      showToast("Períodos copiados."); return;
     }
     if (event.target.closest("[data-save-day]")) {
       const dialog = container.querySelector("[data-agenda-day-dialog]");

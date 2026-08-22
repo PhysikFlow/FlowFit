@@ -13,7 +13,7 @@ import { initAllDatePickers, refreshDatePicker } from "../../appAluno/js/core/da
 import { createNavigation } from "./core/navigation.js?v=build-20260816-1";
 import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v=build-20260816-1";
 import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260818-1";
-import { initAgendaPlanner } from "./screens/agenda/agenda-planner.js?v=build-20260821-1";
+import { initAgendaPlanner } from "./screens/agenda/agenda-planner.js?v=build-20260821-2";
 import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=build-20260816-1";
 import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260816-3";
 import { createWorkoutPdfExporter } from "./pdf/workout-pdf-exporter.js?v=build-20260820-2";

@@ -5121,6 +5121,10 @@ body { color: var(--text-primary); font-weight: var(--type-weight-body); }
   color: var(--text-supporting);
 }
 
+.agenda-day-row__menu {
+  justify-self: end;
+}
+
 .agenda-panel__note {
   margin: 0;
   padding: var(--space-3) var(--space-4);
@@ -5301,14 +5305,25 @@ body { color: var(--text-primary); font-weight: var(--type-weight-body); }
 }
 
 .agenda-dialog::backdrop { background: rgb(0 0 0 / 0.48); backdrop-filter: blur(3px); }
-.agenda-dialog form { display: grid; max-height: inherit; }
+.agenda-dialog form {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: inherit;
+  min-height: 0;
+  overflow: hidden;
+}
 .agenda-dialog header,
 .agenda-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); }
 .agenda-dialog header { border-bottom: 1px solid var(--border-subtle); }
 .agenda-dialog footer { justify-content: flex-end; border-top: 1px solid var(--border-subtle); }
 .agenda-dialog header h3 { margin: 0; font-size: var(--text-lg); }
 .agenda-dialog header p { margin: 0.15rem 0 0; color: var(--text-supporting); font-size: var(--text-xs); }
-.agenda-dialog__body { overflow-y: auto; padding: var(--space-4); }
+.agenda-dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+}
 .agenda-dialog__field { display: grid; gap: var(--space-2); font-size: var(--text-sm); font-weight: var(--type-weight-label); }
 .agenda-dialog__day-selector { margin-bottom: var(--space-3); }
 .agenda-dialog__day-selector select {
@@ -5321,6 +5336,8 @@ body { color: var(--text-primary); font-weight: var(--type-weight-body); }
   color: var(--text-primary);
   font: inherit;
 }
+.agenda-dialog__day-selector .custom-select,
+.agenda-dialog__field > .custom-select { width: 100%; }
 .agenda-dialog__error { min-height: 1.2rem; margin: var(--space-3) 0 0; color: var(--status-danger); font-size: var(--text-xs); }
 
 .agenda-period-editor {
@@ -5349,6 +5366,14 @@ body { color: var(--text-primary); font-weight: var(--type-weight-body); }
 }
 
 .agenda-period-editor > span { color: var(--text-muted); font-size: var(--text-xs); }
+.agenda-period-editor > .custom-select { width: 100%; }
+
+.agenda-copy-note {
+  margin: var(--space-3) 0 0;
+  color: var(--text-supporting);
+  font-size: var(--text-xs);
+  line-height: var(--line-height-copy);
+}
 
 .agenda-exception-types {
   display: grid;
