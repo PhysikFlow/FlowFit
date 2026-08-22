@@ -20,7 +20,7 @@ import { createWorkoutPdfExporter } from "./pdf/workout-pdf-exporter.js?v=build-
 import { escapeHtml, formatUpdatedAt, formatVolume, initialsFromName, normalizeEmail, normalizeSearch } from "./utils/formatters.js?v=build-20260816-1";
 import { createProfessorViewState } from "./state/view-state.js?v=build-20260816-1";
 import { createRefreshCoordinator } from "../../appAluno/js/core/refresh-coordinator.js?v=build-20260820-1";
-import { installFrozenBackdrop } from "../../appAluno/js/core/frozen-backdrop.js?v=build-20260821-2";
+import { installFrozenBackdrop } from "../../appAluno/js/core/frozen-backdrop.js?v=build-20260821-3";
 
 initCustomSelects();
 initAllDatePickers();
