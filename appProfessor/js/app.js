@@ -3046,6 +3046,33 @@ workoutForm?.addEventListener("submit", async (event) => {
   const result = await saveAndPublishWorkout(workout, {
     pendingMessage: editingWorkout ? "Salvando atualização do treino..." : "Publicando treino..."
   });
+  if (result.synced && editScope === "template" && currentTemplateId) {
+    const template = programmingRepository.listTemplates().find((item) => item.id === currentTemplateId);
+    if (template) {
+      programmingRepository.saveTemplate({
+        ...template, currentRevision: template.currentRevision + 1,
+        document: { ...template.document, title: workout.title, objective: workout.focus, level: workout.level, exercises: workout.exercises },
+        syncStatus: "pending", updatedAt: new Date().toISOString()
+      });
+      await programmingRepository.syncLibraries();
+    }
+  }
+  if (result.synced && editScope === "future" && editingWorkout?.programAssignmentId) {
+    const futureWorkouts = workouts.filter((item) => item.id !== editingWorkout.id
+      && item.programAssignmentId === editingWorkout.programAssignmentId
+      && (!editingWorkout.templateId || item.templateId === editingWorkout.templateId)
+      && workoutStartTimestamp(item.startsAt) > workoutStartTimestamp(editingWorkout.startsAt));
+    for (const future of futureWorkouts) {
+      await saveAndPublishWorkout({
+        ...future,
+        focus: workout.focus,
+        level: workout.level,
+        exercises: workout.exercises.map((exercise, index) => ({ ...exercise, id: `${future.id}-ex-${String(index + 1).padStart(2, "0")}` })),
+        version: Number(future.version || 1) + 1,
+        updatedAt: new Date().toISOString()
+      }, { pendingMessage: `Atualizando sessão futura “${future.title}”...` });
+    }
+  }
   if (result.synced) {
     showToast(editingWorkout ? "Treino republicado e confirmado." : "Treino publicado e confirmado.");
     setWorkoutDraftDirty(false);
@@ -3723,6 +3750,10 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
     if (isStale()) return false;
   } catch (error) {
     rememberProfessorFailure("oauth-callback-session", error);
+    if (isRevalidate && authenticatedSessionDetected) {
+      console.warn("[FlowFit][professor] Revalidação de sessão adiada; o painel atual será preservado.", error);
+      return false;
+    }
     setAuthLocked(true);
     setAuthChecking(false);
     syncAuthMode("signin", { preserveStatus: true });
@@ -3731,6 +3762,10 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
     return false;
   }
   if (!session?.user) {
+    if (isRevalidate && authenticatedSessionDetected) {
+      console.warn("[FlowFit][professor] A revalidação não retornou sessão; aguardando a próxima confirmação sem desmontar o painel.");
+      return false;
+    }
     authenticatedSessionDetected = false;
     setAuthLocked(true);
     setAuthChecking(false);
@@ -3793,9 +3828,12 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
     maxAgeMs: PANEL_REFRESH_MAX_AGE.access,
     isSuccess: (value) => value?.ok === true
   });
-  if (accessRefresh.executed) lastCoachAccessResult = accessRefresh.value;
-  const accessResult = accessRefresh.value || lastCoachAccessResult;
+  if (accessRefresh.executed && accessRefresh.value?.ok) lastCoachAccessResult = accessRefresh.value;
+  const accessResult = accessRefresh.value?.ok ? accessRefresh.value : lastCoachAccessResult;
   if (isStale()) return false;
+  if (isRevalidate && !accessRefresh.value?.ok && accessResult?.ok) {
+    console.warn("[FlowFit][professor] Validação de acesso indisponível; mantendo a última autorização confirmada.", accessRefresh.value?.error);
+  }
   if (!accessResult?.ok) {
     setAuthLocked(true);
     setAuthChecking(false);
@@ -3845,34 +3883,6 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
       console.warn(`[FlowFit][professor] Falha ao carregar ${resources[index]}; a sessão permanece ativa.`, result.reason);
     }
   });
-  if (result.synced && editScope === "template" && currentTemplateId) {
-    const template = programmingRepository.listTemplates().find((item) => item.id === currentTemplateId);
-    if (template) {
-      programmingRepository.saveTemplate({
-        ...template, currentRevision: template.currentRevision + 1,
-        document: { ...template.document, title: workout.title, objective: workout.focus, level: workout.level, exercises: workout.exercises },
-        syncStatus: "pending", updatedAt: new Date().toISOString()
-      });
-      await programmingRepository.syncLibraries();
-    }
-  }
-  if (result.synced && editScope === "future" && editingWorkout?.programAssignmentId) {
-    const futureWorkouts = workouts.filter((item) => item.id !== editingWorkout.id
-      && item.programAssignmentId === editingWorkout.programAssignmentId
-      && (!editingWorkout.templateId || item.templateId === editingWorkout.templateId)
-      && workoutStartTimestamp(item.startsAt) > workoutStartTimestamp(editingWorkout.startsAt));
-    for (const future of futureWorkouts) {
-      await saveAndPublishWorkout({
-        ...future,
-        focus: workout.focus,
-        level: workout.level,
-        exercises: workout.exercises.map((exercise, index) => ({ ...exercise, id: `${future.id}-ex-${String(index + 1).padStart(2, "0")}` })),
-        version: Number(future.version || 1) + 1,
-        updatedAt: new Date().toISOString()
-      }, { pendingMessage: `Atualizando sessão futura “${future.title}”...` });
-    }
-  }
-
   if (await workoutRepository.ensureProgrammingDomainSupport() === true) {
     const libraries = await programmingRepository.fetchLibraries();
     if (libraries.synced) renderProgrammingWorkspace();
