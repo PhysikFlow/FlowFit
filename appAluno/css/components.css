@@ -222,8 +222,8 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 3px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .card {
@@ -677,8 +677,8 @@ summary:focus-visible {
 
 .custom-select__trigger:focus-visible,
 .custom-select.is-invalid .custom-select__trigger {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 3px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .custom-select.is-open .custom-select__trigger {

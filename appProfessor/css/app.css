@@ -2369,7 +2369,7 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
 }
 
 .logo-frame-option input:focus-visible {
-  outline: 3px solid var(--selection-soft);
+  outline: 2px solid var(--selection-soft);
   outline-offset: 2px;
 }
 
