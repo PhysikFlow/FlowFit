@@ -39,13 +39,14 @@ export const clearLegacyAuthStorage = (storage) => {
   }
 };
 
-// Cria o cliente supabase-js de forma lazy via CDN (sem bundler/build step).
+// Cria o cliente de forma lazy a partir da copia versionada no proprio PWA.
+// Autenticacao e tema nao dependem de disponibilidade de um CDN externo.
 // Retorna null quando o backend nao esta configurado, mantendo os apps 100% locais.
 export const getSupabase = () => {
   if (!isConfigured()) return null;
   if (!clientPromise) {
     clearLegacyAuthStorage();
-    clientPromise = import("https://esm.sh/@supabase/supabase-js@2.112.3")
+    clientPromise = import("../../vendor/supabase/supabase-js.bundle.mjs?v=2.112.3-flowfit.1")
       .then(({ createClient }) => createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: {
           autoRefreshToken: true,
@@ -57,6 +58,7 @@ export const getSupabase = () => {
       }))
       .catch((error) => {
         console.error("[FlowFit][supabase] Falha ao carregar o cliente Supabase.", error);
+        clientPromise = null;
         return null;
       });
   }

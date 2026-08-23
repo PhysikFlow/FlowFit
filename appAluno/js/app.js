@@ -6,7 +6,7 @@ import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } fro
 import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260812-6";
 import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260822-1";
 import { applyStudentProfile, effectiveStudentName, studentProfileRepository } from "./data/repositories/student-profile-repository.js?v=build-20260822-1";
-import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260820-1";
+import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260823-1";
 import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260823-2";
 import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260823-2";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";

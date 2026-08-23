@@ -1,4 +1,4 @@
-import { getSupabase } from "../../core/supabase.js?v=build-20260812-5";
+import { getSupabase } from "../../core/supabase.js?v=build-20260823-3";
 import { Platform } from "../../core/platform.js?v=build-20260813-1";
 import { LEGACY_REMOTE_THEME_KEY, REMOTE_THEME_KEY, normalizeBrandTheme } from "../../core/brand-theme.js?v=build-20260818-1";
 import { SUPABASE_URL } from "../../config.js?v=build-20260809-6";
@@ -68,10 +68,6 @@ const writeCachedTheme = (theme, { userId, coachId } = {}) => {
   const normalized = toAppTheme({ ...theme, coach_id: coachId || theme?.coachId, updated_at: theme?.updatedAt });
   Platform.storage.set(scopedThemeKey(userId, coachId), normalized);
   return normalized;
-};
-
-const clearCachedTheme = ({ userId, coachId } = {}) => {
-  Platform.storage.remove(scopedThemeKey(userId, coachId));
 };
 
 const isAssetType = (type) => type === "logo" || type === "photo";
@@ -145,10 +141,14 @@ export const themeRepository = {
             return theme;
           }
 
-          // Resposta online e vazia e autoritativa: nao reutiliza tema de outra
-          // conta ou de um banco que acabou de ser limpo.
-          clearCachedTheme(cacheContext);
-          return null;
+          // Uma resposta vazia pode ocorrer enquanto a sessao/RLS ainda esta
+          // estabilizando. Nao apague uma identidade visual valida por causa
+          // dessa leitura transitoria. O cache e isolado por usuario + coach,
+          // portanto nao ha risco de reaproveitar o tema de outra conta.
+          return readCachedTheme({
+            ...cacheContext,
+            allowLegacy: authRepository.canWriteAsCoach(authContext)
+          });
         }
       } catch {
         // offline: usa o cache local abaixo

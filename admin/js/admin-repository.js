@@ -1,4 +1,4 @@
-import { getSupabase } from "../../appAluno/js/core/supabase.js?v=build-20260812-5";
+import { getSupabase } from "../../appAluno/js/core/supabase.js?v=build-20260823-3";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-5";
 
 const messageFromError = (error, fallback) => {

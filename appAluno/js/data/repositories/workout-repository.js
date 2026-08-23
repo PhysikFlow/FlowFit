@@ -1,5 +1,5 @@
 import { Platform } from "../../core/platform.js?v=build-20260813-1";
-import { getSupabase } from "../../core/supabase.js?v=build-20260812-5";
+import { getSupabase } from "../../core/supabase.js?v=build-20260823-3";
 import { DEMO_COACH_ID } from "../../config.js?v=build-20260809-6";
 import { authRepository } from "./auth-repository.js?v=build-20260812-5";
 import { normalizeRepdbMetadata } from "../repdb/repdb-catalog.js?v=build-20260823-1";

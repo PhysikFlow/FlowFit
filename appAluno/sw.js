@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-aluno-v111";
+const CACHE_NAME = "flowfit-aluno-v113";
 const REPDB_CACHE_NAME = "flowfit-repdb-2026.8.0-v1";
 const REPDB_ORIGIN = "https://cdn.jsdelivr.net";
 const REPDB_PATH_PREFIX = "/npm/@repdb/exercises@2026.8.0/";
@@ -41,7 +41,7 @@ const APP_SHELL = [
   "./vendor/cropperjs/cropper.min.css?v=1.6.2",
   "./vendor/cropperjs/cropper.min.js?v=1.6.2",
   "./css/app.css?v=build-20260823-2",
-  "./js/app.js?v=build-20260823-2",
+  "./js/app.js?v=build-20260823-3",
   "./js/components/custom-select.js?v=build-20260816-1",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/components/install-ui.js?v=build-20260816-3",
@@ -58,7 +58,7 @@ const APP_SHELL = [
   "./js/data/repositories/auth-repository.js?v=build-20260812-6",
   "./js/data/repositories/student-repository.js?v=build-20260822-1",
   "./js/data/repositories/student-profile-repository.js?v=build-20260822-1",
-  "./js/data/repositories/theme-repository.js?v=build-20260820-1",
+  "./js/data/repositories/theme-repository.js?v=build-20260823-1",
   "./js/data/repositories/workout-repository.js?v=build-20260823-2",
   "./js/data/training-domain.js?v=build-20260823-2",
   "./js/data/repositories/programming-repository.js?v=build-20260823-2",
@@ -75,7 +75,10 @@ const APP_SHELL = [
   "./js/core/store.js?v=build-20260813-1",
   "./js/core/session-draft-storage.js?v=build-20260811-2",
   "./js/core/theme.js?v=build-20260818-1",
-  "./js/core/supabase.js?v=build-20260812-5",
+  "./js/core/supabase.js?v=build-20260823-3",
+  "./vendor/supabase/supabase-js.bundle.mjs?v=2.112.3-flowfit.1",
+  "./vendor/supabase/process-lite.mjs",
+  "./vendor/supabase/buffer.mjs",
   "./manifest.webmanifest"
 ];
 

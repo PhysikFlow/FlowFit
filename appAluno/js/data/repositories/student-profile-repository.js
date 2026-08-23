@@ -1,4 +1,4 @@
-import { getSupabase } from "../../core/supabase.js?v=build-20260812-5";
+import { getSupabase } from "../../core/supabase.js?v=build-20260823-3";
 import { authRepository } from "./auth-repository.js?v=build-20260812-6";
 
 const TABLE = "student_profiles";

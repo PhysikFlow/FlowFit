@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-professor-v79";
+const CACHE_NAME = "flowfit-professor-v81";
 const REPDB_CACHE_NAME = "flowfit-repdb-2026.8.0-v1";
 const REPDB_ORIGIN = "https://cdn.jsdelivr.net";
 const REPDB_PATH_PREFIX = "/npm/@repdb/exercises@2026.8.0/";
@@ -8,7 +8,7 @@ const APP_SHELL = [
   "./index.html",
   "./manifest.webmanifest",
   "./css/app.css?v=build-20260823-2",
-  "./js/app.js?v=build-20260823-2",
+  "./js/app.js?v=build-20260823-3",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/core/navigation.js?v=build-20260816-1",
   "./js/screens/dashboard/dashboard-screen.js?v=build-20260822-1",
@@ -66,13 +66,16 @@ const APP_SHELL = [
   "../appAluno/js/core/refresh-coordinator.js?v=build-20260820-1",
   "../appAluno/js/core/frozen-backdrop.js?v=build-20260821-3",
   "../appAluno/js/core/date-picker.js?v=build-20260822-1",
-  "../appAluno/js/core/supabase.js?v=build-20260812-5",
+  "../appAluno/js/core/supabase.js?v=build-20260823-3",
+  "../appAluno/vendor/supabase/supabase-js.bundle.mjs?v=2.112.3-flowfit.1",
+  "../appAluno/vendor/supabase/process-lite.mjs",
+  "../appAluno/vendor/supabase/buffer.mjs",
   "../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6",
   "../appAluno/js/data/training-domain.js?v=build-20260823-2",
   "../appAluno/js/data/repositories/programming-repository.js?v=build-20260823-2",
   "../appAluno/js/data/repositories/student-repository.js?v=build-20260822-1",
   "../appAluno/js/data/repositories/student-profile-repository.js?v=build-20260822-1",
-  "../appAluno/js/data/repositories/theme-repository.js?v=build-20260820-1",
+  "../appAluno/js/data/repositories/theme-repository.js?v=build-20260823-1",
   "../appAluno/js/data/repositories/workout-repository.js?v=build-20260823-2",
   "../appAluno/js/data/repdb/repdb-catalog.js?v=build-20260823-1",
   "../appAluno/js/data/repositories/session-repository.js?v=build-20260823-2",
