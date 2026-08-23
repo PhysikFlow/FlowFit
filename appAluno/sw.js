@@ -1,4 +1,8 @@
-const CACHE_NAME = "flowfit-aluno-v109";
+const CACHE_NAME = "flowfit-aluno-v110";
+const REPDB_CACHE_NAME = "flowfit-repdb-2026.8.0-v1";
+const REPDB_ORIGIN = "https://cdn.jsdelivr.net";
+const REPDB_PATH_PREFIX = "/npm/@repdb/exercises@2026.8.0/";
+const REPDB_CACHE_LIMIT = 81;
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -36,8 +40,8 @@ const APP_SHELL = [
   "./assets/fonts/teko-700.woff2",
   "./vendor/cropperjs/cropper.min.css?v=1.6.2",
   "./vendor/cropperjs/cropper.min.js?v=1.6.2",
-  "./css/app.css?v=build-20260822-2",
-  "./js/app.js?v=build-20260822-2",
+  "./css/app.css?v=build-20260823-1",
+  "./js/app.js?v=build-20260823-1",
   "./js/components/custom-select.js?v=build-20260816-1",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/components/install-ui.js?v=build-20260816-3",
@@ -55,7 +59,8 @@ const APP_SHELL = [
   "./js/data/repositories/student-repository.js?v=build-20260822-1",
   "./js/data/repositories/student-profile-repository.js?v=build-20260822-1",
   "./js/data/repositories/theme-repository.js?v=build-20260820-1",
-  "./js/data/repositories/workout-repository.js?v=build-20260820-1",
+  "./js/data/repositories/workout-repository.js?v=build-20260823-1",
+  "./js/data/repdb/repdb-catalog.js?v=build-20260823-1",
   "./js/data/repositories/session-repository.js?v=build-20260820-1",
   "./js/config.js?v=build-20260809-6",
   "./js/core/brand-theme.js?v=build-20260818-1",
@@ -85,7 +90,8 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(keys
-        .filter((key) => key.startsWith("flowfit-aluno-") && key !== CACHE_NAME)
+        .filter((key) => (key.startsWith("flowfit-aluno-") && key !== CACHE_NAME)
+          || (key.startsWith("flowfit-repdb-") && key !== REPDB_CACHE_NAME))
         .map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
@@ -98,6 +104,33 @@ const isNetworkFirstRequest = (request) => {
     || url.pathname.endsWith(".js")
     || url.pathname.endsWith(".css")
     || url.pathname.endsWith(".webmanifest");
+};
+
+const isRepdbRequest = (url) => url.origin === REPDB_ORIGIN
+  && url.pathname.startsWith(REPDB_PATH_PREFIX)
+  && (url.pathname === `${REPDB_PATH_PREFIX}exercises.json`
+    || (/^\/npm\/@repdb\/exercises@2026[.]8[.]0\/images\/flat\/[a-z0-9-]+-(start|peak|main)[.]webp$/).test(url.pathname));
+
+const trimRepdbCache = async (cache) => {
+  const keys = await cache.keys();
+  const excess = keys.length - REPDB_CACHE_LIMIT;
+  if (excess > 0) await Promise.all(keys.slice(0, excess).map((request) => cache.delete(request)));
+};
+
+const repdbCacheFirst = async (request) => {
+  const cache = await caches.open(REPDB_CACHE_NAME);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  if (response.ok || response.type === "opaque") {
+    try {
+      await cache.put(request, response.clone());
+      await trimRepdbCache(cache);
+    } catch {
+      // Quota insuficiente não pode impedir o uso online da ilustração.
+    }
+  }
+  return response;
 };
 
 const networkFirst = async (request) => {
@@ -128,6 +161,10 @@ const networkFirst = async (request) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const requestUrl = new URL(event.request.url);
+  if (isRepdbRequest(requestUrl)) {
+    event.respondWith(repdbCacheFirst(event.request));
+    return;
+  }
   if (requestUrl.origin !== self.location.origin) return;
   if (isNetworkFirstRequest(event.request)) {
     event.respondWith(networkFirst(event.request));

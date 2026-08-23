@@ -1,15 +1,20 @@
-const CACHE_NAME = "flowfit-professor-v77";
+const CACHE_NAME = "flowfit-professor-v78";
+const REPDB_CACHE_NAME = "flowfit-repdb-2026.8.0-v1";
+const REPDB_ORIGIN = "https://cdn.jsdelivr.net";
+const REPDB_PATH_PREFIX = "/npm/@repdb/exercises@2026.8.0/";
+const REPDB_CACHE_LIMIT = 81;
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./css/app.css?v=build-20260822-1",
-  "./js/app.js?v=build-20260822-2",
+  "./css/app.css?v=build-20260823-1",
+  "./js/app.js?v=build-20260823-1",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/core/navigation.js?v=build-20260816-1",
   "./js/screens/dashboard/dashboard-screen.js?v=build-20260822-1",
   "./js/screens/appearance/local-assets-editor.js?v=build-20260818-1",
   "./js/screens/workouts/workouts-screen.js?v=build-20260816-1",
+  "./js/screens/workouts/repdb-picker.js?v=build-20260823-1",
   "./js/pdf/workout-pdf-exporter.js?v=build-20260820-2",
   "./js/pdf/workout-pdf-generator.js?v=build-20260820-2",
   "./js/screens/students/students-screen.js?v=build-20260822-1",
@@ -66,7 +71,8 @@ const APP_SHELL = [
   "../appAluno/js/data/repositories/student-repository.js?v=build-20260822-1",
   "../appAluno/js/data/repositories/student-profile-repository.js?v=build-20260822-1",
   "../appAluno/js/data/repositories/theme-repository.js?v=build-20260820-1",
-  "../appAluno/js/data/repositories/workout-repository.js?v=build-20260820-1",
+  "../appAluno/js/data/repositories/workout-repository.js?v=build-20260823-1",
+  "../appAluno/js/data/repdb/repdb-catalog.js?v=build-20260823-1",
   "../appAluno/js/data/repositories/session-repository.js?v=build-20260820-1",
   "./js/screens/agenda/agenda-planner.js?v=build-20260821-2"
 ];
@@ -100,13 +106,40 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(keys
-        .filter((key) => key.startsWith("flowfit-professor-") && key !== CACHE_NAME)
+        .filter((key) => (key.startsWith("flowfit-professor-") && key !== CACHE_NAME)
+          || (key.startsWith("flowfit-repdb-") && key !== REPDB_CACHE_NAME))
         .map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
 
 const isConfigRequest = (request) => request.url.includes("/appAluno/js/config.js");
+const isRepdbRequest = (url) => url.origin === REPDB_ORIGIN
+  && url.pathname.startsWith(REPDB_PATH_PREFIX)
+  && (url.pathname === `${REPDB_PATH_PREFIX}exercises.json`
+    || (/^\/npm\/@repdb\/exercises@2026[.]8[.]0\/images\/flat\/[a-z0-9-]+-(start|peak|main)[.]webp$/).test(url.pathname));
+
+const trimRepdbCache = async (cache) => {
+  const keys = await cache.keys();
+  const excess = keys.length - REPDB_CACHE_LIMIT;
+  if (excess > 0) await Promise.all(keys.slice(0, excess).map((request) => cache.delete(request)));
+};
+
+const repdbCacheFirst = async (request) => {
+  const cache = await caches.open(REPDB_CACHE_NAME);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  if (response.ok || response.type === "opaque") {
+    try {
+      await cache.put(request, response.clone());
+      await trimRepdbCache(cache);
+    } catch {
+      // Quota insuficiente não pode impedir o uso online da ilustração.
+    }
+  }
+  return response;
+};
 const isNetworkFirstRequest = (request) => {
   const url = new URL(request.url);
   return request.mode === "navigate"
@@ -142,6 +175,10 @@ const networkFirst = async (request) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const requestUrl = new URL(event.request.url);
+  if (isRepdbRequest(requestUrl)) {
+    event.respondWith(repdbCacheFirst(event.request));
+    return;
+  }
   if (requestUrl.origin !== self.location.origin) return;
 
   if (isConfigRequest(event.request) || isNetworkFirstRequest(event.request)) {

@@ -2,6 +2,7 @@ import { Platform } from "../../core/platform.js?v=build-20260813-1";
 import { getSupabase } from "../../core/supabase.js?v=build-20260812-5";
 import { DEMO_COACH_ID } from "../../config.js?v=build-20260809-6";
 import { authRepository } from "./auth-repository.js?v=build-20260812-5";
+import { normalizeRepdbMetadata } from "../repdb/repdb-catalog.js?v=build-20260823-1";
 
 export const PUBLISHED_WORKOUTS_KEY = "flowfit.published-workouts";
 const MAX_LOCAL_PUBLISHED_WORKOUTS = 120;
@@ -40,6 +41,7 @@ const CLOUD_WORKOUT_SELECT = `
     instructions,
     media_url,
     media_type,
+    media_metadata,
     updated_at
   )
 `;
@@ -72,9 +74,14 @@ const LEGACY_CLOUD_WORKOUT_SELECT = `
     instructions,
     media_url,
     media_type,
+    media_metadata,
     updated_at
   )
 `;
+
+const withoutMediaMetadata = (selectColumns) => selectColumns.replace(/\s+media_metadata,/, "");
+const CLOUD_WORKOUT_SELECT_WITHOUT_MEDIA_METADATA = withoutMediaMetadata(CLOUD_WORKOUT_SELECT);
+const LEGACY_CLOUD_WORKOUT_SELECT_WITHOUT_MEDIA_METADATA = withoutMediaMetadata(LEGACY_CLOUD_WORKOUT_SELECT);
 
 const DEFAULT_EXERCISE = {
   target: "Personalizado",
@@ -85,8 +92,11 @@ const DEFAULT_EXERCISE = {
   notes: "Criado no painel do professor.",
   instructions: "",
   mediaUrl: "",
-  mediaType: "none"
+  mediaType: "none",
+  mediaMetadata: {}
 };
+
+let mediaMetadataSupport = null;
 
 const normalizeText = (value, fallback = "") => {
   const text = String(value ?? "").trim();
@@ -154,6 +164,11 @@ const isMissingWorkoutScheduleColumn = (error) => {
   return ["starts_at", "published_at", "version"].some((column) => message.includes(column));
 };
 
+const isMissingMediaMetadataColumn = (error) => {
+  const message = String(error?.message || error?.details || "").toLowerCase();
+  return message.includes("media_metadata");
+};
+
 const initialsFromName = (name) => normalizeText(name, "Aluno")
   .split(" ")
   .filter(Boolean)
@@ -179,7 +194,8 @@ const normalizeExercise = (exercise, index = 0, workoutId = "workout") => ({
   prescription: normalizeText(exercise?.prescription, "3 x 10"),
   instructions: normalizeText(exercise?.instructions),
   mediaUrl: normalizeText(exercise?.mediaUrl || exercise?.media_url),
-  mediaType: normalizeMediaType(exercise?.mediaType || exercise?.media_type, exercise?.mediaUrl || exercise?.media_url)
+  mediaType: normalizeMediaType(exercise?.mediaType || exercise?.media_type, exercise?.mediaUrl || exercise?.media_url),
+  mediaMetadata: normalizeRepdbMetadata(exercise?.mediaMetadata || exercise?.media_metadata)
 });
 
 const normalizeWorkout = (workout) => {
@@ -349,6 +365,7 @@ const toExerciseRows = (workout, authContext) => workout.exercises.map((exercise
   instructions: exercise.instructions,
   media_url: exercise.mediaUrl,
   media_type: exercise.mediaType,
+  media_metadata: exercise.mediaMetadata,
   updated_at: workout.updatedAt
 }));
 
@@ -384,11 +401,30 @@ const toAppWorkout = (row) => normalizeWorkout({
       notes: exercise.notes,
       instructions: exercise.instructions,
       mediaUrl: exercise.media_url,
-      mediaType: exercise.media_type
+      mediaType: exercise.media_type,
+      mediaMetadata: exercise.media_metadata
     }))
 });
 
 export const workoutRepository = {
+  getMediaMetadataSupport() {
+    return mediaMetadataSupport;
+  },
+
+  async ensureMediaMetadataSupport() {
+    if (mediaMetadataSupport !== null) return mediaMetadataSupport;
+    const client = await getSupabase();
+    if (!client) return null;
+    try {
+      const { error } = await client.from(EXERCISES_TABLE).select("media_metadata").limit(1);
+      if (!error) mediaMetadataSupport = true;
+      else if (isMissingMediaMetadataColumn(error)) mediaMetadataSupport = false;
+      return mediaMetadataSupport;
+    } catch {
+      return null;
+    }
+  },
+
   listPublishedWorkouts() {
     return readPublishedWorkouts()
       .filter((workout) => workout?.id && workout?.studentKey && Array.isArray(workout.exercises))
@@ -429,6 +465,16 @@ export const workoutRepository = {
     }
 
     try {
+      const hasRepdbMedia = normalized.exercises.some((exercise) => exercise.mediaMetadata?.provider === "repdb");
+      if (hasRepdbMedia && await this.ensureMediaMetadataSupport() !== true) {
+        const migrationError = new Error("Atualização do banco necessária para publicar ilustrações RepDB.");
+        const failed = this.savePublishedWorkout({
+          ...normalized,
+          syncStatus: "failed",
+          syncMessage: migrationError.message
+        });
+        return { synced: false, reason: "media-metadata-migration-required", error: migrationError, workout: failed };
+      }
       const { data, error } = await client.rpc("publish_student_workout", {
         p_workout: toWorkoutPlanRow(normalized, authContext),
         p_exercises: toExerciseRows(normalized, authContext)
@@ -566,12 +612,30 @@ export const workoutRepository = {
         return query;
       };
 
-      let { data, error } = await runQuery(CLOUD_WORKOUT_SELECT);
-      if (error && isMissingWorkoutScheduleColumn(error)) {
-        ({ data, error } = await runQuery(LEGACY_CLOUD_WORKOUT_SELECT));
+      let data;
+      let error;
+      let supportsSchedule = true;
+      let supportsMetadata = true;
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const selectColumns = supportsSchedule
+          ? (supportsMetadata ? CLOUD_WORKOUT_SELECT : CLOUD_WORKOUT_SELECT_WITHOUT_MEDIA_METADATA)
+          : (supportsMetadata ? LEGACY_CLOUD_WORKOUT_SELECT : LEGACY_CLOUD_WORKOUT_SELECT_WITHOUT_MEDIA_METADATA);
+        ({ data, error } = await runQuery(selectColumns));
+        if (!error) break;
+        if (supportsMetadata && isMissingMediaMetadataColumn(error)) {
+          supportsMetadata = false;
+          mediaMetadataSupport = false;
+          continue;
+        }
+        if (supportsSchedule && isMissingWorkoutScheduleColumn(error)) {
+          supportsSchedule = false;
+          continue;
+        }
+        break;
       }
 
       if (error) return { synced: false, error, workouts: localWorkouts };
+      if (supportsMetadata) mediaMetadataSupport = true;
 
       const cloudWorkouts = (data || []).map(toAppWorkout);
       const unrelatedLocal = this.listPublishedWorkouts().filter((workout) => (

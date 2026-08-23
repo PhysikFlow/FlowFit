@@ -7,7 +7,7 @@ import { authRepository } from "./data/repositories/auth-repository.js?v=build-2
 import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260822-1";
 import { applyStudentProfile, effectiveStudentName, studentProfileRepository } from "./data/repositories/student-profile-repository.js?v=build-20260822-1";
 import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260820-1";
-import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260820-1";
+import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260823-1";
 import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260820-1";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "./components/custom-select.js?v=build-20260816-1";
@@ -29,6 +29,7 @@ import {
   parseRestSeconds, parseTotalSets
 } from "./utils/formatters.js?v=build-20260816-1";
 import { installFrozenBackdrop } from "./core/frozen-backdrop.js?v=build-20260821-3";
+import { getRepdbPoseUrls, normalizeRepdbMetadata } from "./data/repdb/repdb-catalog.js?v=build-20260823-1";
 
 initCustomSelects();
 hydrateIcons();
@@ -79,6 +80,8 @@ const brandInput = document.querySelector("[data-brand-input]");
 const taglineInput = document.querySelector("[data-tagline-input]");
 const modeButtons = [...document.querySelectorAll("[data-mode]")];
 let runnerTickId;
+let runnerRepdbMediaController = null;
+const runnerRepdbPrefetchedUrls = new Set();
 let wakeLockSentinel = null;
 const SET_CLICK_DEBOUNCE_MS = 2000;
 const SET_TRANSITION_MS = 720;
@@ -367,6 +370,7 @@ const navigate = (name, updateHash = true) => {
     document.body.classList.remove("has-workout-runner");
     workoutRunner.hidden = true;
     workoutRunner.setAttribute("aria-hidden", "true");
+    stopRunnerRepdbMedia();
     stopRunnerTicker();
     stopRunnerInactivityMonitor();
     releaseRunnerWakeLock();
@@ -866,10 +870,139 @@ const getYouTubeVideoId = (value) => {
   return "";
 };
 
+const stopRunnerRepdbMedia = () => {
+  runnerRepdbMediaController?.stop?.();
+  runnerRepdbMediaController = null;
+};
+
+const loadRunnerImage = (image, source) => new Promise((resolve, reject) => {
+  image.onload = async () => {
+    try {
+      await image.decode?.();
+    } catch {
+      // O onload já confirma que existe uma imagem utilizável.
+    }
+    resolve(image);
+  };
+  image.onerror = reject;
+  image.src = source;
+});
+
+const prefetchRepdbExerciseMedia = (exercise) => {
+  const poses = getRepdbPoseUrls(exercise?.mediaMetadata);
+  [...new Set(Object.values(poses))].forEach((source) => {
+    if (runnerRepdbPrefetchedUrls.has(source)) return;
+    runnerRepdbPrefetchedUrls.add(source);
+    const image = new Image();
+    image.decoding = "async";
+    image.onerror = () => runnerRepdbPrefetchedUrls.delete(source);
+    image.src = source;
+  });
+};
+
+const renderRepdbRunnerMedia = (target, exercise) => {
+  const metadata = normalizeRepdbMetadata(exercise.mediaMetadata);
+  const poses = getRepdbPoseUrls(metadata);
+  const poster = poses.peak || poses.main || poses.start || "";
+  if (!metadata.provider || !poster) return false;
+
+  target.hidden = false;
+  const frame = document.createElement("div");
+  frame.className = "runner-media__repdb";
+  frame.setAttribute("aria-label", `Demonstração por etapas de ${exercise.name}`);
+  target.append(frame);
+
+  if (!poses.start || !poses.peak) {
+    const image = document.createElement("img");
+    image.className = "is-visible";
+    image.src = poster;
+    image.alt = `Demonstração de ${exercise.name}`;
+    image.loading = "eager";
+    image.decoding = "async";
+    frame.append(image);
+    return true;
+  }
+
+  const startImage = document.createElement("img");
+  const peakImage = document.createElement("img");
+  startImage.alt = `Posição inicial de ${exercise.name}`;
+  peakImage.alt = `Posição de pico de ${exercise.name}`;
+  startImage.loading = "eager";
+  peakImage.loading = "eager";
+  startImage.decoding = "async";
+  peakImage.decoding = "async";
+  frame.append(startImage, peakImage);
+
+  let stopped = false;
+  let timer = 0;
+  let showingPeak = false;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const showPose = (peak) => {
+    showingPeak = peak;
+    startImage.classList.toggle("is-visible", !peak);
+    peakImage.classList.toggle("is-visible", peak);
+  };
+  const scheduleNext = () => {
+    if (stopped || reducedMotion || document.hidden) return;
+    timer = window.setTimeout(() => {
+      if (stopped) return;
+      showPose(!showingPeak);
+      scheduleNext();
+    }, showingPeak ? 1150 : 950);
+  };
+  const stop = () => {
+    stopped = true;
+    window.clearTimeout(timer);
+    startImage.onload = null;
+    startImage.onerror = null;
+    peakImage.onload = null;
+    peakImage.onerror = null;
+  };
+  runnerRepdbMediaController = { stop };
+
+  Promise.all([
+    loadRunnerImage(startImage, poses.start),
+    loadRunnerImage(peakImage, poses.peak)
+  ]).then(() => {
+    if (stopped || !frame.isConnected) return;
+    showPose(false);
+    if (reducedMotion) {
+      const controls = document.createElement("div");
+      controls.className = "runner-media__repdb-controls";
+      const label = document.createElement("span");
+      label.textContent = "Início";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "Trocar";
+      button.setAttribute("aria-label", "Alternar entre posição inicial e posição de pico");
+      button.addEventListener("click", () => {
+        showPose(!showingPeak);
+        label.textContent = showingPeak ? "Pico" : "Início";
+      });
+      controls.append(label, button);
+      frame.append(controls);
+      return;
+    }
+    scheduleNext();
+  }).catch(() => {
+    if (stopped || !frame.isConnected) return;
+    stop();
+    frame.replaceChildren();
+    const fallback = document.createElement("img");
+    fallback.className = "is-visible";
+    fallback.src = poster;
+    fallback.alt = `Demonstração de ${exercise.name}`;
+    frame.append(fallback);
+  });
+  return true;
+};
+
 const renderRunnerMedia = (exercise) => {
   const target = document.querySelector("[data-runner-media]");
+  stopRunnerRepdbMedia();
   const source = String(exercise.mediaUrl || "").trim();
   target.replaceChildren();
+  if (renderRepdbRunnerMedia(target, exercise)) return;
   target.hidden = !source;
   if (!source) return;
   let url;
@@ -1292,6 +1425,7 @@ const renderRunnerSetTrack = (exercise, setNumber, session = getActiveSession())
 const renderWorkoutRunner = () => {
   const session = getActiveSession();
   if (!session) return;
+  if (session.phase !== SESSION_PHASE.ACTIVE_SET) stopRunnerRepdbMedia();
   const total = getSessionTotalSets(session);
   const done = getCompletedSessionSets(session);
   const percent = total ? Math.round((done / total) * 100) : 0;
@@ -1400,6 +1534,9 @@ const renderWorkoutRunner = () => {
   completeButton.disabled = false;
   document.querySelector("[data-correct-last-set]").hidden = getSessionEntries(session).length === 0;
   renderRunnerMedia(exercise);
+  const activeExerciseIndex = exercises.findIndex((item) => occurrenceId(item) === occurrenceId(exercise));
+  const nextExercise = exercises[activeExerciseIndex + 1];
+  if (nextExercise) prefetchRepdbExerciseMedia(nextExercise);
   renderRunnerPerformanceHint(exercise, setNumber);
   updateRunnerPrimaryAction(session);
   syncRunnerClock();
@@ -2050,6 +2187,7 @@ const openRunnerExitDialog = (session = getActiveSession()) => {
   if (!session || runnerExitDialog?.open) return;
   markRunnerActivity({ forcePersist: true });
   pauseActiveSession(getActiveSession(), { reason: "exit-dialog" });
+  stopRunnerRepdbMedia();
   stopRunnerTicker();
   stopRunnerInactivityMonitor();
   releaseRunnerWakeLock();
@@ -2575,7 +2713,9 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     refreshOnForeground();
     restoreRunnerOnForeground();
+    if (!workoutRunner.hidden && getActiveSession()?.phase === SESSION_PHASE.ACTIVE_SET) renderWorkoutRunner();
   } else if (!workoutRunner.hidden) {
+    stopRunnerRepdbMedia();
     stopRunnerTicker();
     releaseRunnerWakeLock();
   }

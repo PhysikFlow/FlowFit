@@ -6,7 +6,7 @@ import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from 
 import { applyStudentProfile, effectiveStudentName, studentProfileRepository } from "../../appAluno/js/data/repositories/student-profile-repository.js?v=build-20260822-1";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260820-1";
-import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260820-1";
+import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260823-1";
 import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260820-1";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "../../appAluno/js/components/custom-select.js?v=build-20260816-1";
@@ -16,12 +16,14 @@ import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v
 import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260818-1";
 import { initAgendaPlanner } from "./screens/agenda/agenda-planner.js?v=build-20260821-2";
 import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=build-20260816-1";
+import { createRepdbPicker } from "./screens/workouts/repdb-picker.js?v=build-20260823-1";
 import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260822-1";
 import { createWorkoutPdfExporter } from "./pdf/workout-pdf-exporter.js?v=build-20260820-2";
 import { escapeHtml, formatUpdatedAt, formatVolume, initialsFromName, normalizeEmail, normalizeSearch } from "./utils/formatters.js?v=build-20260816-1";
 import { createProfessorViewState } from "./state/view-state.js?v=build-20260816-1";
 import { createRefreshCoordinator } from "../../appAluno/js/core/refresh-coordinator.js?v=build-20260820-1";
 import { installFrozenBackdrop } from "../../appAluno/js/core/frozen-backdrop.js?v=build-20260821-3";
+import { getRepdbPoseUrls, getRepdbPosterUrl, normalizeRepdbMetadata } from "../../appAluno/js/data/repdb/repdb-catalog.js?v=build-20260823-1";
 
 initCustomSelects();
 initAllDatePickers();
@@ -72,6 +74,14 @@ const previewMinutes = document.querySelector("[data-preview-minutes]");
 const previewList = document.querySelector("[data-preview-list]");
 const workoutSyncStatus = document.querySelector("[data-workout-sync-status]");
 const saveWorkoutDraftButton = document.querySelector("[data-save-workout-draft]");
+const repdbPickerDialog = document.querySelector("[data-repdb-picker-dialog]");
+const repdbSearchInput = document.querySelector("[data-repdb-search]");
+const repdbBodyPartSelect = document.querySelector("[data-repdb-body-part]");
+const repdbEquipmentSelect = document.querySelector("[data-repdb-equipment]");
+const repdbResults = document.querySelector("[data-repdb-results]");
+const repdbStatus = document.querySelector("[data-repdb-status]");
+const repdbSelection = document.querySelector("[data-repdb-selection]");
+const repdbConfirmButton = document.querySelector("[data-confirm-repdb]");
 const duplicateWorkoutDialog = document.querySelector("[data-duplicate-workout-dialog]");
 const duplicateWorkoutForm = document.querySelector("[data-duplicate-workout-form]");
 const duplicateWorkoutStudents = document.querySelector("[data-duplicate-workout-students]");
@@ -147,7 +157,8 @@ const DRAFT_EXERCISE_DETAIL_FIELDS = [
   "notes",
   "instructions",
   "mediaUrl",
-  "mediaType"
+  "mediaType",
+  "mediaMetadata"
 ];
 
 const THEME_PALETTES = [
@@ -252,6 +263,7 @@ let workoutDraftExercises = [];
 let workoutDraftTextSignature = "";
 let workoutDraftDirty = false;
 let workoutDraftSaveTimer;
+let repdbPicker;
 let activeWorkoutDrag = null;
 const workoutReorderAnimations = new Set();
 let removedWorkoutExercise = null;
@@ -1551,6 +1563,36 @@ const renderWorkoutInsertSlot = (index) => `
   </div>
 `;
 
+const renderRepdbDraftMedia = (exercise) => {
+  const metadata = normalizeRepdbMetadata(exercise.mediaMetadata);
+  const poses = getRepdbPoseUrls(metadata);
+  const poster = getRepdbPosterUrl(metadata);
+  const migrationPending = workoutRepository.getMediaMetadataSupport() === false;
+  if (!metadata.provider || !poster) {
+    return `
+      <div class="repdb-draft-media repdb-draft-media--empty">
+        <div>
+          <strong>Ilustração RepDB</strong>
+          <small>${migrationPending ? "Atualização do banco pendente." : "Escolha uma referência visual flat para o aluno."}</small>
+        </div>
+        <button class="button button--quiet" type="button" data-open-repdb-picker="${escapeHtml(exercise.draftKey)}" ${migrationPending ? "disabled" : ""}>Escolher ilustração</button>
+      </div>`;
+  }
+  const poseLabel = poses.start && poses.peak ? "Início e pico" : "Pose principal";
+  return `
+    <div class="repdb-draft-media">
+      <img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async" />
+      <div>
+        <strong>Ilustração RepDB selecionada</strong>
+        <small>${escapeHtml(poseLabel)} · ${escapeHtml(metadata.exerciseId)}</small>
+      </div>
+      <span class="repdb-draft-media__actions">
+        <button class="button button--quiet" type="button" data-open-repdb-picker="${escapeHtml(exercise.draftKey)}">Trocar</button>
+        <button class="text-button" type="button" data-remove-repdb-media="${escapeHtml(exercise.draftKey)}">Remover</button>
+      </span>
+    </div>`;
+};
+
 const renderWorkoutPreview = () => {
   if (!previewList || !previewExercises || !previewSets || !previewMinutes) return;
   const draft = getWorkoutDraft();
@@ -1600,6 +1642,7 @@ const renderWorkoutPreview = () => {
             <label>Cadência<input name="draft-tempo-${index}" value="${escapeHtml(exercise.tempo)}" data-draft-exercise-field="tempo" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="2-0-2" /></label>
           </div>
           <label>Instrução curta<textarea name="draft-instructions-${index}" rows="2" maxlength="240" data-draft-exercise-field="instructions" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="Ex: mantenha as escápulas apoiadas">${escapeHtml(exercise.instructions || "")}</textarea></label>
+          ${renderRepdbDraftMedia(exercise)}
           <label>Tipo da demonstração
             <select name="draft-media-type-${index}" data-draft-exercise-field="mediaType" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}">
               <option value="none" ${!exercise.mediaType || exercise.mediaType === "none" ? "selected" : ""}>Sem mídia</option>
@@ -1635,6 +1678,27 @@ const commitWorkoutDraftMutation = ({ focusKey = "", announce = "" } = {}) => {
     window.setTimeout(() => findDraftExerciseHandle(focusKey)?.focus(), 0);
   }
 };
+
+repdbPicker = createRepdbPicker({
+  dialog: repdbPickerDialog,
+  searchInput: repdbSearchInput,
+  bodyPartSelect: repdbBodyPartSelect,
+  equipmentSelect: repdbEquipmentSelect,
+  results: repdbResults,
+  status: repdbStatus,
+  selection: repdbSelection,
+  confirmButton: repdbConfirmButton,
+  closeButtons: [...document.querySelectorAll("[data-close-repdb-picker]")],
+  refreshSelects: (root) => refreshCustomSelects(root),
+  onConfirm: ({ draftKey, exercise: repdbExercise }) => {
+    const exercise = workoutDraftExercises.find((item) => item.draftKey === draftKey);
+    if (!exercise) return;
+    exercise.mediaMetadata = repdbExercise.metadata;
+    exercise.mediaUrl = repdbExercise.posterUrl;
+    exercise.mediaType = "image";
+    commitWorkoutDraftMutation({ announce: "Ilustração adicionada sem alterar o nome do exercício." });
+  }
+});
 
 const moveDraftExercise = (draftKey, nextIndex) => {
   const currentIndex = findDraftExerciseIndex(draftKey);
@@ -1712,6 +1776,9 @@ const updateDraftExerciseField = (input) => {
   const exercise = workoutDraftExercises.find((item) => item.draftKey === draftKey);
   if (!exercise || !field) return;
   exercise[field] = input.value;
+  if (["mediaUrl", "mediaType"].includes(field) && exercise.mediaMetadata?.provider === "repdb") {
+    exercise.mediaMetadata = {};
+  }
   if (field === "name" || field === "prescription") {
     exercise.sourceLine = "";
     writeWorkoutDraftText();
@@ -1917,6 +1984,36 @@ previewList?.addEventListener("keydown", (event) => {
 });
 
 previewList?.addEventListener("click", (event) => {
+  const openRepdb = event.target.closest("[data-open-repdb-picker]");
+  if (openRepdb) {
+    const draftKey = openRepdb.dataset.openRepdbPicker;
+    const exercise = workoutDraftExercises.find((item) => item.draftKey === draftKey);
+    if (!exercise) return;
+    openRepdb.disabled = true;
+    workoutRepository.ensureMediaMetadataSupport().then((supported) => {
+      if (supported !== true) {
+        showToast(supported === false
+          ? "Execute a migration RepDB antes de escolher ilustrações."
+          : "Não foi possível validar a integração RepDB agora. Tente novamente online.");
+        renderWorkoutPreview();
+        return;
+      }
+      repdbPicker?.open({ draftKey, mediaMetadata: exercise.mediaMetadata });
+    }).finally(() => {
+      if (openRepdb.isConnected) openRepdb.disabled = false;
+    });
+    return;
+  }
+  const removeRepdb = event.target.closest("[data-remove-repdb-media]");
+  if (removeRepdb) {
+    const exercise = workoutDraftExercises.find((item) => item.draftKey === removeRepdb.dataset.removeRepdbMedia);
+    if (!exercise) return;
+    exercise.mediaMetadata = {};
+    exercise.mediaUrl = "";
+    exercise.mediaType = "none";
+    commitWorkoutDraftMutation({ announce: "Ilustração removida." });
+    return;
+  }
   const editButton = event.target.closest("[data-edit-draft-exercise]");
   if (editButton) {
     const entry = editButton.closest(".workout-preview__entry");

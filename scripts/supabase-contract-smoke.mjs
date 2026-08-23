@@ -22,10 +22,12 @@ const migration = migrations
 
 const checks = [
   ["frontend lê media_type", repository.includes("media_type")],
+  ["frontend lê e envia media_metadata", repository.includes("media_metadata") && repository.includes("mediaMetadata")],
   ["frontend envia workout_exercise_id", sessions.includes("workout_exercise_id")],
   ["frontend envia discomfort", sessions.includes("discomfort")],
   ["frontend chama sync_workout_session", sessions.includes('rpc("sync_workout_session"')],
   ["migration adiciona media_type", migration.includes("add column if not exists media_type")],
+  ["migration adiciona e valida media_metadata", migration.includes("add column if not exists media_metadata") && migration.includes("exercise_repdb_media_mismatch")],
   ["migration adiciona workout_exercise_id", migration.includes("add column if not exists workout_exercise_id")],
   ["migration adiciona discomfort", migration.includes("add column if not exists discomfort")],
   ["migration define sync_workout_session", migration.includes("create or replace function public.sync_workout_session")],

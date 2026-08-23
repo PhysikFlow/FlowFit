@@ -1599,6 +1599,308 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   margin-top: var(--space-1);
 }
 
+.repdb-draft-media {
+  display: grid;
+  grid-template-columns: 4.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-compact);
+  background: color-mix(in srgb, var(--surface-raised) 84%, transparent);
+}
+
+.repdb-draft-media--empty {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.repdb-draft-media > img {
+  width: 4.25rem;
+  aspect-ratio: 1;
+  border-radius: var(--radius-compact);
+  object-fit: contain;
+  background: #f4f5f7;
+}
+
+.repdb-draft-media strong,
+.repdb-draft-media small {
+  display: block;
+}
+
+.repdb-draft-media small {
+  margin-top: 0.2rem;
+  color: var(--text-supporting);
+  font-size: var(--text-xs);
+}
+
+.repdb-draft-media__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.repdb-picker {
+  width: min(calc(100% - 2rem), 64rem);
+  height: min(88dvh, 50rem);
+  max-height: min(88dvh, 50rem);
+  overflow: hidden;
+}
+
+.repdb-picker__panel {
+  height: 100%;
+  grid-template-rows: auto auto auto auto auto minmax(12rem, 1fr) auto auto;
+  overflow: hidden;
+}
+
+.repdb-picker__panel > p {
+  margin: 0;
+  color: var(--text-supporting);
+}
+
+.repdb-picker__tools {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1.4fr) minmax(9rem, 0.8fr) minmax(10rem, 0.9fr);
+  gap: var(--space-2);
+}
+
+.repdb-picker__tools label {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+  color: var(--text-supporting);
+  font-size: var(--text-xs);
+  font-weight: var(--type-weight-item-title);
+}
+
+.repdb-picker__tools input,
+.repdb-picker__tools .custom-select,
+.repdb-picker__tools .custom-select__trigger {
+  width: 100%;
+  min-width: 0;
+}
+
+.repdb-picker__status {
+  min-height: 1.25rem;
+}
+
+.repdb-picker__results {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  gap: var(--space-2);
+  min-height: 0;
+  padding: 0.1rem var(--space-1) var(--space-2) 0.1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.repdb-picker__results::-webkit-scrollbar {
+  display: none;
+}
+
+.repdb-exercise-card {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.repdb-exercise-card:hover,
+.repdb-exercise-card:focus-visible,
+.repdb-exercise-card.is-selected {
+  border-color: var(--selection-color);
+}
+
+.repdb-exercise-card:focus-visible {
+  outline: 2px solid var(--selection-color);
+  outline-offset: 2px;
+}
+
+.repdb-exercise-card__media {
+  display: grid;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  place-items: center;
+  background: #f4f5f7;
+}
+
+.repdb-exercise-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.repdb-exercise-card__copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+  padding: var(--space-2);
+}
+
+.repdb-exercise-card__copy strong,
+.repdb-exercise-card__copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repdb-exercise-card__copy small,
+.repdb-exercise-card__copy span {
+  color: var(--text-supporting);
+  font-size: var(--text-xs);
+}
+
+.repdb-exercise-card > i {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: grid;
+  width: 1.65rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--selection-color);
+  color: var(--action-primary-text);
+  font-style: normal;
+  opacity: 0;
+  transform: scale(0.75);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.repdb-exercise-card.is-selected > i {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.repdb-picker__selection {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 5.25rem;
+  padding: var(--space-2);
+  border: 1px solid var(--selection-border);
+  border-radius: var(--radius-card);
+  background: var(--selection-soft);
+}
+
+.repdb-picker__selection-empty {
+  grid-column: 1 / -1;
+  color: var(--text-supporting);
+}
+
+.repdb-picker__selection-copy strong,
+.repdb-picker__selection-copy small {
+  display: block;
+}
+
+.repdb-picker__selection-copy small {
+  margin-top: 0.2rem;
+  color: var(--text-supporting);
+}
+
+.repdb-picker__selection-poses {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.repdb-picker__selection-poses figure {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  text-align: center;
+}
+
+.repdb-picker__selection-poses img {
+  width: 4rem;
+  aspect-ratio: 1;
+  border-radius: var(--radius-compact);
+  background: #f4f5f7;
+  object-fit: contain;
+}
+
+.repdb-picker__selection-poses figcaption {
+  color: var(--text-supporting);
+  font-size: 0.7rem;
+}
+
+.repdb-picker__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.repdb-picker__actions > a,
+.data-credit {
+  color: var(--text-supporting);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.repdb-picker__actions > a:hover,
+.data-credit:hover {
+  color: var(--selection-color);
+  text-decoration: underline;
+}
+
+.repdb-picker__actions > span {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.repdb-picker__empty,
+.repdb-picker__loading {
+  grid-column: 1 / -1;
+  display: grid;
+  min-height: 12rem;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-2);
+  color: var(--text-supporting);
+  text-align: center;
+}
+
+.repdb-picker__empty strong,
+.repdb-picker__empty small {
+  display: block;
+}
+
+.repdb-picker__loading {
+  grid-template-columns: repeat(3, 0.55rem);
+}
+
+.repdb-picker__loading span {
+  width: 0.55rem;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--selection-color);
+  animation: repdb-loading 900ms ease-in-out infinite alternate;
+}
+
+.repdb-picker__loading span:nth-child(2) { animation-delay: 140ms; }
+.repdb-picker__loading span:nth-child(3) { animation-delay: 280ms; }
+
+@keyframes repdb-loading {
+  to { opacity: 0.25; transform: translateY(-0.3rem); }
+}
+
+.data-credit {
+  display: inline-block;
+  margin-top: var(--space-3);
+}
+
 .workout-insert-slot {
   min-height: 1.75rem;
   text-align: center;
@@ -2428,6 +2730,74 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
 }
 
 @media (max-width: 760px) {
+  .repdb-draft-media,
+  .repdb-draft-media--empty {
+    grid-template-columns: 3.5rem minmax(0, 1fr);
+  }
+
+  .repdb-draft-media--empty > div {
+    grid-column: 1 / -1;
+  }
+
+  .repdb-draft-media > img {
+    width: 3.5rem;
+  }
+
+  .repdb-draft-media__actions,
+  .repdb-draft-media > .button {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .repdb-draft-media__actions .button,
+  .repdb-draft-media > .button {
+    flex: 1;
+  }
+
+  .repdb-picker {
+    width: calc(100% - 0.75rem);
+    height: calc(100dvh - 1rem);
+    max-height: calc(100dvh - 1rem);
+  }
+
+  .repdb-picker__panel {
+    padding: var(--space-3);
+  }
+
+  .repdb-picker__tools {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .repdb-picker__search {
+    grid-column: 1 / -1;
+  }
+
+  .repdb-picker__results {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .repdb-picker__selection {
+    grid-template-columns: 1fr;
+  }
+
+  .repdb-picker__selection-poses {
+    justify-content: flex-start;
+  }
+
+  .repdb-picker__actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .repdb-picker__actions > span {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .repdb-picker__actions > a {
+    text-align: center;
+  }
+
   .exercise-detail-editor__grid {
     grid-template-columns: 1fr;
   }
@@ -2967,6 +3337,25 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
       background: color-mix(in srgb, var(--surface-raised) 85%, transparent);
       color: var(--text-primary);
     }
+  }
+}
+
+@media (max-width: 390px) {
+  .repdb-picker__tools,
+  .repdb-picker__results {
+    grid-template-columns: 1fr;
+  }
+
+  .repdb-picker__tools label {
+    grid-column: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .repdb-exercise-card > i,
+  .repdb-picker__loading span {
+    transition: none;
+    animation: none;
   }
 }
 

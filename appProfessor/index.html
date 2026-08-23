@@ -19,9 +19,9 @@
     <link rel="stylesheet" href="../appAluno/css/fonts.css?v=build-20260817-1" />
     <link rel="stylesheet" href="vendor/cropperjs/cropper.min.css?v=1.6.2" />
     <link rel="stylesheet" href="../appAluno/css/date-picker.css?v=build-20260819-1" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260822-1" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260823-1" />
     <script defer src="vendor/cropperjs/cropper.min.js?v=1.6.2"></script>
-    <script type="module" src="js/app.js?v=build-20260822-2"></script>
+    <script type="module" src="js/app.js?v=build-20260823-1"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title" aria-busy="true">
@@ -357,6 +357,46 @@
           </form>
         </dialog>
 
+        <dialog class="app-dialog repdb-picker" data-repdb-picker-dialog aria-labelledby="repdb-picker-title">
+          <section class="dialog-form repdb-picker__panel">
+            <button class="icon-button dialog-form__close" type="button" data-close-repdb-picker aria-label="Fechar biblioteca">×</button>
+            <span class="eyebrow">Biblioteca visual</span>
+            <h2 id="repdb-picker-title">Escolher ilustração</h2>
+            <p>Encontre uma referência visual sem alterar o nome ou a prescrição escritos no treino.</p>
+
+            <div class="repdb-picker__tools">
+              <label class="repdb-picker__search">Buscar exercício
+                <input type="search" data-repdb-search autocomplete="off" placeholder="Ex: bench press, squat…" />
+              </label>
+              <label>Região
+                <select data-repdb-body-part aria-label="Filtrar por região corporal">
+                  <option value="">Todas as regiões</option>
+                </select>
+              </label>
+              <label>Equipamento
+                <select data-repdb-equipment aria-label="Filtrar por equipamento">
+                  <option value="">Todos os equipamentos</option>
+                </select>
+              </label>
+            </div>
+
+            <p class="form-status repdb-picker__status" data-repdb-status role="status" aria-live="polite"></p>
+            <div class="repdb-picker__results" data-repdb-results aria-label="Ilustrações encontradas"></div>
+
+            <aside class="repdb-picker__selection" data-repdb-selection aria-live="polite">
+              <span class="repdb-picker__selection-empty">Escolha uma ilustração para visualizar as poses.</span>
+            </aside>
+
+            <footer class="repdb-picker__actions">
+              <a href="https://repdb.co/" target="_blank" rel="noopener noreferrer">Dados e ilustrações de exercícios por RepDB</a>
+              <span>
+                <button class="button button--quiet" type="button" data-close-repdb-picker>Cancelar</button>
+                <button class="button" type="button" data-confirm-repdb disabled>Usar ilustração</button>
+              </span>
+            </footer>
+          </section>
+        </dialog>
+
       </section>
 
       <section class="page" data-page="agenda" aria-label="Agenda e disponibilidade">
@@ -660,6 +700,7 @@
               </div>
               <div class="progress-track" aria-label="Uso do limite de alunos"><span data-account-limit-progress style="--progress: 0%"></span></div>
               <p class="form-status" data-account-status></p>
+              <a class="data-credit" href="https://repdb.co/" target="_blank" rel="noopener noreferrer">Dados e ilustrações de exercícios por RepDB</a>
             </article>
           </div>
         </section>

@@ -125,6 +125,7 @@ create table if not exists public.workout_exercises (
   instructions text not null default '',
   media_url    text not null default '' check (media_url = '' or media_url ~* '^https://'),
   media_type   text not null default 'none' check (media_type in ('none', 'image', 'gif', 'video', 'youtube', 'external')),
+  media_metadata jsonb not null default '{}'::jsonb check (jsonb_typeof(media_metadata) = 'object' and pg_column_size(media_metadata) <= 4096),
   updated_at   timestamptz not null default now()
 );
 
@@ -254,7 +255,8 @@ alter table public.workout_feedback alter column coach_id drop default;
 alter table public.workout_exercises
   add column if not exists instructions text not null default '',
   add column if not exists media_url text not null default '',
-  add column if not exists media_type text not null default 'none';
+  add column if not exists media_type text not null default 'none',
+  add column if not exists media_metadata jsonb not null default '{}'::jsonb;
 
 alter table public.workout_set_logs
   add column if not exists set_number integer,
@@ -2031,6 +2033,9 @@ declare
   v_count integer := 0;
   v_media_url text;
   v_media_type text;
+  v_media_metadata jsonb;
+  v_repdb_poses jsonb;
+  v_repdb_poster_path text;
   v_result jsonb;
 begin
   if v_user_id is null or not public.can_operate_as_coach() then
@@ -2105,16 +2110,51 @@ begin
   loop
     v_media_url := trim(coalesce(v_exercise ->> 'media_url', ''));
     v_media_type := lower(trim(coalesce(v_exercise ->> 'media_type', case when v_media_url = '' then 'none' else 'external' end)));
+    v_media_metadata := coalesce(v_exercise -> 'media_metadata', '{}'::jsonb);
     if v_media_url <> '' and v_media_url !~* '^https://' then
       raise exception 'exercise_media_url_requires_https';
     end if;
     if v_media_type not in ('none', 'image', 'gif', 'video', 'youtube', 'external') then
       raise exception 'exercise_media_type_invalid';
     end if;
+    if jsonb_typeof(v_media_metadata) <> 'object' or pg_column_size(v_media_metadata) > 4096 then
+      raise exception 'exercise_media_metadata_invalid';
+    end if;
+
+    if v_media_metadata <> '{}'::jsonb then
+      if v_media_metadata ->> 'provider' <> 'repdb'
+         or v_media_metadata ->> 'version' <> '2026.8.0'
+         or coalesce(v_media_metadata ->> 'exerciseId', '') !~ '^[a-z0-9]+(-[a-z0-9]+)*$'
+         or jsonb_typeof(v_media_metadata -> 'poses') <> 'object' then
+        raise exception 'exercise_repdb_metadata_invalid';
+      end if;
+      v_repdb_poses := v_media_metadata -> 'poses';
+      if v_repdb_poses = '{}'::jsonb
+         or exists (
+           select 1 from jsonb_object_keys(v_repdb_poses) as pose(key)
+           where pose.key not in ('start', 'peak', 'main')
+         )
+         or exists (
+           select 1 from jsonb_each_text(v_repdb_poses) as pose(key, value)
+           where pose.value !~ '^images/flat/[a-z0-9]+(-[a-z0-9]+)*-(start|peak|main)[.]webp$'
+              or pose.value !~ (
+                '^images/flat/'
+                || (v_media_metadata ->> 'exerciseId')
+                || '-(start|peak|main)[.]webp$'
+              )
+         ) then
+        raise exception 'exercise_repdb_poses_invalid';
+      end if;
+      v_repdb_poster_path := coalesce(v_repdb_poses ->> 'peak', v_repdb_poses ->> 'main', v_repdb_poses ->> 'start');
+      if v_media_type <> 'image'
+         or v_media_url <> ('https://cdn.jsdelivr.net/npm/@repdb/exercises@2026.8.0/' || v_repdb_poster_path) then
+        raise exception 'exercise_repdb_media_mismatch';
+      end if;
+    end if;
 
     insert into public.workout_exercises (
       id, workout_id, coach_id, position, name, target, prescription,
-      load, rest, tempo, rir, notes, instructions, media_url, media_type, updated_at
+      load, rest, tempo, rir, notes, instructions, media_url, media_type, media_metadata, updated_at
     ) values (
       trim(coalesce(v_exercise ->> 'id', v_workout_id || '-ex-' || v_count::text)),
       v_workout_id,
@@ -2131,6 +2171,7 @@ begin
       trim(coalesce(v_exercise ->> 'instructions', '')),
       v_media_url,
       v_media_type,
+      v_media_metadata,
       now()
     );
     v_count := v_count + 1;
