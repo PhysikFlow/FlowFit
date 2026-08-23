@@ -194,12 +194,12 @@ export const createStudentsScreen = ({
           <div class="entity-row__actions">
             ${publishedWorkout
               ? `<button class="button" type="button" data-student-detail="${escapeHtml(student.id)}">Acompanhar</button>`
-              : `<button class="button" type="button" data-student-action="${escapeHtml(student.id)}">Criar treino</button>`}
+              : `<button class="button" type="button" data-student-action="${escapeHtml(student.id)}">Programar</button>`}
             <details class="action-menu entity-menu">
               <summary class="icon-button" aria-label="Mais ações para ${escapeHtml(studentName)}">•••</summary>
               <div class="action-menu__popover">
                 <button type="button" data-student-invite="${escapeHtml(student.id)}">Enviar convite</button>
-                ${publishedWorkout ? `<button type="button" data-student-action="${escapeHtml(student.id)}">Editar treino</button>` : ""}
+                ${publishedWorkout ? `<button type="button" data-student-action="${escapeHtml(student.id)}">Editar programação</button>` : ""}
               </div>
             </details>
           </div>

@@ -6,8 +6,8 @@ import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from 
 import { applyStudentProfile, effectiveStudentName, studentProfileRepository } from "../../appAluno/js/data/repositories/student-profile-repository.js?v=build-20260822-1";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260820-1";
-import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260823-1";
-import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260820-1";
+import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260823-2";
+import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260823-2";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "../../appAluno/js/components/custom-select.js?v=build-20260816-1";
 import { initAllDatePickers, refreshDatePicker } from "../../appAluno/js/core/date-picker.js?v=build-20260822-1";
@@ -24,6 +24,8 @@ import { createProfessorViewState } from "./state/view-state.js?v=build-20260816
 import { createRefreshCoordinator } from "../../appAluno/js/core/refresh-coordinator.js?v=build-20260820-1";
 import { installFrozenBackdrop } from "../../appAluno/js/core/frozen-backdrop.js?v=build-20260821-3";
 import { getRepdbPoseUrls, getRepdbPosterUrl, normalizeRepdbMetadata } from "../../appAluno/js/data/repdb/repdb-catalog.js?v=build-20260823-1";
+import { programmingRepository } from "../../appAluno/js/data/repositories/programming-repository.js?v=build-20260823-2";
+import { cloneTrainingDocument, formatPrescription, normalizePrescription as normalizeStructuredPrescription, parseQuickEntry } from "../../appAluno/js/data/training-domain.js?v=build-20260823-2";
 
 initCustomSelects();
 initAllDatePickers();
@@ -74,6 +76,11 @@ const previewMinutes = document.querySelector("[data-preview-minutes]");
 const previewList = document.querySelector("[data-preview-list]");
 const workoutSyncStatus = document.querySelector("[data-workout-sync-status]");
 const saveWorkoutDraftButton = document.querySelector("[data-save-workout-draft]");
+const saveAsTemplateButton = document.querySelector("[data-save-as-template]");
+const quickEntryButton = document.querySelector("[data-import-quick-entry]");
+const programmingLibrary = document.querySelector("[data-programming-library]");
+const workoutScopeDialog = document.querySelector("[data-workout-scope-dialog]");
+const workoutScopeForm = document.querySelector("[data-workout-scope-form]");
 const repdbPickerDialog = document.querySelector("[data-repdb-picker-dialog]");
 const repdbSearchInput = document.querySelector("[data-repdb-search]");
 const repdbBodyPartSelect = document.querySelector("[data-repdb-body-part]");
@@ -158,7 +165,15 @@ const DRAFT_EXERCISE_DETAIL_FIELDS = [
   "instructions",
   "mediaUrl",
   "mediaType",
-  "mediaMetadata"
+  "mediaMetadata",
+  "definitionId",
+  "sets",
+  "reps",
+  "rpe",
+  "blockId",
+  "blockType",
+  "blockLabel",
+  "alternatives"
 ];
 
 const THEME_PALETTES = [
@@ -264,6 +279,12 @@ let workoutDraftTextSignature = "";
 let workoutDraftDirty = false;
 let workoutDraftSaveTimer;
 let repdbPicker;
+let selectedDraftExerciseKey = "";
+let currentTemplateId = "";
+let workoutDomain = "students";
+let workoutUndoStack = [];
+let workoutRedoStack = [];
+let draftFieldSnapshot = null;
 let activeWorkoutDrag = null;
 const workoutReorderAnimations = new Set();
 let removedWorkoutExercise = null;
@@ -1008,15 +1029,16 @@ const getWorkoutStage = (workout) => {
 
 const getWorkoutSyncLabel = (workout) => {
   if (workout?.syncStatus === "synced") return "Publicado";
-  if (workout?.syncStatus === "failed") return "Pendente";
-  return "Rascunho";
+  if (["failed", "pending", "local"].includes(workout?.syncStatus)) return "Publicação pendente";
+  return workout?.editorialState === "draft" ? "Rascunho" : "Publicação pendente";
 };
 
 const describeWorkoutSyncResult = (result) => {
   if (result.synced && result.partial) return "Treino enviado sem agendamento. Tente republicar para completar.";
   if (result.synced) return "Treino enviado. O aluno recebe quando abrir ou atualizar o app.";
   if (result.reason === "not-authenticated-as-coach") return "Entre novamente para enviar o treino ao aluno.";
-  return "Treino salvo como rascunho. Verifique a conexão e tente publicar novamente.";
+  if (result.reason === "programming-domain-migration-required") return "Atualização do banco pendente. O conteúdo foi preservado neste aparelho.";
+  return "Publicação pendente. O conteúdo foi preservado e será reenviado quando houver conexão.";
 };
 
 const parseSets = (prescription) => {
@@ -1063,6 +1085,7 @@ const applyPublishedWorkouts = (publishedWorkouts = workoutRepository.listPublis
   workouts.forEach(syncStudentWorkout);
   renderStudents();
   renderWorkouts();
+  renderProgrammingWorkspace();
   renderDashboard();
 };
 
@@ -1280,11 +1303,18 @@ const renderInviteTools = () => {
 
 const renderStudentOptions = () => {
   const select = document.querySelector("[data-student-options]");
+  const templateSource = document.querySelector("[data-template-source]");
   const submitButton = workoutForm?.querySelector("button[type='submit']");
   if (!select) return;
+  if (templateSource) {
+    const previousTemplate = templateSource.value;
+    templateSource.innerHTML = `<option value="">Criar do zero</option>` + programmingRepository.listTemplates()
+      .map((template) => `<option value="${escapeHtml(template.id)}">${escapeHtml(template.name)}</option>`).join("");
+    if (programmingRepository.listTemplates().some((template) => template.id === previousTemplate)) templateSource.value = previousTemplate;
+  }
   if (!students.length) {
-    select.innerHTML = `<option value="">Cadastre um aluno primeiro</option>`;
-    select.disabled = true;
+    select.innerHTML = `<option value="">Sem aluno — conteúdo reutilizável</option>`;
+    select.disabled = false;
     if (submitButton) submitButton.disabled = true;
     renderInviteTools();
     return;
@@ -1293,7 +1323,7 @@ const renderStudentOptions = () => {
   const previousValue = select.value;
   select.disabled = false;
   if (submitButton) submitButton.disabled = false;
-  select.innerHTML = students.map((student) => {
+  select.innerHTML = `<option value="">Sem aluno — conteúdo reutilizável</option>` + students.map((student) => {
     const name = effectiveStudentName(student);
     return `<option value="${escapeHtml(student.id)}" data-icon="${escapeHtml(initialsFromName(name))}" data-avatar="true"${student.email ? ` data-description="${escapeHtml(student.email)}"` : ""}>${escapeHtml(name)}</option>`;
   }).join("");
@@ -1319,7 +1349,7 @@ const exerciseToDraftLine = (exercise) => {
 };
 
 const toDraftExercise = (exercise, index = 0, sourceLine = "") => ({
-  ...exercise,
+  ...normalizeStructuredPrescription(exercise, index, "draft"),
   draftKey: exercise?.draftKey || createDraftExerciseKey(),
   sourceLine: String(sourceLine || exercise?.sourceLine || `${exercise?.name || `Exercício ${index + 1}`} ${compactPrescription(exercise?.prescription)}`).trim(),
   parsed: exercise?.parsed !== false
@@ -1341,12 +1371,11 @@ const reconcileWorkoutDraftFromText = ({ force = false } = {}) => {
   const blocksInput = getWorkoutBlocksInput();
   if (!blocksInput) return workoutDraftExercises;
   const rawText = String(blocksInput.value || "");
-  if (!force && rawText === workoutDraftTextSignature) return workoutDraftExercises;
+  if (!force || rawText === workoutDraftTextSignature) return workoutDraftExercises;
   const lines = rawText
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 12);
+    .filter(Boolean);
   const previous = workoutDraftExercises;
   const usedKeys = new Set();
   const findReusable = (line, parsed) => {
@@ -1397,10 +1426,10 @@ const setWorkoutDraftDirty = (dirty, message = "") => {
 
 const serializeWorkoutDraft = ({ builderOpen = !workoutBuilder?.hidden } = {}) => {
   if (!workoutForm) return null;
-  reconcileWorkoutDraftFromText();
   const fields = Object.fromEntries(new FormData(workoutForm));
   return {
     editingWorkoutId,
+    currentTemplateId,
     fields,
     exercises: workoutDraftExercises.map((exercise) => ({ ...exercise })),
     dirty: workoutDraftDirty,
@@ -1453,6 +1482,8 @@ const restoreStoredWorkoutDraft = ({ open = false } = {}) => {
     if (field && "value" in field) field.value = String(value ?? "");
   });
   workoutDraftExercises = saved.exercises.map((exercise, index) => toDraftExercise(exercise, index));
+  currentTemplateId = String(saved.currentTemplateId || saved.fields.templateSource || "");
+  selectedDraftExerciseKey = workoutDraftExercises[0]?.draftKey || "";
   restoredWorkoutDraftSavedAt = saved.savedAt || "";
   writeWorkoutDraftText();
   const editingWorkout = workouts.find((workout) => workout.id === saved.editingWorkoutId) || null;
@@ -1489,21 +1520,25 @@ const workoutToEditableBlocks = (workout) => (workout.exercises || [])
 const loadWorkoutForEditing = (workout) => {
   if (!workoutForm || !workout) return;
   clearStoredWorkoutDraft();
+  currentTemplateId = workout.templateId || "";
   const studentSelect = workoutForm.querySelector("[name='student']");
   const titleInput = workoutForm.querySelector("[name='title']");
-  const templateInput = workoutForm.querySelector("[name='template']");
+  const objectiveInput = workoutForm.querySelector("[name='objective']");
+  const levelInput = workoutForm.querySelector("[name='level']");
   const startsAtInput = workoutForm.querySelector("[name='startsAt']");
   const blocksInput = workoutForm.querySelector("[name='blocks']");
 
   if (studentSelect && students.some((student) => student.id === workout.studentId)) studentSelect.value = workout.studentId;
   if (titleInput) titleInput.value = workoutToEditableTitle(workout);
-  if (templateInput) templateInput.value = workout.focus || templateInput.value;
+  if (objectiveInput) objectiveInput.value = workout.focus || "";
+  if (levelInput) levelInput.value = workout.level || "";
   refreshCustomSelects(workoutForm);
   if (startsAtInput) {
     startsAtInput.value = formatDateForInput(workout.startsAt || workout.updatedAt);
     refreshDatePicker(startsAtInput);
   }
   workoutDraftExercises = (workout.exercises || []).map((exercise, index) => toDraftExercise(exercise, index));
+  selectedDraftExerciseKey = workoutDraftExercises[0]?.draftKey || "";
   if (blocksInput) blocksInput.value = workoutToEditableBlocks(workout);
   workoutDraftTextSignature = blocksInput?.value || "";
 
@@ -1516,10 +1551,34 @@ const loadWorkoutForEditing = (workout) => {
 const resetWorkoutFormMode = ({ resetForm = false, clearStored = false } = {}) => {
   if (resetForm) workoutForm?.reset();
   workoutDraftExercises = [];
+  selectedDraftExerciseKey = "";
+  workoutUndoStack = [];
+  workoutRedoStack = [];
+  currentTemplateId = "";
   workoutDraftTextSignature = getWorkoutBlocksInput()?.value || "";
   workoutDraftDirty = false;
   if (clearStored) clearStoredWorkoutDraft();
   setWorkoutEditingMode(null);
+  renderWorkoutPreview();
+};
+
+const loadTemplateForEditing = (template, { asCopy = false } = {}) => {
+  if (!workoutForm || !template) return;
+  resetWorkoutFormMode({ resetForm: true, clearStored: true });
+  currentTemplateId = asCopy ? "" : template.id;
+  workoutForm.elements.namedItem("student").value = "";
+  workoutForm.elements.namedItem("title").value = asCopy ? `${template.name} - cópia` : template.name;
+  workoutForm.elements.namedItem("objective").value = template.objective || "";
+  workoutForm.elements.namedItem("level").value = template.level || "";
+  workoutDraftExercises = (template.document?.exercises || []).map((exercise, index) => toDraftExercise({
+    ...exercise, id: asCopy ? `draft-copy-${Date.now()}-${index}` : exercise.id, draftKey: createDraftExerciseKey()
+  }, index));
+  selectedDraftExerciseKey = workoutDraftExercises[0]?.draftKey || "";
+  writeWorkoutDraftText();
+  if (workoutBuilderMode) workoutBuilderMode.textContent = asCopy ? "Novo modelo" : "Editar modelo";
+  if (workoutBuilderTitle) workoutBuilderTitle.textContent = asCopy ? "Criar modelo a partir de uma cópia" : `Editando modelo “${template.name}”`;
+  if (workoutBuilderCopy) workoutBuilderCopy.textContent = "Modelos não dependem de aluno e só afetam atribuições futuras quando você decidir usá-los.";
+  setWorkoutBuilderOpen(true, { focus: false });
   renderWorkoutPreview();
 };
 
@@ -1542,8 +1601,8 @@ const {
 });
 const getWorkoutDraft = () => {
   if (!workoutForm) return { exercises: [], totalSets: 0, estimatedMinutes: 0 };
-  const exercises = reconcileWorkoutDraftFromText();
-  const totalSets = exercises.reduce((sum, exercise) => sum + parseSets(exercise.prescription), 0);
+  const exercises = workoutDraftExercises;
+  const totalSets = exercises.reduce((sum, exercise) => sum + Number(exercise.sets || parseSets(exercise.prescription)), 0);
 
   return {
     exercises,
@@ -1593,74 +1652,98 @@ const renderRepdbDraftMedia = (exercise) => {
     </div>`;
 };
 
+const blockTypeLabel = (value) => ({
+  standard: "Sem grupo", warmup: "Aquecimento", superset: "Superset", circuit: "Circuito",
+  main: "Principal", finisher: "Finalizador"
+}[value] || "Sem grupo");
+
+const recentExerciseHistory = (exercise) => {
+  const studentId = workoutForm?.elements.namedItem("student")?.value || "";
+  if (!studentId) return [];
+  return getSessionsForStudent(studentId).flatMap((session) => (session.setLogs || [])
+    .filter((log) => normalizeSearch(log.exerciseName) === normalizeSearch(exercise.name))
+    .map((log) => ({ ...log, finishedAt: session.finishedAt })))
+    .sort((a, b) => new Date(b.finishedAt || 0) - new Date(a.finishedAt || 0)).slice(0, 6);
+};
+
+const renderTrainingDetails = (exercise) => {
+  if (!exercise) return `<aside class="training-details"><strong>Selecione um exercício</strong><small>Os detalhes, mídia e histórico aparecerão aqui.</small></aside>`;
+  const history = recentExerciseHistory(exercise);
+  return `<aside class="training-details" data-training-details="${escapeHtml(exercise.draftKey)}">
+    <header><div><span class="eyebrow">Exercício selecionado</span><h3>${escapeHtml(exercise.name)}</h3></div><button class="icon-button training-details__close" type="button" data-close-training-details aria-label="Fechar detalhes">×</button></header>
+    <div class="training-details__grid">
+      <label>Cadência<input value="${escapeHtml(exercise.tempo)}" data-draft-exercise-field="tempo" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" /></label>
+      <label>Carga/alvo<input value="${escapeHtml(exercise.load)}" data-draft-exercise-field="load" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" /></label>
+      <label>RPE opcional<input value="${escapeHtml(exercise.rpe || "")}" data-draft-exercise-field="rpe" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" /></label>
+      <label>Grupo muscular/alvo<input value="${escapeHtml(exercise.target || "")}" data-draft-exercise-field="target" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" /></label>
+      <label>Tipo de bloco<select data-draft-exercise-field="blockType" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}">
+        ${["standard","warmup","superset","circuit","main","finisher"].map((type) => `<option value="${type}" ${exercise.blockType === type ? "selected" : ""}>${blockTypeLabel(type)}</option>`).join("")}
+      </select></label>
+      <label>Identificador do bloco<input value="${escapeHtml(exercise.blockLabel || "")}" placeholder="Ex: A ou Aquecimento" data-draft-exercise-field="blockLabel" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" /></label>
+    </div>
+    <label>Instrução para o aluno<textarea rows="3" maxlength="240" data-draft-exercise-field="instructions" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}">${escapeHtml(exercise.instructions || "")}</textarea></label>
+    <label>Alternativas <input value="${escapeHtml((exercise.alternatives || []).join(", "))}" placeholder="Ex: Halteres, máquina" data-draft-exercise-field="alternatives" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" /></label>
+    ${renderRepdbDraftMedia(exercise)}
+    <div class="training-details__grid">
+      <label>Tipo da mídia<select data-draft-exercise-field="mediaType" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}">
+        ${["none","image","gif","video","youtube","external"].map((type) => `<option value="${type}" ${exercise.mediaType === type ? "selected" : ""}>${({none:"Sem mídia",image:"Imagem",gif:"GIF",video:"Vídeo",youtube:"YouTube",external:"Link externo"})[type]}</option>`).join("")}
+      </select></label>
+      <label>URL da demonstração<input type="url" value="${escapeHtml(exercise.mediaUrl || "")}" data-draft-exercise-field="mediaUrl" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="https://..." /></label>
+    </div>
+    <section class="training-history"><strong>Histórico recente${history.length ? "" : " indisponível"}</strong>
+      ${history.length ? `<div>${history.map((log) => `<span><time>${formatUpdatedAt(log.finishedAt)}</time><b>${formatVolume(log.loadKg)} · ${escapeHtml(log.reps)} reps</b><small>${log.rir ? `RIR ${escapeHtml(log.rir)}` : ""}</small></span>`).join("")}</div>` : `<small>Associe o treino a um aluno com execuções deste exercício para consultar dados reais.</small>`}
+    </section>
+  </aside>`;
+};
+
+const renderStudentWorkoutPreview = (exercises) => {
+  const title = workoutForm?.elements.namedItem("title")?.value || "Novo treino";
+  const objective = workoutForm?.elements.namedItem("objective")?.value || "Prescrição personalizada";
+  let previousBlock = "";
+  return `<details class="student-workout-preview"><summary>Prévia no app do aluno</summary><div class="student-workout-preview__screen">
+    <span class="eyebrow">Treino disponível</span><h3>${escapeHtml(title)}</h3><p>${escapeHtml(objective)}</p>
+    <div>${exercises.map((exercise, index) => {
+      const block = exercise.blockId || "";
+      const heading = block && block !== previousBlock ? `<small class="student-workout-preview__block">${escapeHtml(exercise.blockLabel || blockTypeLabel(exercise.blockType))}</small>` : "";
+      previousBlock = block;
+      return `${heading}<article><b>${String(index + 1).padStart(2, "0")}</b><span><strong>${escapeHtml(exercise.name)}</strong><small>${escapeHtml(formatPrescription(exercise.sets, exercise.reps))} · ${escapeHtml(exercise.rest)} descanso</small></span></article>`;
+    }).join("")}</div></div></details>`;
+};
+
 const renderWorkoutPreview = () => {
   if (!previewList || !previewExercises || !previewSets || !previewMinutes) return;
   const draft = getWorkoutDraft();
   previewExercises.textContent = draft.exercises.length;
   previewSets.textContent = draft.totalSets;
   previewMinutes.textContent = draft.estimatedMinutes;
-
-  if (!students.length) {
-    previewList.innerHTML = `<article class="empty-state"><strong>Cadastre um aluno primeiro.</strong><small>Depois selecione o aluno e publique o treino.</small></article>`;
-    return;
-  }
-
   if (!draft.exercises.length) {
-    previewList.innerHTML = `<article class="empty-state"><strong>Nenhum exercício informado.</strong><small>Cole uma lista no formato: Supino reto 4x10.</small></article>`;
+    previewList.innerHTML = `<article class="empty-state"><strong>Comece pela entrada rápida.</strong><small>Cole várias linhas ou adicione o primeiro exercício diretamente.</small>${renderWorkoutInsertSlot(0)}</article>`;
     return;
   }
-
-  previewList.innerHTML = draft.exercises.map((exercise, index) => `
-    <div class="workout-preview__entry" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}">
-    <article class="workout-preview__item workout-preview__item--editable">
-      <button class="workout-exercise-drag-handle" type="button" data-draft-drag-handle="${escapeHtml(exercise.draftKey)}" aria-label="Mover ${escapeHtml(exercise.name)}. Arraste ou use as setas para reordenar." title="Arrastar para reordenar"><span class="workout-exercise-drag-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
-      <span class="workout-preview__number">${String(index + 1).padStart(2, "0")}</span>
-      <div class="workout-preview__exercise-main">
-        <div class="workout-preview__exercise-head">
-          <div>
-            <strong data-preview-exercise-name>${escapeHtml(exercise.name)}</strong>
-            <small data-preview-exercise-prescription>${escapeHtml(exercise.prescription)} - ${escapeHtml(exercise.rest)} descanso</small>
-          </div>
-          <details class="action-menu workout-exercise-menu">
-            <summary class="icon-button" aria-label="Ações para ${escapeHtml(exercise.name)}">•••</summary>
-            <div class="action-menu__popover action-menu__popover--end">
-              <button type="button" data-edit-draft-exercise="${escapeHtml(exercise.draftKey)}">Editar exercício</button>
-              <button type="button" data-duplicate-draft-exercise="${escapeHtml(exercise.draftKey)}">Duplicar exercício</button>
-              <button class="is-danger" type="button" data-delete-draft-exercise="${escapeHtml(exercise.draftKey)}">Excluir exercício</button>
-            </div>
-          </details>
-        </div>
-        <details class="exercise-detail-editor">
-          <summary>Detalhes para o aluno</summary>
-          <div class="exercise-detail-editor__grid exercise-detail-editor__grid--identity">
-            <label>Nome<input name="draft-name-${index}" value="${escapeHtml(exercise.name)}" data-draft-exercise-field="name" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" /></label>
-            <label>Séries e repetições<input name="draft-prescription-${index}" value="${escapeHtml(exercise.prescription)}" data-draft-exercise-field="prescription" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="4 x 10" /></label>
-          </div>
-          <div class="exercise-detail-editor__grid">
-            <label>Descanso<input name="draft-rest-${index}" value="${escapeHtml(exercise.rest)}" data-draft-exercise-field="rest" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="60s" /></label>
-            <label>RIR<input name="draft-rir-${index}" value="${escapeHtml(exercise.rir)}" data-draft-exercise-field="rir" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="2" /></label>
-            <label>Cadência<input name="draft-tempo-${index}" value="${escapeHtml(exercise.tempo)}" data-draft-exercise-field="tempo" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="2-0-2" /></label>
-          </div>
-          <label>Instrução curta<textarea name="draft-instructions-${index}" rows="2" maxlength="240" data-draft-exercise-field="instructions" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="Ex: mantenha as escápulas apoiadas">${escapeHtml(exercise.instructions || "")}</textarea></label>
-          ${renderRepdbDraftMedia(exercise)}
-          <label>Tipo da demonstração
-            <select name="draft-media-type-${index}" data-draft-exercise-field="mediaType" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}">
-              <option value="none" ${!exercise.mediaType || exercise.mediaType === "none" ? "selected" : ""}>Sem mídia</option>
-              <option value="image" ${exercise.mediaType === "image" ? "selected" : ""}>Imagem</option>
-              <option value="gif" ${exercise.mediaType === "gif" ? "selected" : ""}>GIF</option>
-              <option value="video" ${exercise.mediaType === "video" ? "selected" : ""}>Vídeo direto</option>
-              <option value="youtube" ${exercise.mediaType === "youtube" ? "selected" : ""}>YouTube</option>
-              <option value="external" ${exercise.mediaType === "external" ? "selected" : ""}>Link externo</option>
-            </select>
-          </label>
-          <label>URL da demonstração<input type="url" name="draft-media-${index}" value="${escapeHtml(exercise.mediaUrl || "")}" data-draft-exercise-field="mediaUrl" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" placeholder="https://..." /></label>
-          <small class="field-help">Aceita HTTPS, incluindo YouTube, imagem, GIF ou vídeo direto.</small>
-        </details>
-      </div>
-    </article>
-    ${renderWorkoutInsertSlot(index + 1)}
-    </div>
-  `).join("");
+  if (!draft.exercises.some((exercise) => exercise.draftKey === selectedDraftExerciseKey)) selectedDraftExerciseKey = draft.exercises[0].draftKey;
+  const definitions = programmingRepository.listDefinitions();
+  const definitionOptions = definitions.map((item) => `<option value="${escapeHtml(item.name)}"></option>`).join("");
+  const rows = draft.exercises.map((exercise, index) => `
+    <div class="workout-preview__entry training-grid__row ${exercise.draftKey === selectedDraftExerciseKey ? "is-selected" : ""}" role="row" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}">
+      <button class="workout-exercise-drag-handle" type="button" data-draft-drag-handle="${escapeHtml(exercise.draftKey)}" aria-label="Mover ${escapeHtml(exercise.name)}"><span class="workout-exercise-drag-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
+      <button class="training-grid__index" type="button" data-select-draft-exercise="${escapeHtml(exercise.draftKey)}" aria-label="Abrir detalhes de ${escapeHtml(exercise.name)}">${String(index + 1).padStart(2, "0")}</button>
+      <input class="training-grid__name" value="${escapeHtml(exercise.name)}" list="training-exercise-definitions" data-draft-exercise-field="name" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" aria-label="Exercício ${index + 1}" />
+      <input type="number" min="1" max="99" value="${escapeHtml(exercise.sets)}" data-draft-exercise-field="sets" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" aria-label="Séries de ${escapeHtml(exercise.name)}" />
+      <input value="${escapeHtml(exercise.reps)}" data-draft-exercise-field="reps" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" aria-label="Repetições de ${escapeHtml(exercise.name)}" />
+      <input value="${escapeHtml(exercise.rir)}" data-draft-exercise-field="rir" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" aria-label="RIR de ${escapeHtml(exercise.name)}" />
+      <input value="${escapeHtml(exercise.rest)}" data-draft-exercise-field="rest" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" aria-label="Descanso de ${escapeHtml(exercise.name)}" />
+      <button class="training-grid__details" type="button" data-select-draft-exercise="${escapeHtml(exercise.draftKey)}" aria-label="Mais detalhes de ${escapeHtml(exercise.name)}">${exercise.blockType !== "standard" ? escapeHtml(exercise.blockLabel || blockTypeLabel(exercise.blockType)) : "•••"}</button>
+      <details class="action-menu workout-exercise-menu"><summary class="icon-button" aria-label="Ações para ${escapeHtml(exercise.name)}">•••</summary><div class="action-menu__popover action-menu__popover--end">
+        <button type="button" data-duplicate-draft-exercise="${escapeHtml(exercise.draftKey)}">Duplicar</button><button class="is-danger" type="button" data-delete-draft-exercise="${escapeHtml(exercise.draftKey)}">Excluir</button>
+      </div></details>
+    </div>`).join("");
+  const selected = draft.exercises.find((exercise) => exercise.draftKey === selectedDraftExerciseKey);
+  previewList.innerHTML = `<datalist id="training-exercise-definitions">${definitionOptions}</datalist>${renderStudentWorkoutPreview(draft.exercises)}<div class="training-editor__workspace">
+    <section class="training-grid" role="grid" aria-label="Editor estruturado de exercícios">
+      <div class="training-grid__header" role="row"><span></span><span>#</span><span>Exercício</span><span>Séries</span><span>Reps</span><span>RIR</span><span>Descanso</span><span>Detalhes</span><span></span></div>
+      ${rows}${renderWorkoutInsertSlot(draft.exercises.length)}
+    </section>${renderTrainingDetails(selected)}</div>`;
+  refreshCustomSelects(previewList);
 };
 
 const findDraftExerciseIndex = (draftKey) => workoutDraftExercises
@@ -1668,6 +1751,25 @@ const findDraftExerciseIndex = (draftKey) => workoutDraftExercises
 
 const findDraftExerciseHandle = (draftKey) => [...(previewList?.querySelectorAll("[data-draft-drag-handle]") || [])]
   .find((handle) => handle.dataset.draftDragHandle === draftKey) || null;
+
+const snapshotWorkoutDraft = () => cloneTrainingDocument(workoutDraftExercises);
+const pushWorkoutUndo = (snapshot = snapshotWorkoutDraft()) => {
+  workoutUndoStack.push(snapshot);
+  if (workoutUndoStack.length > 80) workoutUndoStack.shift();
+  workoutRedoStack = [];
+};
+const applyWorkoutHistory = (source, destination) => {
+  const snapshot = source.pop();
+  if (!snapshot) return false;
+  destination.push(snapshotWorkoutDraft());
+  workoutDraftExercises = snapshot.map((exercise, index) => toDraftExercise(exercise, index));
+  selectedDraftExerciseKey = workoutDraftExercises.find((item) => item.draftKey === selectedDraftExerciseKey)?.draftKey
+    || workoutDraftExercises[0]?.draftKey || "";
+  writeWorkoutDraftText();
+  markWorkoutDraftChanged();
+  renderWorkoutPreview();
+  return true;
+};
 
 const commitWorkoutDraftMutation = ({ focusKey = "", announce = "" } = {}) => {
   writeWorkoutDraftText();
@@ -1696,6 +1798,17 @@ repdbPicker = createRepdbPicker({
     exercise.mediaMetadata = repdbExercise.metadata;
     exercise.mediaUrl = repdbExercise.posterUrl;
     exercise.mediaType = "image";
+    const known = programmingRepository.listDefinitions().find((item) => normalizeSearch(item.name) === normalizeSearch(exercise.name));
+    const definition = programmingRepository.saveDefinition({
+      ...(known || {}),
+      name: exercise.name,
+      mediaUrl: repdbExercise.posterUrl,
+      mediaType: "image",
+      mediaMetadata: repdbExercise.metadata,
+      syncStatus: "pending",
+      updatedAt: new Date().toISOString()
+    });
+    exercise.definitionId = definition.id;
     commitWorkoutDraftMutation({ announce: "Ilustração adicionada sem alterar o nome do exercício." });
   }
 });
@@ -1705,6 +1818,7 @@ const moveDraftExercise = (draftKey, nextIndex) => {
   if (currentIndex < 0 || workoutDraftExercises.length < 2) return false;
   const boundedIndex = Math.max(0, Math.min(nextIndex, workoutDraftExercises.length - 1));
   if (boundedIndex === currentIndex) return false;
+  pushWorkoutUndo();
   const [exercise] = workoutDraftExercises.splice(currentIndex, 1);
   workoutDraftExercises.splice(boundedIndex, 0, exercise);
   commitWorkoutDraftMutation({ focusKey: draftKey });
@@ -1713,10 +1827,11 @@ const moveDraftExercise = (draftKey, nextIndex) => {
 
 const duplicateDraftExercise = (draftKey) => {
   const index = findDraftExerciseIndex(draftKey);
-  if (index < 0 || workoutDraftExercises.length >= 12) {
-    showToast(index < 0 ? "Exercício não encontrado." : "O treino aceita até 12 exercícios.");
+  if (index < 0) {
+    showToast("Exercício não encontrado.");
     return;
   }
+  pushWorkoutUndo();
   const source = workoutDraftExercises[index];
   const copy = toDraftExercise({
     ...source,
@@ -1731,6 +1846,7 @@ const duplicateDraftExercise = (draftKey) => {
 const deleteDraftExercise = (draftKey) => {
   const index = findDraftExerciseIndex(draftKey);
   if (index < 0) return;
+  pushWorkoutUndo();
   const [exercise] = workoutDraftExercises.splice(index, 1);
   removedWorkoutExercise = { exercise, index };
   writeWorkoutDraftText();
@@ -1755,10 +1871,7 @@ const insertDraftExercise = (line, index) => {
     showToast("Digite o exercício antes de adicionar.");
     return false;
   }
-  if (workoutDraftExercises.length >= 12) {
-    showToast("O treino aceita até 12 exercícios.");
-    return false;
-  }
+  pushWorkoutUndo();
   const parsed = parseExerciseLine(normalizedLine, index, "draft");
   const exercise = toDraftExercise({
     ...parsed,
@@ -1776,19 +1889,42 @@ const updateDraftExerciseField = (input) => {
   const exercise = workoutDraftExercises.find((item) => item.draftKey === draftKey);
   if (!exercise || !field) return;
   exercise[field] = input.value;
+  if (field === "alternatives") exercise.alternatives = input.value.split(",").map((item) => item.trim()).filter(Boolean);
+  if (field === "sets") exercise.sets = Math.max(1, Number.parseInt(input.value || "1", 10) || 1);
+  if (["sets", "reps"].includes(field)) exercise.prescription = formatPrescription(exercise.sets, exercise.reps);
+  if (field === "blockType" && input.value === "standard") {
+    exercise.blockId = "";
+    exercise.blockLabel = "";
+  } else if (field === "blockType" && !exercise.blockId) {
+    exercise.blockId = `${input.value}-${Date.now()}`;
+  }
+  if (field === "blockLabel" && exercise.blockType !== "standard" && !exercise.blockId) exercise.blockId = `block-${Date.now()}`;
+  if (field === "name") {
+    const definition = programmingRepository.listDefinitions().find((item) => normalizeSearch(item.name) === normalizeSearch(input.value));
+    if (definition) {
+      exercise.definitionId = definition.id;
+      if (!exercise.mediaUrl && definition.mediaUrl) {
+        exercise.mediaUrl = definition.mediaUrl;
+        exercise.mediaType = definition.mediaType;
+        exercise.mediaMetadata = definition.mediaMetadata;
+      }
+    } else {
+      exercise.definitionId = "";
+    }
+  }
   if (["mediaUrl", "mediaType"].includes(field) && exercise.mediaMetadata?.provider === "repdb") {
     exercise.mediaMetadata = {};
   }
-  if (field === "name" || field === "prescription") {
+  if (["name", "prescription", "sets", "reps"].includes(field)) {
     exercise.sourceLine = "";
     writeWorkoutDraftText();
-    const card = input.closest(".workout-preview__item");
+    const card = input.closest(".workout-preview__entry");
     const nameTarget = card?.querySelector("[data-preview-exercise-name]");
     if (field === "name" && nameTarget) nameTarget.textContent = exercise.name;
     const prescription = card?.querySelector("[data-preview-exercise-prescription]");
     if (prescription) prescription.textContent = `${exercise.prescription} - ${exercise.rest} descanso`;
   } else if (field === "rest") {
-    const prescription = input.closest(".workout-preview__item")?.querySelector("[data-preview-exercise-prescription]");
+    const prescription = input.closest(".workout-preview__entry")?.querySelector("[data-preview-exercise-prescription]");
     if (prescription) prescription.textContent = `${exercise.prescription} - ${exercise.rest} descanso`;
   }
   markWorkoutDraftChanged();
@@ -1838,8 +1974,8 @@ const moveWorkoutDragPlaceholder = (clientY) => {
     return clientY < rect.top + (rect.height / 2);
   }) || null;
   const placeholder = activeWorkoutDrag.placeholder;
-  if (reference === placeholder.nextElementSibling || (!reference && placeholder === previewList.lastElementChild)) return;
-  previewList.insertBefore(placeholder, reference);
+  if (reference === placeholder.nextElementSibling || (!reference && placeholder === activeWorkoutDrag.container.lastElementChild)) return;
+  activeWorkoutDrag.container.insertBefore(placeholder, reference);
   animateWorkoutEntryReflow(beforeRects);
 };
 
@@ -1852,6 +1988,7 @@ const beginWorkoutDrag = () => {
   placeholder.style.height = `${rect.height}px`;
   placeholder.setAttribute("aria-hidden", "true");
   entry.before(placeholder);
+  activeWorkoutDrag.container = placeholder.parentElement;
   document.body.appendChild(entry);
   Object.assign(entry.style, {
     position: "fixed",
@@ -1880,11 +2017,11 @@ const finalizeWorkoutDrag = ({ cancel = false } = {}) => {
   if (cancel) {
     const entries = getWorkoutPreviewEntries();
     const beforeRects = new Map(entries.map((entry) => [entry, entry.getBoundingClientRect()]));
-    previewList.insertBefore(drag.placeholder, entries[drag.originIndex] || null);
+    drag.container.insertBefore(drag.placeholder, entries[drag.originIndex] || null);
     animateWorkoutEntryReflow(beforeRects);
   }
 
-  const targetIndex = [...previewList.children]
+  const targetIndex = [...drag.container.children]
     .filter((element) => element === drag.placeholder || element.matches?.(".workout-preview__entry[data-draft-exercise-key]"))
     .indexOf(drag.placeholder);
   const targetRect = drag.placeholder.getBoundingClientRect();
@@ -1906,6 +2043,7 @@ const finalizeWorkoutDrag = ({ cancel = false } = {}) => {
 
   window.setTimeout(() => {
     if (!cancel && targetIndex >= 0 && targetIndex !== drag.originIndex) {
+      pushWorkoutUndo();
       const [exercise] = workoutDraftExercises.splice(drag.originIndex, 1);
       workoutDraftExercises.splice(targetIndex, 0, exercise);
       writeWorkoutDraftText();
@@ -1971,6 +2109,28 @@ document.addEventListener("keydown", (event) => {
 });
 
 previewList?.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && ["z", "y"].includes(event.key.toLowerCase())) {
+    event.preventDefault();
+    const redo = event.key.toLowerCase() === "y" || event.shiftKey;
+    applyWorkoutHistory(redo ? workoutRedoStack : workoutUndoStack, redo ? workoutUndoStack : workoutRedoStack);
+    return;
+  }
+  const editable = event.target.closest("[data-draft-exercise-field]");
+  if (editable && event.key === "Enter" && !event.shiftKey && editable.tagName !== "TEXTAREA") {
+    event.preventDefault();
+    const index = findDraftExerciseIndex(editable.dataset.draftExerciseKey);
+    const before = snapshotWorkoutDraft();
+    const exercise = toDraftExercise({
+      id: `draft-${Date.now()}`, draftKey: createDraftExerciseKey(), name: "Novo exercício", sets: 3, reps: "10", rest: "60s"
+    }, index + 1);
+    workoutUndoStack.push(before);
+    workoutRedoStack = [];
+    workoutDraftExercises.splice(index + 1, 0, exercise);
+    selectedDraftExerciseKey = exercise.draftKey;
+    commitWorkoutDraftMutation();
+    window.setTimeout(() => previewList.querySelector(`[data-draft-exercise-key="${CSS.escape(exercise.draftKey)}"] .training-grid__name`)?.select(), 0);
+    return;
+  }
   const handle = event.target.closest("[data-draft-drag-handle]");
   if (!handle || !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
   event.preventDefault();
@@ -1984,6 +2144,18 @@ previewList?.addEventListener("keydown", (event) => {
 });
 
 previewList?.addEventListener("click", (event) => {
+  const selectExercise = event.target.closest("[data-select-draft-exercise]");
+  if (selectExercise) {
+    selectedDraftExerciseKey = selectExercise.dataset.selectDraftExercise;
+    renderWorkoutPreview();
+    window.setTimeout(() => previewList.querySelector(".training-details input, .training-details textarea")?.focus(), 0);
+    return;
+  }
+  if (event.target.closest("[data-close-training-details]")) {
+    selectedDraftExerciseKey = "";
+    previewList.querySelector(".training-details")?.classList.add("is-closed");
+    return;
+  }
   const openRepdb = event.target.closest("[data-open-repdb-picker]");
   if (openRepdb) {
     const draftKey = openRepdb.dataset.openRepdbPicker;
@@ -2008,6 +2180,7 @@ previewList?.addEventListener("click", (event) => {
   if (removeRepdb) {
     const exercise = workoutDraftExercises.find((item) => item.draftKey === removeRepdb.dataset.removeRepdbMedia);
     if (!exercise) return;
+    pushWorkoutUndo();
     exercise.mediaMetadata = {};
     exercise.mediaUrl = "";
     exercise.mediaType = "none";
@@ -2080,6 +2253,52 @@ const { render: renderWorkouts } = createWorkoutsScreen({
   parseSets,
   setCount: (value) => setText("[data-workout-count]", value)
 });
+
+const renderProgramStudentOptions = () => students.map((student) => {
+  const name = effectiveStudentName(student);
+  return `<option value="${escapeHtml(student.id)}"${student.email ? ` data-description="${escapeHtml(student.email)}"` : ""}>${escapeHtml(name)}</option>`;
+}).join("");
+
+const renderProgramCard = (program, templates) => {
+  const assignments = programmingRepository.listAssignments().filter((item) => item.programId === program.id && item.status !== "cancelled");
+  return `<article class="programming-card programming-card--program"><div><span class="eyebrow">${program.weeks} semanas</span><h3>${escapeHtml(program.name)}</h3><p>${program.sessions.length} sessões programadas · ${assignments.length} atribuição(ões)</p></div>
+    <div class="programming-card__controls">${templates.length ? `<label>Adicionar modelo<select data-program-template="${escapeHtml(program.id)}"><option value="">Escolha...</option>${templates.map((template) => `<option value="${escapeHtml(template.id)}">${escapeHtml(template.name)}</option>`).join("")}</select></label>` : ""}
+    ${students.length && program.sessions.length ? `<form data-assign-program="${escapeHtml(program.id)}"><label>Aplicar ao aluno<select name="student" data-avatar="true" data-show-description="true" required><option value="">Escolha...</option>${renderProgramStudentOptions()}</select></label><label>Início<input type="date" name="startsAt" value="${workoutDateInputValue(new Date())}" required></label><button class="button" type="submit">Programar</button></form>` : `<small>${students.length ? "Adicione ao menos uma sessão para aplicar." : "Cadastre um aluno para aplicar o programa."}</small>`}</div></article>`;
+};
+
+previewList?.addEventListener("focusin", (event) => {
+  if (event.target.closest("[data-draft-exercise-field]")) draftFieldSnapshot = snapshotWorkoutDraft();
+});
+
+const renderProgrammingWorkspace = () => {
+  const workoutList = document.querySelector("[data-workout-list]");
+  const toolbar = document.querySelector("[data-page='workouts'] .page-toolbar");
+  document.querySelectorAll("[data-workout-domain]").forEach((button) => {
+    const active = button.dataset.workoutDomain === workoutDomain;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  const showStudentWorkouts = workoutDomain === "students";
+  if (workoutList) workoutList.hidden = !showStudentWorkouts;
+  if (toolbar) toolbar.hidden = !showStudentWorkouts;
+  if (!programmingLibrary) return;
+  programmingLibrary.hidden = showStudentWorkouts;
+  if (showStudentWorkouts) return;
+  const templates = programmingRepository.listTemplates();
+  const programs = programmingRepository.listPrograms();
+  if (workoutDomain === "templates") {
+    programmingLibrary.innerHTML = `<header class="programming-library__head"><div><h2>Modelos do personal</h2><p>Independentes de aluno e prontos para reutilizar.</p></div><button class="button" type="button" data-new-template>Criar modelo</button></header>
+      <div class="programming-library__list">${templates.length ? templates.map((template) => `<article class="programming-card"><div><span class="eyebrow">Modelo · revisão ${template.currentRevision}</span><h3>${escapeHtml(template.name)}</h3><p>${template.document.exercises.length} exercícios${template.objective ? ` · ${escapeHtml(template.objective)}` : ""}</p></div><span><button class="button" type="button" data-use-template="${escapeHtml(template.id)}">Usar</button><button class="button button--quiet" type="button" data-edit-template="${escapeHtml(template.id)}">Editar</button><button class="text-button" type="button" data-duplicate-template="${escapeHtml(template.id)}">Duplicar</button></span></article>`).join("") : `<article class="empty-state"><strong>Nenhum modelo criado.</strong><small>Crie um modelo mesmo sem alunos cadastrados.</small></article>`}</div>`;
+  } else if (workoutDomain === "programs") {
+    programmingLibrary.innerHTML = `<header class="programming-library__head"><div><h2>Programas</h2><p>Organize modelos em semanas e sessões.</p></div></header>
+      <form class="program-inline-form" data-create-program><input name="name" placeholder="Nome do programa" required><input name="weeks" type="number" min="1" max="104" value="4" aria-label="Semanas"><button class="button" type="submit">Criar programa</button></form>
+      <div class="programming-library__list">${programs.length ? programs.map((program) => renderProgramCard(program, templates)).join("") : `<article class="empty-state"><strong>Nenhum programa criado.</strong><small>Crie a estrutura agora e adicione modelos como sessões.</small></article>`}</div>`;
+  } else {
+    const stored = Platform.storage.get(getWorkoutDraftStorageKey(), null);
+    programmingLibrary.innerHTML = `<header class="programming-library__head"><div><h2>Rascunhos</h2><p>Conteúdo editorial ainda não publicado.</p></div></header>${stored ? `<article class="programming-card"><div><span class="eyebrow">Salvo ${formatUpdatedAt(stored.savedAt)}</span><h3>${escapeHtml(stored.fields?.title || "Treino sem nome")}</h3><p>${stored.exercises?.length || 0} exercícios</p></div><button class="button" type="button" data-open-stored-draft>Continuar</button></article>` : `<article class="empty-state"><strong>Nenhum rascunho.</strong><small>Falhas de rede aparecem como publicação pendente, não aqui.</small></article>`}`;
+  }
+  refreshCustomSelects(programmingLibrary);
+};
 
 const renderDuplicateWorkoutStudents = (selectedStudentId = "") => {
   if (!duplicateWorkoutStudents) return;
@@ -2160,6 +2379,7 @@ const renderAll = () => {
   renderCoachProfile();
   renderStudents();
   renderWorkouts();
+  renderProgrammingWorkspace();
   renderDashboard();
   applyTheme();
   renderThemePalettes({ syncToTheme: true });
@@ -2569,7 +2789,41 @@ const saveAndPublishWorkout = async (workout, { pendingMessage = "Publicando tre
   if (result.workout) {
     applyPublishedWorkouts([result.workout, ...workouts.filter((item) => item.id !== result.workout.id)]);
   }
+  if (!result.synced && !["media-metadata-migration-required", "programming-domain-migration-required"].includes(result.reason)) {
+    const alreadyQueued = programmingRepository.listPublishQueue().some((item) => item.workoutId === savedWorkout.id);
+    if (!alreadyQueued) programmingRepository.enqueuePublish(result.workout || savedWorkout, result.reason || "network-error");
+  }
   return { ...result, savedWorkout: result.workout || savedWorkout };
+};
+
+let publishQueueSyncPromise = null;
+const syncPendingWorkoutPublishes = () => {
+  if (publishQueueSyncPromise) return publishQueueSyncPromise;
+  publishQueueSyncPromise = (async () => {
+    const queue = programmingRepository.listPublishQueue();
+    let syncedCount = 0;
+    for (const operation of queue) {
+      const linkedStudent = students.find((student) => student.id === operation.payload?.studentId);
+      const result = await workoutRepository.syncPublishedWorkout(operation.payload, linkedStudent);
+      if (result.synced) {
+        programmingRepository.removeQueuedPublish(operation.id);
+        syncedCount += 1;
+        if (result.workout) applyPublishedWorkouts([result.workout, ...workouts.filter((item) => item.id !== result.workout.id)]);
+      } else {
+        programmingRepository.updateQueuedPublish(operation.id, {
+          attempts: Number(operation.attempts || 0) + 1,
+          lastAttemptAt: new Date().toISOString(),
+          reason: result.reason || result.error?.message || operation.reason
+        });
+      }
+    }
+    if (queue.length) setWorkoutSyncStatus(
+      syncedCount === queue.length ? "Publicações pendentes sincronizadas." : `${queue.length - syncedCount} publicação(ões) ainda aguardando conexão.`,
+      syncedCount === queue.length ? "synced" : "warning"
+    );
+    return syncedCount;
+  })().finally(() => { publishQueueSyncPromise = null; });
+  return publishQueueSyncPromise;
 };
 
 duplicateWorkoutForm?.addEventListener("submit", async (event) => {
@@ -2618,6 +2872,134 @@ duplicateWorkoutDialog?.addEventListener("click", (event) => {
   if (event.target === duplicateWorkoutDialog) closeDuplicateWorkoutDialog();
 });
 
+const applyKnownDefinition = (exercise) => {
+  const definition = programmingRepository.listDefinitions().find((item) => normalizeSearch(item.name) === normalizeSearch(exercise.name)
+    || item.aliases.some((alias) => normalizeSearch(alias) === normalizeSearch(exercise.name)));
+  if (!definition) return exercise;
+  return {
+    ...exercise,
+    definitionId: definition.id,
+    instructions: exercise.instructions || definition.instructions,
+    mediaUrl: exercise.mediaUrl || definition.mediaUrl,
+    mediaType: exercise.mediaUrl ? exercise.mediaType : definition.mediaType,
+    mediaMetadata: exercise.mediaUrl ? exercise.mediaMetadata : definition.mediaMetadata
+  };
+};
+
+const persistDraftExerciseDefinitions = () => {
+  const known = programmingRepository.listDefinitions();
+  workoutDraftExercises.forEach((exercise) => {
+    let definition = known.find((item) => item.id === exercise.definitionId)
+      || known.find((item) => normalizeSearch(item.name) === normalizeSearch(exercise.name));
+    const nextInstructions = exercise.instructions || definition?.instructions || "";
+    const nextMediaUrl = exercise.mediaUrl || definition?.mediaUrl || "";
+    const nextMediaType = exercise.mediaUrl ? exercise.mediaType : definition?.mediaType;
+    const nextMediaMetadata = exercise.mediaUrl ? exercise.mediaMetadata : definition?.mediaMetadata;
+    const unchanged = definition
+      && definition.name === exercise.name
+      && definition.instructions === nextInstructions
+      && definition.mediaUrl === nextMediaUrl
+      && definition.mediaType === (nextMediaType || "none")
+      && JSON.stringify(definition.mediaMetadata || {}) === JSON.stringify(nextMediaMetadata || {});
+    if (unchanged) {
+      exercise.definitionId = definition.id;
+      return;
+    }
+    definition = programmingRepository.saveDefinition({
+      ...(definition || {}),
+      id: definition?.id,
+      name: exercise.name,
+      instructions: nextInstructions,
+      mediaUrl: nextMediaUrl,
+      mediaType: nextMediaType,
+      mediaMetadata: nextMediaMetadata,
+      syncStatus: "pending",
+      updatedAt: new Date().toISOString()
+    });
+    exercise.definitionId = definition.id;
+  });
+};
+
+quickEntryButton?.addEventListener("click", () => {
+  const input = workoutForm?.elements.namedItem("quickEntry");
+  const parsed = parseQuickEntry(input?.value || "", "draft-import");
+  if (!parsed.length) {
+    showToast("Cole ou digite pelo menos um exercício.");
+    input?.focus();
+    return;
+  }
+  pushWorkoutUndo();
+  const additions = parsed.map((exercise, index) => toDraftExercise(applyKnownDefinition({
+    ...exercise, id: `draft-${Date.now()}-${index}`, draftKey: createDraftExerciseKey()
+  }), workoutDraftExercises.length + index));
+  workoutDraftExercises.push(...additions);
+  selectedDraftExerciseKey = additions[0]?.draftKey || selectedDraftExerciseKey;
+  input.value = "";
+  commitWorkoutDraftMutation({ announce: `${additions.length} ${additions.length === 1 ? "exercício adicionado" : "exercícios adicionados"}.` });
+});
+
+saveAsTemplateButton?.addEventListener("click", async () => {
+  if (!workoutDraftExercises.length) {
+    showToast("Adicione pelo menos um exercício antes de criar o modelo.");
+    return;
+  }
+  const name = String(workoutForm?.elements.namedItem("title")?.value || "Modelo sem nome").trim();
+  persistDraftExerciseDefinitions();
+  const existing = programmingRepository.listTemplates().find((item) => item.id === currentTemplateId);
+  const template = programmingRepository.saveTemplate({
+    ...(existing || {}),
+    id: existing?.id,
+    name,
+    objective: workoutForm.elements.namedItem("objective")?.value || "",
+    level: workoutForm.elements.namedItem("level")?.value || "",
+    currentRevision: existing ? existing.currentRevision + 1 : 1,
+    document: {
+      id: existing?.id || `template-${Date.now()}`,
+      title: name,
+      objective: workoutForm.elements.namedItem("objective")?.value || "",
+      level: workoutForm.elements.namedItem("level")?.value || "",
+      exercises: workoutDraftExercises.map(toPublishedExercise)
+    },
+    syncStatus: "pending"
+  });
+  currentTemplateId = template.id;
+  saveWorkoutDraftLocally();
+  const result = await programmingRepository.syncLibraries();
+  renderProgrammingWorkspace();
+  showToast(result.synced ? "Modelo salvo e sincronizado." : "Modelo salvo localmente; sincronização pendente.");
+});
+
+const chooseWorkoutEditScope = (workout) => new Promise((resolve) => {
+  if (!workoutScopeDialog || !workoutScopeForm || (!workout.templateId && !workout.programAssignmentId)) {
+    resolve("current");
+    return;
+  }
+  workoutScopeForm.querySelector("[data-workout-scope-template]")?.toggleAttribute("hidden", !workout.templateId);
+  workoutScopeForm.querySelector("[data-workout-scope-future]")?.toggleAttribute("hidden", !workout.programAssignmentId);
+  workoutScopeForm.elements.namedItem("scope").value = "current";
+  let settled = false;
+  const finish = (value) => {
+    if (settled) return;
+    settled = true;
+    workoutScopeDialog.removeEventListener("close", onClose);
+    workoutScopeForm.removeEventListener("submit", onSubmit);
+    workoutScopeForm.querySelectorAll("[data-close-workout-scope]").forEach((button) => button.removeEventListener("click", onCancel));
+    if (workoutScopeDialog.open) workoutScopeDialog.close();
+    resolve(value);
+  };
+  const onSubmit = (event) => { event.preventDefault(); finish(new FormData(workoutScopeForm).get("scope") || "current"); };
+  const onCancel = () => finish("");
+  const onClose = () => finish("");
+  workoutScopeForm.addEventListener("submit", onSubmit);
+  workoutScopeForm.querySelectorAll("[data-close-workout-scope]").forEach((button) => button.addEventListener("click", onCancel));
+  workoutScopeDialog.addEventListener("close", onClose);
+  workoutScopeDialog.showModal();
+});
+
+workoutScopeDialog?.addEventListener("click", (event) => {
+  if (event.target === workoutScopeDialog) workoutScopeDialog.close();
+});
+
 workoutForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!authContext?.user) {
@@ -2625,13 +3007,13 @@ workoutForm?.addEventListener("submit", async (event) => {
     setAuthLocked(true);
     return;
   }
-  if (!students.length) {
-    showToast("Cadastre um aluno antes de publicar treino.");
+  const data = new FormData(event.currentTarget);
+  const selectedStudent = students.find((student) => student.id === data.get("student"));
+  if (!selectedStudent) {
+    showToast("Escolha um aluno para publicar. Para conteúdo sem aluno, use “Salvar como modelo”.");
     return;
   }
-
-  const data = new FormData(event.currentTarget);
-  if (!String(data.get("blocks") || "").trim()) {
+  if (!workoutDraftExercises.length) {
     showToast("Informe pelo menos um exercício.");
     return;
   }
@@ -2645,18 +3027,21 @@ workoutForm?.addEventListener("submit", async (event) => {
     return;
   }
 
-  const selectedStudent = students.find((student) => student.id === data.get("student"));
   const editingWorkout = workouts.find((item) => item.id === editingWorkoutId);
+  const editScope = editingWorkout ? await chooseWorkoutEditScope(editingWorkout) : "current";
+  if (!editScope) return;
   const workout = createWorkoutFromProfessorForm({
     student: selectedStudent,
     coachId: authContext.coachId,
     title: data.get("title"),
-    template: data.get("template"),
+    template: data.get("objective"),
+    level: data.get("level"),
     blocks: data.get("blocks"),
     exercises: workoutDraft.exercises.map(toPublishedExercise),
     workoutId: editingWorkout?.id,
     startsAt: data.get("startsAt"),
     version: editingWorkout ? Number(editingWorkout.version || 1) + 1 : 1
+    ,templateId: currentTemplateId || editingWorkout?.templateId || ""
   });
   const result = await saveAndPublishWorkout(workout, {
     pendingMessage: editingWorkout ? "Salvando atualização do treino..." : "Publicando treino..."
@@ -2668,8 +3053,13 @@ workoutForm?.addEventListener("submit", async (event) => {
     resetWorkoutFormMode({ resetForm: true });
     setWorkoutBuilderOpen(false, { focus: false });
   } else {
-    showToast("Publicação não concluída. Revise o aviso e tente novamente.");
+    showToast(result.reason === "programming-domain-migration-required"
+      ? "A migration da programação estruturada precisa ser aplicada antes de publicar."
+      : "Publicação pendente; o FlowFit tentará novamente quando a conexão voltar.");
   }
+
+  persistDraftExerciseDefinitions();
+  await programmingRepository.syncLibraries();
 });
 
 workoutForm?.addEventListener("input", (event) => {
@@ -2690,6 +3080,17 @@ workoutForm?.addEventListener("change", (event) => {
   else markWorkoutDraftChanged();
 });
 
+workoutForm?.elements.namedItem("templateSource")?.addEventListener("change", (event) => {
+  const template = programmingRepository.listTemplates().find((item) => item.id === event.currentTarget.value);
+  if (!template) return;
+  if (workoutDraftExercises.length && !window.confirm("Substituir os exercícios atuais pelo modelo escolhido?")) {
+    event.currentTarget.value = "";
+    refreshCustomSelects(event.currentTarget);
+    return;
+  }
+  loadTemplateForEditing(template);
+});
+
 previewList?.addEventListener("input", (event) => {
   const detailInput = event.target.closest("[data-draft-exercise-field]");
   if (!detailInput) return;
@@ -2698,7 +3099,15 @@ previewList?.addEventListener("input", (event) => {
 
 previewList?.addEventListener("change", (event) => {
   const detailInput = event.target.closest("[data-draft-exercise-field]");
-  if (detailInput) updateDraftExerciseField(detailInput);
+  if (detailInput) {
+    if (draftFieldSnapshot) {
+      workoutUndoStack.push(draftFieldSnapshot);
+      if (workoutUndoStack.length > 80) workoutUndoStack.shift();
+      workoutRedoStack = [];
+      draftFieldSnapshot = null;
+    }
+    updateDraftExerciseField(detailInput);
+  }
 });
 
 saveWorkoutDraftButton?.addEventListener("click", () => {
@@ -2707,6 +3116,7 @@ saveWorkoutDraftButton?.addEventListener("click", () => {
     saved ? "● Alterações não publicadas · rascunho salvo localmente" : "Não foi possível salvar o rascunho.",
     "warning"
   );
+  if (saved) setWorkoutBuilderOpen(false, { focus: false });
 });
 
 const handleThemeControlChange = () => {
@@ -2892,6 +3302,37 @@ coachProfileForm?.addEventListener("submit", async (event) => {
 });
 
 document.addEventListener("click", async (event) => {
+  const domainButton = event.target.closest("[data-workout-domain]");
+  if (domainButton) {
+    workoutDomain = domainButton.dataset.workoutDomain;
+    renderProgrammingWorkspace();
+    return;
+  }
+  if (event.target.closest("[data-new-template]")) {
+    resetWorkoutFormMode({ resetForm: true, clearStored: true });
+    workoutForm.elements.namedItem("student").value = "";
+    if (workoutBuilderMode) workoutBuilderMode.textContent = "Novo modelo";
+    if (workoutBuilderTitle) workoutBuilderTitle.textContent = "Criar modelo reutilizável";
+    setWorkoutBuilderOpen(true, { focus: false });
+    renderWorkoutPreview();
+    return;
+  }
+  const templateAction = event.target.closest("[data-use-template], [data-edit-template], [data-duplicate-template]");
+  if (templateAction) {
+    const id = templateAction.dataset.useTemplate || templateAction.dataset.editTemplate || templateAction.dataset.duplicateTemplate;
+    const template = programmingRepository.listTemplates().find((item) => item.id === id);
+    if (!template) return;
+    loadTemplateForEditing(template, { asCopy: Boolean(templateAction.dataset.duplicateTemplate) });
+    if (templateAction.dataset.useTemplate && students[0]) {
+      workoutForm.elements.namedItem("student").value = students[0].id;
+      refreshCustomSelects(workoutForm);
+    }
+    return;
+  }
+  if (event.target.closest("[data-open-stored-draft]")) {
+    restoreStoredWorkoutDraft({ open: true });
+    return;
+  }
   const addStudentButton = event.target.closest("[data-toggle-student-form]");
   if (addStudentButton) {
     setStudentFormOpen(true);
@@ -3041,6 +3482,72 @@ document.addEventListener("click", async (event) => {
     setWorkoutSyncStatus("Treino arquivado. O histórico do aluno foi preservado.", "synced");
     showToast("Treino arquivado.");
   }
+});
+
+programmingLibrary?.addEventListener("submit", async (event) => {
+  const assignmentForm = event.target.closest("[data-assign-program]");
+  if (assignmentForm) {
+    event.preventDefault();
+    const program = programmingRepository.listPrograms().find((item) => item.id === assignmentForm.dataset.assignProgram);
+    const data = new FormData(assignmentForm);
+    const student = students.find((item) => item.id === data.get("student"));
+    if (!program || !student) return;
+    const submit = assignmentForm.querySelector("button[type='submit']");
+    submit.disabled = true;
+    const base = new Date(`${data.get("startsAt")}T00:00:00`);
+    const assignment = programmingRepository.saveAssignment({
+      studentId: student.id, programId: program.id, programRevision: 1,
+      startsAt: base.toISOString(), status: "active", syncStatus: "pending"
+    });
+    const librarySync = await programmingRepository.syncLibraries();
+    if (!librarySync.synced) {
+      submit.disabled = false;
+      showToast("Programa preservado localmente; não foi possível confirmar a atribuição.");
+      return;
+    }
+    let published = 0;
+    for (const session of program.sessions) {
+      const template = programmingRepository.listTemplates().find((item) => item.id === session.templateId);
+      if (!template) continue;
+      const startsAt = new Date(base);
+      startsAt.setDate(startsAt.getDate() + ((Number(session.week || 1) - 1) * 7) + (Number(session.day || 1) - 1));
+      const document = programmingRepository.instantiateTemplate(template, { programAssignmentId: assignment.id });
+      const workout = createWorkoutFromProfessorForm({
+        student, coachId: authContext.coachId, title: document.title, template: document.objective,
+        level: document.level, exercises: document.exercises.map(toPublishedExercise), startsAt,
+        version: 1, templateId: template.id, programAssignmentId: assignment.id
+      });
+      const result = await saveAndPublishWorkout(workout, { pendingMessage: `Programando ${document.title}...` });
+      if (result.synced) published += 1;
+    }
+    renderProgrammingWorkspace();
+    showToast(published === program.sessions.length
+      ? `Programa aplicado a ${effectiveStudentName(student)}.`
+      : `${published} de ${program.sessions.length} sessões publicadas; as demais ficaram pendentes.`);
+    return;
+  }
+  const form = event.target.closest("[data-create-program]");
+  if (!form) return;
+  event.preventDefault();
+  const data = new FormData(form);
+  programmingRepository.saveProgram({ name: data.get("name"), weeks: data.get("weeks"), sessions: [], syncStatus: "pending" });
+  programmingRepository.syncLibraries();
+  renderProgrammingWorkspace();
+  showToast("Programa criado. Adicione modelos como sessões.");
+});
+
+programmingLibrary?.addEventListener("change", (event) => {
+  const select = event.target.closest("[data-program-template]");
+  if (!select?.value) return;
+  const program = programmingRepository.listPrograms().find((item) => item.id === select.dataset.programTemplate);
+  const template = programmingRepository.listTemplates().find((item) => item.id === select.value);
+  if (!program || !template) return;
+  programmingRepository.saveProgram({ ...program, sessions: [...program.sessions, {
+    week: 1, day: program.sessions.length + 1, templateId: template.id, title: template.name
+  }], syncStatus: "pending" });
+  programmingRepository.syncLibraries();
+  renderProgrammingWorkspace();
+  showToast("Sessão adicionada ao programa.");
 });
 
 // ── Close action menus on outside click ──────────────────────
@@ -3338,6 +3845,39 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
       console.warn(`[FlowFit][professor] Falha ao carregar ${resources[index]}; a sessão permanece ativa.`, result.reason);
     }
   });
+  if (result.synced && editScope === "template" && currentTemplateId) {
+    const template = programmingRepository.listTemplates().find((item) => item.id === currentTemplateId);
+    if (template) {
+      programmingRepository.saveTemplate({
+        ...template, currentRevision: template.currentRevision + 1,
+        document: { ...template.document, title: workout.title, objective: workout.focus, level: workout.level, exercises: workout.exercises },
+        syncStatus: "pending", updatedAt: new Date().toISOString()
+      });
+      await programmingRepository.syncLibraries();
+    }
+  }
+  if (result.synced && editScope === "future" && editingWorkout?.programAssignmentId) {
+    const futureWorkouts = workouts.filter((item) => item.id !== editingWorkout.id
+      && item.programAssignmentId === editingWorkout.programAssignmentId
+      && (!editingWorkout.templateId || item.templateId === editingWorkout.templateId)
+      && workoutStartTimestamp(item.startsAt) > workoutStartTimestamp(editingWorkout.startsAt));
+    for (const future of futureWorkouts) {
+      await saveAndPublishWorkout({
+        ...future,
+        focus: workout.focus,
+        level: workout.level,
+        exercises: workout.exercises.map((exercise, index) => ({ ...exercise, id: `${future.id}-ex-${String(index + 1).padStart(2, "0")}` })),
+        version: Number(future.version || 1) + 1,
+        updatedAt: new Date().toISOString()
+      }, { pendingMessage: `Atualizando sessão futura “${future.title}”...` });
+    }
+  }
+
+  if (await workoutRepository.ensureProgrammingDomainSupport() === true) {
+    const libraries = await programmingRepository.fetchLibraries();
+    if (libraries.synced) renderProgrammingWorkspace();
+    syncPendingWorkoutPublishes();
+  }
 
   if (!isRevalidate) {
     const pendingWorkoutDraft = Platform.storage.get(getWorkoutDraftStorageKey(), null);
@@ -3470,6 +4010,8 @@ const revalidateCoachAccess = () => {
 window.addEventListener("focus", () => revalidateCoachAccess());
 window.addEventListener("online", () => {
   panelRefresh.invalidate();
+  programmingRepository.syncLibraries().then(() => programmingRepository.fetchLibraries()).then(renderProgrammingWorkspace);
+  syncPendingWorkoutPublishes();
   revalidateCoachAccess();
 });
 document.addEventListener("visibilitychange", () => {

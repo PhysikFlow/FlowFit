@@ -3,6 +3,7 @@ import { getSupabase } from "../../core/supabase.js?v=build-20260812-5";
 import { DEMO_COACH_ID } from "../../config.js?v=build-20260809-6";
 import { authRepository } from "./auth-repository.js?v=build-20260812-5";
 import { normalizeRepdbMetadata } from "../repdb/repdb-catalog.js?v=build-20260823-1";
+import { formatPrescription, normalizePrescription as normalizeStructuredPrescription } from "../training-domain.js?v=build-20260823-2";
 
 export const PUBLISHED_WORKOUTS_KEY = "flowfit.published-workouts";
 const MAX_LOCAL_PUBLISHED_WORKOUTS = 120;
@@ -26,6 +27,12 @@ const CLOUD_WORKOUT_SELECT = `
   starts_at,
   published_at,
   version,
+  template_id,
+  program_assignment_id,
+  current_revision_id,
+  editorial_status,
+  schema_version,
+  level,
   updated_at,
   workout_exercises (
     id,
@@ -42,6 +49,14 @@ const CLOUD_WORKOUT_SELECT = `
     media_url,
     media_type,
     media_metadata,
+    exercise_definition_id,
+    sets_count,
+    reps_target,
+    rpe,
+    block_id,
+    block_type,
+    block_label,
+    alternatives,
     updated_at
   )
 `;
@@ -59,6 +74,12 @@ const LEGACY_CLOUD_WORKOUT_SELECT = `
   last_done_label,
   source,
   status,
+  template_id,
+  program_assignment_id,
+  current_revision_id,
+  editorial_status,
+  schema_version,
+  level,
   updated_at,
   workout_exercises (
     id,
@@ -75,6 +96,14 @@ const LEGACY_CLOUD_WORKOUT_SELECT = `
     media_url,
     media_type,
     media_metadata,
+    exercise_definition_id,
+    sets_count,
+    reps_target,
+    rpe,
+    block_id,
+    block_type,
+    block_label,
+    alternatives,
     updated_at
   )
 `;
@@ -82,6 +111,13 @@ const LEGACY_CLOUD_WORKOUT_SELECT = `
 const withoutMediaMetadata = (selectColumns) => selectColumns.replace(/\s+media_metadata,/, "");
 const CLOUD_WORKOUT_SELECT_WITHOUT_MEDIA_METADATA = withoutMediaMetadata(CLOUD_WORKOUT_SELECT);
 const LEGACY_CLOUD_WORKOUT_SELECT_WITHOUT_MEDIA_METADATA = withoutMediaMetadata(LEGACY_CLOUD_WORKOUT_SELECT);
+const withoutProgrammingColumns = (selectColumns) => selectColumns
+  .replace(/^\s*(template_id|program_assignment_id|current_revision_id|editorial_status|schema_version|level),\s*$/gm, "")
+  .replace(/^\s*(exercise_definition_id|sets_count|reps_target|rpe|block_id|block_type|block_label|alternatives),\s*$/gm, "");
+const CLOUD_WORKOUT_SELECT_LEGACY_DOMAIN = withoutProgrammingColumns(CLOUD_WORKOUT_SELECT);
+const LEGACY_CLOUD_WORKOUT_SELECT_LEGACY_DOMAIN = withoutProgrammingColumns(LEGACY_CLOUD_WORKOUT_SELECT);
+const CLOUD_WORKOUT_SELECT_LEGACY_DOMAIN_NO_METADATA = withoutMediaMetadata(CLOUD_WORKOUT_SELECT_LEGACY_DOMAIN);
+const LEGACY_CLOUD_WORKOUT_SELECT_LEGACY_DOMAIN_NO_METADATA = withoutMediaMetadata(LEGACY_CLOUD_WORKOUT_SELECT_LEGACY_DOMAIN);
 
 const DEFAULT_EXERCISE = {
   target: "Personalizado",
@@ -97,6 +133,7 @@ const DEFAULT_EXERCISE = {
 };
 
 let mediaMetadataSupport = null;
+let programmingDomainSupport = null;
 
 const normalizeText = (value, fallback = "") => {
   const text = String(value ?? "").trim();
@@ -169,6 +206,13 @@ const isMissingMediaMetadataColumn = (error) => {
   return message.includes("media_metadata");
 };
 
+const isMissingProgrammingDomain = (error) => {
+  const message = String(error?.message || error?.details || "").toLowerCase();
+  return ["template_id", "program_assignment_id", "current_revision_id", "editorial_status", "schema_version",
+    "level", "exercise_definition_id", "sets_count", "reps_target", "block_id", "block_type", "alternatives", "publish_student_workout_v2"]
+    .some((column) => message.includes(column));
+};
+
 const initialsFromName = (name) => normalizeText(name, "Aluno")
   .split(" ")
   .filter(Boolean)
@@ -186,7 +230,7 @@ const normalizeMediaType = (value, mediaUrl = "") => {
   return mediaUrl ? "external" : "none";
 };
 
-const normalizeExercise = (exercise, index = 0, workoutId = "workout") => ({
+const normalizeExercise = (exercise, index = 0, workoutId = "workout") => normalizeStructuredPrescription({
   ...DEFAULT_EXERCISE,
   ...exercise,
   id: normalizeText(exercise?.id, `${workoutId}-ex-${String(index + 1).padStart(2, "0")}`),
@@ -195,8 +239,16 @@ const normalizeExercise = (exercise, index = 0, workoutId = "workout") => ({
   instructions: normalizeText(exercise?.instructions),
   mediaUrl: normalizeText(exercise?.mediaUrl || exercise?.media_url),
   mediaType: normalizeMediaType(exercise?.mediaType || exercise?.media_type, exercise?.mediaUrl || exercise?.media_url),
-  mediaMetadata: normalizeRepdbMetadata(exercise?.mediaMetadata || exercise?.media_metadata)
-});
+  mediaMetadata: normalizeRepdbMetadata(exercise?.mediaMetadata || exercise?.media_metadata),
+  definitionId: normalizeText(exercise?.definitionId || exercise?.exercise_definition_id),
+  sets: exercise?.sets ?? exercise?.sets_count,
+  reps: exercise?.reps || exercise?.reps_target,
+  rpe: exercise?.rpe,
+  blockId: exercise?.blockId || exercise?.block_id,
+  blockType: exercise?.blockType || exercise?.block_type,
+  blockLabel: exercise?.blockLabel || exercise?.block_label,
+  alternatives: exercise?.alternatives
+}, index, workoutId);
 
 const normalizeWorkout = (workout) => {
   const owner = normalizeText(workout?.owner, "Aluno");
@@ -215,6 +267,7 @@ const normalizeWorkout = (workout) => {
     code: normalizeText(workout?.code, "A"),
     title: normalizeText(workout?.title, "Novo treino"),
     focus: normalizeText(workout?.focus, "Prescrição personalizada"),
+    level: normalizeText(workout?.level),
     estimatedMinutes: Number(workout?.estimatedMinutes || 45),
     lastDoneLabel: normalizeText(workout?.lastDoneLabel, "novo"),
     owner,
@@ -225,7 +278,13 @@ const normalizeWorkout = (workout) => {
     startsAt,
     publishedAt: normalizeIsoDate(workout?.publishedAt, updatedAt),
     version: Math.max(1, Number.parseInt(workout?.version || "1", 10) || 1),
+    revisionId: normalizeText(workout?.revisionId || workout?.current_revision_id),
+    templateId: normalizeText(workout?.templateId || workout?.template_id),
+    programAssignmentId: normalizeText(workout?.programAssignmentId || workout?.program_assignment_id),
+    editorialState: normalizeText(workout?.editorialState || workout?.editorial_status, workout?.status === "archived" ? "archived" : "published"),
+    schemaVersion: Math.max(1, Number.parseInt(workout?.schemaVersion || workout?.schema_version || "1", 10) || 1),
     syncStatus: normalizeText(workout?.syncStatus, "local"),
+    transportState: normalizeText(workout?.transportState || workout?.syncStatus, "local"),
     syncMessage: normalizeText(workout?.syncMessage, ""),
     updatedAt,
     exercises
@@ -255,6 +314,8 @@ export const parseExerciseLine = (line, index = 0, workoutId = "workout") => {
     ...DEFAULT_EXERCISE,
     id: `${workoutId}-ex-${String(index + 1).padStart(2, "0")}-${slugFromText(name)}`,
     name,
+    sets,
+    reps,
     prescription: normalizePrescription(sets, reps)
   };
 };
@@ -266,7 +327,7 @@ const readPublishedWorkouts = () => {
 
 const writePublishedWorkouts = (items) => Platform.storage.set(PUBLISHED_WORKOUTS_KEY, items);
 
-export const createWorkoutFromProfessorForm = ({ student, studentName, studentId, studentKey, coachId, title, template, blocks, exercises: providedExercises, workoutId, startsAt, version = 1 }) => {
+export const createWorkoutFromProfessorForm = ({ student, studentName, studentId, studentKey, coachId, title, template, level = "", blocks, exercises: providedExercises, workoutId, startsAt, version = 1, templateId = "", programAssignmentId = "" }) => {
   const owner = normalizeText(student?.name || studentName, "Aluno");
   const resolvedStudentKey = normalizeText(student?.studentKey || studentKey, studentKeyFromName(owner));
   const resolvedStudentId = normalizeText(student?.id || studentId, fallbackStudentIdFromKey(resolvedStudentKey));
@@ -274,15 +335,16 @@ export const createWorkoutFromProfessorForm = ({ student, studentName, studentId
   const sourceLines = String(blocks ?? "")
     .split(/\r?\n/)
     .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 12);
+    .filter(Boolean);
   if (!sourceLines.length) sourceLines.push("Exercício livre 3x10");
   const id = normalizeText(workoutId, `published-${Date.now()}`);
   const now = new Date().toISOString();
   const exercises = Array.isArray(providedExercises) && providedExercises.length
-    ? providedExercises.slice(0, 12).map((exercise, index) => normalizeExercise({
+    ? providedExercises.map((exercise, index) => normalizeExercise({
       ...exercise,
-      id: `${id}-ex-${String(index + 1).padStart(2, "0")}-${slugFromText(exercise.name)}`
+      id: String(exercise.id || "").startsWith(`${id}-ex-`)
+        ? exercise.id
+        : `${id}-ex-${String(index + 1).padStart(2, "0")}-${slugFromText(exercise.name)}`
     }, index, id))
     : sourceLines.map((line, index) => parseExerciseLine(line, index, id));
 
@@ -292,6 +354,7 @@ export const createWorkoutFromProfessorForm = ({ student, studentName, studentId
     code: workoutTitle.match(/\bTreino\s+([A-Z0-9])/i)?.[1]?.toUpperCase() || "A",
     title: workoutTitle,
     focus: normalizeText(template, "Prescrição personalizada"),
+    level: normalizeText(level),
     estimatedMinutes: Math.max(28, exercises.length * 7),
     lastDoneLabel: "novo",
     owner,
@@ -302,7 +365,13 @@ export const createWorkoutFromProfessorForm = ({ student, studentName, studentId
     startsAt: normalizeWorkoutStart(startsAt, now),
     publishedAt: now,
     version: Math.max(1, Number.parseInt(version, 10) || 1),
+    revisionId: "",
+    templateId: normalizeText(templateId),
+    programAssignmentId: normalizeText(programAssignmentId),
+    editorialState: "published",
+    schemaVersion: 2,
     syncStatus: "pending",
+    transportState: "pending",
     syncMessage: "Aguardando sincronização.",
     updatedAt: now,
     exercises
@@ -334,6 +403,7 @@ const toWorkoutPlanRow = (workout, authContext) => ({
   code: workout.code,
   title: workout.title,
   focus: workout.focus,
+  level: workout.level,
   estimated_minutes: workout.estimatedMinutes,
   last_done_label: workout.lastDoneLabel,
   source: workout.source,
@@ -341,6 +411,10 @@ const toWorkoutPlanRow = (workout, authContext) => ({
   starts_at: workout.startsAt,
   published_at: workout.publishedAt,
   version: workout.version,
+  template_id: workout.templateId || null,
+  program_assignment_id: workout.programAssignmentId || null,
+  editorial_status: workout.editorialState || "published",
+  schema_version: workout.schemaVersion || 2,
   updated_at: workout.updatedAt
 });
 
@@ -366,6 +440,14 @@ const toExerciseRows = (workout, authContext) => workout.exercises.map((exercise
   media_url: exercise.mediaUrl,
   media_type: exercise.mediaType,
   media_metadata: exercise.mediaMetadata,
+  exercise_definition_id: exercise.definitionId || null,
+  sets_count: exercise.sets,
+  reps_target: exercise.reps,
+  rpe: exercise.rpe || "",
+  block_id: exercise.blockId || "",
+  block_type: exercise.blockType || "standard",
+  block_label: exercise.blockLabel || "",
+  alternatives: exercise.alternatives || [],
   updated_at: workout.updatedAt
 }));
 
@@ -375,6 +457,7 @@ const toAppWorkout = (row) => normalizeWorkout({
   code: row.code,
   title: row.title,
   focus: row.focus,
+  level: row.level,
   estimatedMinutes: row.estimated_minutes,
   lastDoneLabel: row.last_done_label,
   owner: row.owner,
@@ -385,6 +468,11 @@ const toAppWorkout = (row) => normalizeWorkout({
   startsAt: row.starts_at,
   publishedAt: row.published_at,
   version: row.version,
+  revisionId: row.current_revision_id,
+  templateId: row.template_id,
+  programAssignmentId: row.program_assignment_id,
+  editorialState: row.editorial_status,
+  schemaVersion: row.schema_version,
   syncStatus: "synced",
   updatedAt: row.updated_at,
   exercises: [...(row.workout_exercises || [])]
@@ -402,11 +490,36 @@ const toAppWorkout = (row) => normalizeWorkout({
       instructions: exercise.instructions,
       mediaUrl: exercise.media_url,
       mediaType: exercise.media_type,
-      mediaMetadata: exercise.media_metadata
+      mediaMetadata: exercise.media_metadata,
+      definitionId: exercise.exercise_definition_id,
+      sets: exercise.sets_count,
+      reps: exercise.reps_target,
+      rpe: exercise.rpe,
+      blockId: exercise.block_id,
+      blockType: exercise.block_type,
+      blockLabel: exercise.block_label,
+      alternatives: exercise.alternatives
     }))
 });
 
 export const workoutRepository = {
+  getProgrammingDomainSupport() {
+    return programmingDomainSupport;
+  },
+
+  async ensureProgrammingDomainSupport() {
+    if (programmingDomainSupport !== null) return programmingDomainSupport;
+    const client = await getSupabase();
+    if (!client) return null;
+    try {
+      const { error } = await client.from("workout_revisions").select("id").limit(1);
+      programmingDomainSupport = !error;
+      return programmingDomainSupport;
+    } catch {
+      return null;
+    }
+  },
+
   getMediaMetadataSupport() {
     return mediaMetadataSupport;
   },
@@ -452,6 +565,7 @@ export const workoutRepository = {
       ...workout,
       coachId: authContext?.coachId || workout?.coachId,
       syncStatus: "pending",
+      transportState: "pending",
       syncMessage: "Aguardando sincronização."
     });
     const client = await getSupabase();
@@ -459,6 +573,7 @@ export const workoutRepository = {
       const pending = this.savePublishedWorkout({
         ...normalized,
         syncStatus: "local",
+        transportState: "local",
         syncMessage: "Entre como professor para enviar este treino ao aluno."
       });
       return { synced: false, reason: "not-authenticated-as-coach", workout: pending };
@@ -471,19 +586,32 @@ export const workoutRepository = {
         const failed = this.savePublishedWorkout({
           ...normalized,
           syncStatus: "failed",
+          transportState: "error",
           syncMessage: migrationError.message
         });
         return { synced: false, reason: "media-metadata-migration-required", error: migrationError, workout: failed };
       }
-      const { data, error } = await client.rpc("publish_student_workout", {
+      const { data, error } = await client.rpc("publish_student_workout_v2", {
         p_workout: toWorkoutPlanRow(normalized, authContext),
         p_exercises: toExerciseRows(normalized, authContext)
       });
+      if (error && isMissingProgrammingDomain(error)) {
+        programmingDomainSupport = false;
+        const migrationError = new Error("A atualização do banco para programação estruturada ainda não foi aplicada.");
+        const failed = this.savePublishedWorkout({
+          ...normalized,
+          syncStatus: "failed",
+          transportState: "error",
+          syncMessage: migrationError.message
+        });
+        return { synced: false, reason: "programming-domain-migration-required", error: migrationError, workout: failed };
+      }
       if (error || !data || Number(data.exercise_count || 0) !== normalized.exercises.length) {
         const verificationError = error || new Error("Não foi possível confirmar todos os exercícios do treino.");
         const failed = this.savePublishedWorkout({
           ...normalized,
           syncStatus: "failed",
+          transportState: "error",
           syncMessage: verificationError.message || "Não foi possível publicar o treino por completo."
         });
         return { synced: false, error: verificationError, workout: failed };
@@ -492,9 +620,14 @@ export const workoutRepository = {
       const confirmedWorkout = this.savePublishedWorkout({
         ...normalized,
         syncStatus: "synced",
+        transportState: "synced",
         syncMessage: "Treino publicado e pronto para o aluno.",
+        revisionId: data.revision_id || normalized.revisionId,
+        version: data.version || normalized.version,
+        schemaVersion: data.schema_version || 2,
         updatedAt: data.updated_at || normalized.updatedAt
       });
+      programmingDomainSupport = true;
       return { synced: true, workout: confirmedWorkout, partial: false, confirmation: data };
 
       /* Compatibilidade historica removida da execucao: a RPC acima substitui
@@ -579,6 +712,7 @@ export const workoutRepository = {
       const failed = this.savePublishedWorkout({
         ...normalized,
         syncStatus: "failed",
+        transportState: "error",
         syncMessage: error?.message || "Não foi possível sincronizar o treino."
       });
       return { synced: false, error, workout: failed };
@@ -616,12 +750,22 @@ export const workoutRepository = {
       let error;
       let supportsSchedule = true;
       let supportsMetadata = true;
-      for (let attempt = 0; attempt < 4; attempt += 1) {
-        const selectColumns = supportsSchedule
-          ? (supportsMetadata ? CLOUD_WORKOUT_SELECT : CLOUD_WORKOUT_SELECT_WITHOUT_MEDIA_METADATA)
-          : (supportsMetadata ? LEGACY_CLOUD_WORKOUT_SELECT : LEGACY_CLOUD_WORKOUT_SELECT_WITHOUT_MEDIA_METADATA);
+      let supportsProgramming = true;
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const selectColumns = supportsProgramming
+          ? (supportsSchedule
+            ? (supportsMetadata ? CLOUD_WORKOUT_SELECT : CLOUD_WORKOUT_SELECT_WITHOUT_MEDIA_METADATA)
+            : (supportsMetadata ? LEGACY_CLOUD_WORKOUT_SELECT : LEGACY_CLOUD_WORKOUT_SELECT_WITHOUT_MEDIA_METADATA))
+          : (supportsSchedule
+            ? (supportsMetadata ? CLOUD_WORKOUT_SELECT_LEGACY_DOMAIN : CLOUD_WORKOUT_SELECT_LEGACY_DOMAIN_NO_METADATA)
+            : (supportsMetadata ? LEGACY_CLOUD_WORKOUT_SELECT_LEGACY_DOMAIN : LEGACY_CLOUD_WORKOUT_SELECT_LEGACY_DOMAIN_NO_METADATA));
         ({ data, error } = await runQuery(selectColumns));
         if (!error) break;
+        if (supportsProgramming && isMissingProgrammingDomain(error)) {
+          supportsProgramming = false;
+          programmingDomainSupport = false;
+          continue;
+        }
         if (supportsMetadata && isMissingMediaMetadataColumn(error)) {
           supportsMetadata = false;
           mediaMetadataSupport = false;
@@ -636,6 +780,7 @@ export const workoutRepository = {
 
       if (error) return { synced: false, error, workouts: localWorkouts };
       if (supportsMetadata) mediaMetadataSupport = true;
+      if (supportsProgramming) programmingDomainSupport = true;
 
       const cloudWorkouts = (data || []).map(toAppWorkout);
       const unrelatedLocal = this.listPublishedWorkouts().filter((workout) => (

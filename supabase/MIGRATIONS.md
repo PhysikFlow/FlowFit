@@ -70,3 +70,17 @@ assinar avatares de alunos vinculados a ele.
 A migration anterior `20260821120000_flowfit_student_photo_path.sql` permanece
 no histórico por já poder ter sido aplicada, mas sua coluna não é usada como
 fonte da nova funcionalidade. Não edite nem reaplique essa migration antiga.
+
+## Programação estruturada de treinos
+
+`migrations/20260823180000_flowfit_programming_domain.sql` é obrigatória antes
+de publicar o frontend que usa o novo editor. Ela é aditiva: preserva os campos
+e treinos legados, cria definições de exercícios, modelos, programas,
+atribuições e revisões imutáveis; adiciona prescrição estruturada aos exercícios
+e vincula cada sessão à revisão executada. Também instala as RPCs transacionais
+`publish_student_workout_v2` e `sync_workout_session_v2`.
+
+Não execute `schema.sql` em produção. Aplique somente esta migration após as
+anteriores e então rode `node scripts/supabase-contract-smoke.mjs`. O frontend
+detecta a ausência da migration, preserva o conteúdo local e informa que a
+publicação estruturada está indisponível, sem fazer fallback destrutivo.

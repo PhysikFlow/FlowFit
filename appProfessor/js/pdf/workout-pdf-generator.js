@@ -80,8 +80,10 @@ const drawRoundedRect = (page, { x, y, width, height, radius, color, opacity = 1
   page.drawEllipse({ x: x + width - corner, y: y + height - corner, xScale: corner, yScale: corner, color: fill, opacity });
 };
 
-const parsePrescription = (value) => {
-  const text = cleanText(value, "3 x 10");
+const parsePrescription = (value, exercise = {}) => {
+  const structuredSets = Math.max(0, Number.parseInt(exercise.sets || exercise.sets_count || 0, 10) || 0);
+  const structuredReps = cleanText(exercise.reps || exercise.reps_target);
+  const text = structuredSets && structuredReps ? `${structuredSets} x ${structuredReps}` : cleanText(value, "3 x 10");
   const match = text.match(/^\s*(\d+)\s*[x×]\s*(.+)$/i);
   return {
     sets: Number.parseInt(match?.[1] || "0", 10) || 0,
@@ -266,7 +268,7 @@ export const createWorkoutPdf = async (sourceContext = {}) => {
   });
   y -= metaHeight + 20;
 
-  const totalSets = context.exercises.reduce((sum, exercise) => sum + parsePrescription(exercise.prescription).sets, 0);
+  const totalSets = context.exercises.reduce((sum, exercise) => sum + parsePrescription(exercise.prescription, exercise).sets, 0);
   page.drawText("PLANO DE EXERCÍCIOS", { x: PAGE_MARGIN, y, size: 10.5, font: bold, color: colors.text });
   const countLabel = `${context.exercises.length} exercícios - ${totalSets} séries`;
   page.drawText(countLabel, {
@@ -293,7 +295,7 @@ export const createWorkoutPdf = async (sourceContext = {}) => {
     page.drawText(fitText(exercise.target || "Personalizado", regular, 6.6, 220), {
       x: columns.exercise, y: y - 32, size: 6.6, font: regular, color: colors.muted
     });
-    const prescription = parsePrescription(exercise.prescription).display;
+    const prescription = parsePrescription(exercise.prescription, exercise).display;
     page.drawText(fitText(prescription, bold, 10, 68), {
       x: columns.prescription, y: y - 22, size: 10, font: bold, color: colors.text
     });

@@ -8,7 +8,8 @@ const SCOPED_SESSIONS_PREFIX = `${WORKOUT_SESSIONS_KEY}:`;
 const SESSIONS_TABLE = "workout_sessions";
 const SET_LOGS_TABLE = "workout_set_logs";
 const FEEDBACK_TABLE = "workout_feedback";
-const SESSION_SELECT = "id, coach_id, student_id, student_key, student_email, workout_id, workout_code, workout_title, workout_version, status, total_sets, completed_sets, volume_kg, duration_seconds, started_at, finished_at, updated_at";
+const LEGACY_SESSION_SELECT = "id, coach_id, student_id, student_key, student_email, workout_id, workout_code, workout_title, workout_version, status, total_sets, completed_sets, volume_kg, duration_seconds, started_at, finished_at, updated_at";
+const SESSION_SELECT = `${LEGACY_SESSION_SELECT}, workout_revision_id, prescription_snapshot`;
 const SET_LOG_SELECT = "id, session_id, coach_id, workout_id, exercise_id, workout_exercise_id, position, exercise_name, target, prescription, planned_sets, completed_sets, load_kg, reps, volume_kg, rir, notes, set_number, set_kind, completed_at, discomfort, discomfort_note";
 const FEEDBACK_SELECT = "id, session_id, coach_id, student_id, effort, pain, note";
 
@@ -150,6 +151,8 @@ export const normalizeWorkoutSession = (session = {}) => {
     workoutCode: normalizeText(session.workoutCode, "A"),
     workoutTitle: normalizeText(session.workoutTitle, "Treino"),
     workoutVersion: Math.max(1, normalizeNumber(session.workoutVersion, 1)),
+    workoutRevisionId: normalizeText(session.workoutRevisionId || session.workout_revision_id),
+    prescriptionSnapshot: session.prescriptionSnapshot || session.prescription_snapshot || {},
     status: normalizeText(session.status, "completed"),
     totalSets: normalizeNumber(session.totalSets),
     completedSets: normalizeNumber(session.completedSets),
@@ -174,6 +177,8 @@ const toSessionRow = (session) => ({
   workout_code: session.workoutCode,
   workout_title: session.workoutTitle,
   workout_version: session.workoutVersion,
+  workout_revision_id: session.workoutRevisionId || null,
+  prescription_snapshot: session.prescriptionSnapshot || {},
   status: session.status,
   total_sets: session.totalSets,
   completed_sets: session.completedSets,
@@ -229,6 +234,8 @@ const fromRows = (row, setLogs = [], feedback = null) => normalizeWorkoutSession
   workoutCode: row.workout_code,
   workoutTitle: row.workout_title,
   workoutVersion: row.workout_version,
+  workoutRevisionId: row.workout_revision_id,
+  prescriptionSnapshot: row.prescription_snapshot,
   status: row.status,
   totalSets: row.total_sets,
   completedSets: row.completed_sets,
@@ -318,11 +325,21 @@ export const sessionRepository = {
 
     try {
       const rows = normalized.setLogs.map((log) => toSetLogRow(log, normalized));
-      const { error } = await client.rpc("sync_workout_session", {
+      let { error } = await client.rpc("sync_workout_session_v2", {
         p_session: toSessionRow(normalized),
         p_set_logs: rows,
         p_feedback: toFeedbackRow(normalized.feedback, normalized)
       });
+      if (error && String(error.message || "").toLowerCase().includes("sync_workout_session_v2")) {
+        const legacyRow = toSessionRow(normalized);
+        delete legacyRow.workout_revision_id;
+        delete legacyRow.prescription_snapshot;
+        ({ error } = await client.rpc("sync_workout_session", {
+          p_session: legacyRow,
+          p_set_logs: rows,
+          p_feedback: toFeedbackRow(normalized.feedback, normalized)
+        }));
+      }
       if (error) throw error;
 
       const synced = upsertLocalSession({
@@ -397,7 +414,15 @@ export const sessionRepository = {
         .limit(Math.max(1, Math.min(80, Number(limit) || 20)));
       if (resolvedWorkoutId) query = query.eq("workout_id", resolvedWorkoutId);
 
-      const { data: sessionsData, error: sessionsError } = await query;
+      let { data: sessionsData, error: sessionsError } = await query;
+      if (sessionsError && String(sessionsError.message || "").includes("workout_revision_id")) {
+        let legacyQuery = client.from(SESSIONS_TABLE).select(LEGACY_SESSION_SELECT)
+          .eq("student_id", resolvedStudentId).eq("coach_id", resolvedCoachId)
+          .order("finished_at", { ascending: false })
+          .limit(Math.max(1, Math.min(80, Number(limit) || 20)));
+        if (resolvedWorkoutId) legacyQuery = legacyQuery.eq("workout_id", resolvedWorkoutId);
+        ({ data: sessionsData, error: sessionsError } = await legacyQuery);
+      }
       if (sessionsError) throw sessionsError;
       const ids = (sessionsData || []).map((session) => session.id);
       if (!ids.length) return { synced: true, sessions: localSessions };
@@ -456,7 +481,14 @@ export const sessionRepository = {
         .limit(limit);
       if (studentId) query = query.eq("student_id", studentId);
 
-      const { data: sessionsData, error: sessionsError } = await query;
+      let { data: sessionsData, error: sessionsError } = await query;
+      if (sessionsError && String(sessionsError.message || "").includes("workout_revision_id")) {
+        let legacyQuery = client.from(SESSIONS_TABLE).select(LEGACY_SESSION_SELECT)
+          .eq("coach_id", authContext.coachId)
+          .order("finished_at", { ascending: false }).limit(limit);
+        if (studentId) legacyQuery = legacyQuery.eq("student_id", studentId);
+        ({ data: sessionsData, error: sessionsError } = await legacyQuery);
+      }
       if (sessionsError) throw sessionsError;
 
       const ids = (sessionsData || []).map((session) => session.id);

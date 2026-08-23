@@ -7,8 +7,8 @@ import { authRepository } from "./data/repositories/auth-repository.js?v=build-2
 import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260822-1";
 import { applyStudentProfile, effectiveStudentName, studentProfileRepository } from "./data/repositories/student-profile-repository.js?v=build-20260822-1";
 import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260820-1";
-import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260823-1";
-import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260820-1";
+import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260823-2";
+import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260823-2";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "./components/custom-select.js?v=build-20260816-1";
 import { initRunnerWheelPickers } from "./components/wheel-picker.js?v=build-20260816-2";
@@ -21,7 +21,7 @@ import { createHomeScreen } from "./screens/home/home-screen.js?v=build-20260818
 import { createStudentProfileEditor } from "./screens/profile/student-profile-editor.js?v=build-20260822-1";
 import { createNotificationsScreen } from "./screens/notifications/notifications-screen.js?v=build-20260816-1";
 import { createStudentAppState } from "./state/app-state.js?v=build-20260822-1";
-import { createWorkoutSessionState } from "./state/workout-session-state.js?v=build-20260816-1";
+import { createWorkoutSessionState } from "./state/workout-session-state.js?v=build-20260823-2";
 import { createRefreshCoordinator } from "./core/refresh-coordinator.js?v=build-20260820-1";
 import {
   escapeHtml, formatClock, formatMonthYear, formatSetPerformance,
@@ -732,6 +732,8 @@ const buildWorkoutSessionPayload = () => {
     workoutCode: snapshot.code || "A",
     workoutTitle: snapshot.title || "Treino",
     workoutVersion: snapshot.version || activeSession.workoutVersion || 1,
+    workoutRevisionId: snapshot.revisionId || activeSession.workoutRevisionId || "",
+    prescriptionSnapshot: snapshot,
     status: completedSets >= totalSets ? "completed" : "partial",
     totalSets,
     completedSets,
@@ -835,10 +837,18 @@ const renderExercises = () => {
   }
   const activeSession = getActiveSession();
   const belongsToCurrentWorkout = activeSession?.workoutId === appState.currentWorkout.id;
+  let previousBlockKey = "";
   list.innerHTML = exercises.map((exercise, index) => {
     const done = belongsToCurrentWorkout ? getCompletedSetCount(occurrenceId(exercise), activeSession) : 0;
     const total = parseTotalSets(exercise);
+    const blockKey = exercise.blockId || (exercise.blockType && exercise.blockType !== "standard" ? `${exercise.blockType}-${index}` : "");
+    const blockLabels = { warmup: "Aquecimento", superset: "Superset", circuit: "Circuito", main: "Bloco principal", finisher: "Finalizador" };
+    const blockHeading = blockKey && blockKey !== previousBlockKey
+      ? `<div class="exercise-block-heading"><span>${escapeHtml(exercise.blockLabel || blockLabels[exercise.blockType] || "Bloco")}</span><small>${escapeHtml(blockLabels[exercise.blockType] || "Sequência")}</small></div>`
+      : "";
+    previousBlockKey = blockKey;
     return `
+      ${blockHeading}
       <article class="exercise-overview card ${done >= total ? "is-complete" : ""}">
         <span class="exercise__number">${String(index + 1).padStart(2, "0")}</span>
         <div>
@@ -1512,14 +1522,23 @@ const renderWorkoutRunner = () => {
   const previous = findPreviousSet(exercise, setNumber);
   const previousLogs = findPreviousExerciseLogs(exercise);
   document.querySelector("[data-runner-exercise-name]").textContent = exercise.name;
+  const runnerExercisePosition = document.querySelector("[data-runner-exercise-position]");
+  if (runnerExercisePosition) {
+    const hasBlock = exercise.blockType && exercise.blockType !== "standard";
+    const blockLabels = { warmup: "Aquecimento", superset: "Superset", circuit: "Circuito", main: "Principal", finisher: "Finalizador" };
+    runnerExercisePosition.hidden = !hasBlock;
+    runnerExercisePosition.textContent = hasBlock ? (exercise.blockLabel || blockLabels[exercise.blockType] || "Bloco") : "";
+  }
   document.querySelector("[data-runner-set-number]").textContent = `Série ${setNumber} de ${parseTotalSets(exercise)}`;
   renderRunnerSetTrack(exercise, setNumber, session);
   document.querySelector("[data-runner-rir]").textContent = `RIR ${exercise.rir}`;
   document.querySelector("[data-runner-tempo]").textContent = formatRunnerTempo(exercise.tempo);
   const instructions = document.querySelector("[data-runner-instructions]");
   const instructionsDetails = document.querySelector("[data-runner-instructions-details]");
-  if (instructionsDetails) instructionsDetails.hidden = !exercise.instructions;
-  instructions.textContent = exercise.instructions || "";
+  const alternatives = Array.isArray(exercise.alternatives) && exercise.alternatives.length
+    ? `Alternativas: ${exercise.alternatives.join(", ")}.` : "";
+  if (instructionsDetails) instructionsDetails.hidden = !exercise.instructions && !alternatives;
+  instructions.textContent = [exercise.instructions, alternatives].filter(Boolean).join(" ");
   const comparableLogs = previousLogs.filter((log) => Number(log.setNumber || 0) > 0).slice(0, 4);
   document.querySelector("[data-previous-set-value]").textContent = comparableLogs.length
     ? comparableLogs.map((log) => formatSetPerformance(log.loadKg, log.reps)).join(" · ")

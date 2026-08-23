@@ -19,9 +19,9 @@
     <link rel="stylesheet" href="../appAluno/css/fonts.css?v=build-20260817-1" />
     <link rel="stylesheet" href="vendor/cropperjs/cropper.min.css?v=1.6.2" />
     <link rel="stylesheet" href="../appAluno/css/date-picker.css?v=build-20260819-1" />
-    <link rel="stylesheet" href="css/app.css?v=build-20260823-1" />
+    <link rel="stylesheet" href="css/app.css?v=build-20260823-2" />
     <script defer src="vendor/cropperjs/cropper.min.js?v=1.6.2"></script>
-    <script type="module" src="js/app.js?v=build-20260823-1"></script>
+    <script type="module" src="js/app.js?v=build-20260823-2"></script>
   </head>
   <body>
     <section class="auth-gate" data-auth-gate aria-labelledby="professor-auth-title" aria-busy="true">
@@ -240,6 +240,12 @@
       </section>
 
       <section class="page" data-page="workouts" aria-label="Treinos, modelos e ajustes">
+        <nav class="workout-domain-tabs" aria-label="Áreas de programação">
+          <button type="button" class="is-active" data-workout-domain="students" aria-pressed="true">Alunos</button>
+          <button type="button" data-workout-domain="templates" aria-pressed="false">Modelos</button>
+          <button type="button" data-workout-domain="programs" aria-pressed="false">Programas</button>
+          <button type="button" data-workout-domain="drafts" aria-pressed="false">Rascunhos</button>
+        </nav>
         <div class="page-toolbar">
           <div class="page-toolbar__summary"><h2 class="sr-only">Treinos</h2><span data-workout-count>0 publicados</span></div>
           <div class="page-toolbar__actions">
@@ -253,6 +259,7 @@
           </div>
         </div>
         <section class="workout-list entity-list" data-workout-list aria-label="Treinos cadastrados"></section>
+        <section class="programming-library" data-programming-library hidden></section>
 
         <div class="workout-builder card" id="add-workout" data-workout-builder hidden>
           <button class="icon-button workout-builder__close" type="button" data-close-workout-form aria-label="Fechar editor de treino">×</button>
@@ -263,25 +270,31 @@
           </div>
           <form class="quick-form quick-form--stack" data-workout-form>
             <label>Aluno
-              <select name="student" data-student-options data-avatar="true" data-show-description="true"></select>
+              <select name="student" data-student-options data-avatar="true" data-show-description="true">
+                <option value="">Sem aluno — criar conteúdo reutilizável</option>
+              </select>
             </label>
             <label>Nome do treino <input name="title" placeholder="Peito e tríceps" required /></label>
-            <label>Modelo
-              <select name="template">
-                <option>Hipertrofia 4x semana</option>
-                <option>Emagrecimento iniciante</option>
-                <option>Força base</option>
-              </select>
+            <div class="workout-metadata-grid">
+              <label>Objetivo <input name="objective" placeholder="Ex: Hipertrofia" /></label>
+              <label>Nível <input name="level" placeholder="Ex: Intermediário" /></label>
+            </div>
+            <label>Partir de um modelo
+              <select name="templateSource" data-template-source><option value="">Criar do zero</option></select>
             </label>
             <label>Disponível a partir
               <input type="date" name="startsAt" data-workout-starts-at />
             </label>
-            <label>Exercícios
-              <textarea name="blocks" placeholder="Supino reto 4x10&#10;Crucifixo 3x12&#10;Tríceps corda 3x15" required></textarea>
-            </label>
+            <section class="quick-entry" aria-labelledby="quick-entry-title">
+              <div><strong id="quick-entry-title">Entrada rápida</strong><small>Cole linhas do Sheets ou digite como “Supino reto 4x10 90s”.</small></div>
+              <textarea name="quickEntry" placeholder="Supino reto 4x10&#10;Crucifixo 3x12&#10;Tríceps corda 3x15"></textarea>
+              <button class="button button--quiet" type="button" data-import-quick-entry>Adicionar à grade</button>
+              <textarea name="blocks" hidden aria-hidden="true" tabindex="-1"></textarea>
+            </section>
             <div class="button-group workout-form-actions">
               <button class="button button--block" type="submit" data-workout-submit>Publicar treino para o aluno</button>
-              <button class="button button--quiet button--block" type="button" data-save-workout-draft>Salvar rascunho</button>
+              <button class="button button--quiet button--block" type="button" data-save-as-template>Salvar como modelo</button>
+              <button class="button button--quiet button--block" type="button" data-save-workout-draft>Fechar e manter rascunho</button>
               <button class="button button--quiet button--block" type="button" data-cancel-workout-edit hidden>Cancelar edição</button>
             </div>
           </form>
@@ -289,8 +302,8 @@
             <div class="workout-preview__head">
               <span class="surface-icon" aria-hidden="true" data-ui-icon="dumbbell"></span>
               <div>
-                <strong>Prévia do treino</strong>
-                <small>Cole exercícios como “Supino reto 4x10”.</small>
+                <strong>Editor estruturado</strong>
+                <small>Tab avança entre campos; Enter cria uma nova linha.</small>
               </div>
             </div>
             <div class="workout-preview__stats">
@@ -298,10 +311,23 @@
               <span><strong data-preview-sets>0</strong><small>séries</small></span>
               <span><strong data-preview-minutes>0</strong><small>min</small></span>
             </div>
-            <section class="workout-preview__list" data-preview-list aria-label="Exercícios interpretados"></section>
+            <section class="workout-preview__list training-editor" data-preview-list aria-label="Prescrições do treino"></section>
             <p class="form-status" data-workout-sync-status>Pronto para publicar.</p>
           </aside>
         </div>
+
+        <dialog class="app-dialog" data-workout-scope-dialog aria-labelledby="workout-scope-title">
+          <form class="dialog-form" data-workout-scope-form>
+            <button class="icon-button dialog-form__close" type="button" data-close-workout-scope aria-label="Fechar">×</button>
+            <span class="eyebrow">Escopo da alteração</span>
+            <h2 id="workout-scope-title">Onde aplicar esta edição?</h2>
+            <p>O histórico já executado nunca será alterado.</p>
+            <label class="choice-row"><input type="radio" name="scope" value="current" checked /> Somente este treino</label>
+            <label class="choice-row" data-workout-scope-future><input type="radio" name="scope" value="future" /> Esta e as próximas sessões equivalentes do programa</label>
+            <label class="choice-row" data-workout-scope-template><input type="radio" name="scope" value="template" /> Este treino e o modelo de origem para usos futuros</label>
+            <div class="button-group"><button class="button" type="submit">Continuar</button><button class="button button--quiet" type="button" data-close-workout-scope>Cancelar</button></div>
+          </form>
+        </dialog>
 
         <dialog class="app-dialog" data-duplicate-workout-dialog aria-labelledby="duplicate-workout-title">
           <form class="dialog-form" data-duplicate-workout-form>

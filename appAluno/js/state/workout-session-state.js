@@ -165,6 +165,8 @@ export const createWorkoutSessionState = ({
       title: workout.title,
       focus: workout.focus,
       version: workout.version || 1,
+      revisionId: workout.revisionId || "",
+      schemaVersion: workout.schemaVersion || 1,
       exercises: exercises.map((exercise, index) => {
         const baseId = exercise.workoutExerciseId || exercise.id || `${workout.id}-item-${index + 1}`;
         return {
@@ -189,6 +191,7 @@ export const createWorkoutSessionState = ({
       studentEmail: getCurrentStudent().email || "",
       workoutId: workout.id,
       workoutVersion: workout.version || 1,
+      workoutRevisionId: workout.revisionId || "",
       workoutSnapshot,
       startedAt: new Date().toISOString(),
       schemaVersion: 2,
@@ -263,4 +266,3 @@ export const createWorkoutSessionState = ({
     createActiveSession
   };
 };
-
