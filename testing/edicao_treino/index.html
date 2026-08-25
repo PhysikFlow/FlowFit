@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-BR" data-mode="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#090b10" />
+    <title>Edição de Treino — Teste Local</title>
+    <link rel="stylesheet" href="../../appAluno/css/tokens.css?v=build-20260816-1" />
+    <link rel="stylesheet" href="../../appAluno/css/components.css?v=build-20260822-1" />
+    <link rel="stylesheet" href="../../appAluno/css/fonts.css?v=build-20260817-1" />
+    <link rel="stylesheet" href="../../appAluno/css/date-picker.css?v=build-20260819-1" />
+    <link rel="stylesheet" href="app.css?v=build-20260824-1" />
+    <script type="module" src="app.js?v=build-20260824-1"></script>
+  </head>
+  <body>
+    <main class="admin-shell">
+      <div class="test-header">
+        <span class="eyebrow">Ambiente de teste</span>
+        <h2>Editor de Treino — Modo Local</h2>
+        <p>Edição e criação de treinos isoladas para testes de UX. Nenhuma chamada ao Supabase.</p>
+        <div class="test-actions">
+          <button class="button button--quiet" type="button" id="test-load-mock">Carregar treino de exemplo</button>
+          <button class="button button--quiet" type="button" id="test-add-sample">Adicionar exercícios de exemplo</button>
+          <button class="button button--quiet" type="button" id="test-reset">Resetar editor</button>
+        </div>
+      </div>
+
+      <div class="workout-builder card" id="add-workout" data-workout-builder>
+        <button class="icon-button workout-builder__close" type="button" data-close-workout-form aria-label="Fechar editor de treino">×</button>
+        <div class="workout-builder__header">
+          <span class="eyebrow" data-workout-builder-mode>Adicionar treino</span>
+          <h2 data-workout-builder-title>Criar novo treino para um aluno</h2>
+          <p data-workout-builder-copy>Ao publicar, o aluno recebe esse treino no app na próxima abertura ou atualização.</p>
+        </div>
+        <form class="quick-form quick-form--stack" data-workout-form>
+          <label>Aluno
+            <select name="student" data-student-options>
+              <option value="">Sem aluno — criar conteúdo reutilizável</option>
+            </select>
+          </label>
+          <label>Nome do treino <input name="title" placeholder="Peito e tríceps" required /></label>
+          <div class="workout-metadata-grid">
+            <label>Objetivo <input name="objective" placeholder="Ex: Hipertrofia" /></label>
+            <label>Nível <input name="level" placeholder="Ex: Intermediário" /></label>
+          </div>
+          <label>Partir de um modelo
+            <select name="templateSource" data-template-source><option value="">Criar do zero</option></select>
+          </label>
+          <label>Disponível a partir
+            <input type="date" name="startsAt" data-workout-starts-at />
+          </label>
+          <section class="quick-entry" aria-labelledby="quick-entry-title">
+            <div><strong id="quick-entry-title">Entrada rápida</strong><small>Cole linhas do Sheets ou digite como "Supino reto 4x10 90s".</small></div>
+            <textarea name="quickEntry" placeholder="Supino reto 4x10&#10;Crucifixo 3x12&#10;Tríceps corda 3x15"></textarea>
+            <button class="button button--quiet" type="button" data-import-quick-entry>Adicionar à grade</button>
+            <textarea name="blocks" hidden aria-hidden="true" tabindex="-1"></textarea>
+          </section>
+          <div class="button-group workout-form-actions">
+            <button class="button button--block" type="submit" data-workout-submit>Publicar treino para o aluno</button>
+            <button class="button button--quiet button--block" type="button" data-save-as-template>Salvar como modelo</button>
+            <button class="button button--quiet button--block" type="button" data-save-workout-draft>Fechar e manter rascunho</button>
+            <button class="button button--quiet button--block" type="button" data-cancel-workout-edit hidden>Cancelar edição</button>
+          </div>
+        </form>
+        <aside class="workout-preview" data-workout-preview aria-live="polite">
+          <div class="workout-preview__head">
+            <span class="surface-icon" aria-hidden="true" data-ui-icon="dumbbell"></span>
+            <div>
+              <strong>Editor estruturado</strong>
+              <small>Tab avança entre campos; Enter cria uma nova linha.</small>
+            </div>
+          </div>
+          <div class="workout-preview__stats">
+            <span><strong data-preview-exercises>0</strong><small>exercícios</small></span>
+            <span><strong data-preview-sets>0</strong><small>séries</small></span>
+            <span><strong data-preview-minutes>0</strong><small>min</small></span>
+          </div>
+          <section class="workout-preview__list training-editor" data-preview-list aria-label="Prescrições do treino"></section>
+          <p class="form-status" data-workout-sync-status>Pronto para publicar.</p>
+        </aside>
+      </div>
+
+      <div class="test-toast-container">
+        <div class="toast" data-toast role="status" aria-live="polite"></div>
+      </div>
+    </main>
+  </body>
+</html>

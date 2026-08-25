@@ -65,6 +65,7 @@ const assetCropConfirm = document.querySelector("[data-asset-crop-confirm]");
 const themeStatus = document.querySelector("[data-theme-status]");
 const studentSyncStatus = document.querySelector("[data-student-sync-status]");
 const workoutForm = document.querySelector("[data-workout-form]");
+const workoutSettings = document.querySelector("[data-workout-settings]");
 const workoutBuilderMode = document.querySelector("[data-workout-builder-mode]");
 const workoutBuilderTitle = document.querySelector("[data-workout-builder-title]");
 const workoutBuilderCopy = document.querySelector("[data-workout-builder-copy]");
@@ -280,6 +281,8 @@ let workoutDraftDirty = false;
 let workoutDraftSaveTimer;
 let repdbPicker;
 let selectedDraftExerciseKey = "";
+const wideTrainingEditorQuery = window.matchMedia("(min-width: 1600px)");
+let workoutDetailsOpen = wideTrainingEditorQuery.matches;
 let currentTemplateId = "";
 let workoutDomain = "students";
 let workoutUndoStack = [];
@@ -1033,6 +1036,10 @@ const getWorkoutSyncLabel = (workout) => {
   return workout?.editorialState === "draft" ? "Rascunho" : "Publicação pendente";
 };
 
+const setWorkoutSettingsOpen = (open) => {
+  if (workoutSettings) workoutSettings.open = Boolean(open);
+};
+
 const describeWorkoutSyncResult = (result) => {
   if (result.synced && result.partial) return "Treino enviado sem agendamento. Tente republicar para completar.";
   if (result.synced) return "Treino enviado. O aluno recebe quando abrir ou atualizar o app.";
@@ -1484,6 +1491,8 @@ const restoreStoredWorkoutDraft = ({ open = false } = {}) => {
   workoutDraftExercises = saved.exercises.map((exercise, index) => toDraftExercise(exercise, index));
   currentTemplateId = String(saved.currentTemplateId || saved.fields.templateSource || "");
   selectedDraftExerciseKey = workoutDraftExercises[0]?.draftKey || "";
+  workoutDetailsOpen = wideTrainingEditorQuery.matches;
+  setWorkoutSettingsOpen(!workoutDraftExercises.length);
   restoredWorkoutDraftSavedAt = saved.savedAt || "";
   writeWorkoutDraftText();
   const editingWorkout = workouts.find((workout) => workout.id === saved.editingWorkoutId) || null;
@@ -1539,6 +1548,8 @@ const loadWorkoutForEditing = (workout) => {
   }
   workoutDraftExercises = (workout.exercises || []).map((exercise, index) => toDraftExercise(exercise, index));
   selectedDraftExerciseKey = workoutDraftExercises[0]?.draftKey || "";
+  workoutDetailsOpen = wideTrainingEditorQuery.matches;
+  setWorkoutSettingsOpen(false);
   if (blocksInput) blocksInput.value = workoutToEditableBlocks(workout);
   workoutDraftTextSignature = blocksInput?.value || "";
 
@@ -1552,6 +1563,8 @@ const resetWorkoutFormMode = ({ resetForm = false, clearStored = false } = {}) =
   if (resetForm) workoutForm?.reset();
   workoutDraftExercises = [];
   selectedDraftExerciseKey = "";
+  workoutDetailsOpen = wideTrainingEditorQuery.matches;
+  setWorkoutSettingsOpen(true);
   workoutUndoStack = [];
   workoutRedoStack = [];
   currentTemplateId = "";
@@ -1574,6 +1587,8 @@ const loadTemplateForEditing = (template, { asCopy = false } = {}) => {
     ...exercise, id: asCopy ? `draft-copy-${Date.now()}-${index}` : exercise.id, draftKey: createDraftExerciseKey()
   }, index));
   selectedDraftExerciseKey = workoutDraftExercises[0]?.draftKey || "";
+  workoutDetailsOpen = wideTrainingEditorQuery.matches;
+  setWorkoutSettingsOpen(false);
   writeWorkoutDraftText();
   if (workoutBuilderMode) workoutBuilderMode.textContent = asCopy ? "Novo modelo" : "Editar modelo";
   if (workoutBuilderTitle) workoutBuilderTitle.textContent = asCopy ? "Criar modelo a partir de uma cópia" : `Editando modelo “${template.name}”`;
@@ -1657,6 +1672,13 @@ const blockTypeLabel = (value) => ({
   main: "Principal", finisher: "Finalizador"
 }[value] || "Sem grupo");
 
+const exerciseGridSummary = (exercise) => [
+  `${Number(exercise?.sets || parseSets(exercise?.prescription) || 1)} séries`,
+  `${exercise?.reps || "—"} reps`,
+  `RIR ${exercise?.rir || "—"}`,
+  `${exercise?.rest || "—"} descanso`
+].join(" · ");
+
 const recentExerciseHistory = (exercise) => {
   const studentId = workoutForm?.elements.namedItem("student")?.value || "";
   if (!studentId) return [];
@@ -1667,10 +1689,10 @@ const recentExerciseHistory = (exercise) => {
 };
 
 const renderTrainingDetails = (exercise) => {
-  if (!exercise) return `<aside class="training-details"><strong>Selecione um exercício</strong><small>Os detalhes, mídia e histórico aparecerão aqui.</small></aside>`;
+  if (!exercise) return `<aside class="training-details is-closed"><strong>Selecione um exercício</strong><small>Os detalhes, mídia e histórico aparecerão aqui.</small></aside>`;
   const history = recentExerciseHistory(exercise);
-  return `<aside class="training-details" data-training-details="${escapeHtml(exercise.draftKey)}">
-    <header><div><span class="eyebrow">Exercício selecionado</span><h3>${escapeHtml(exercise.name)}</h3></div><button class="icon-button training-details__close" type="button" data-close-training-details aria-label="Fechar detalhes">×</button></header>
+  return `<aside class="training-details ${workoutDetailsOpen ? "is-open" : "is-closed"}" id="training-exercise-properties" data-training-details="${escapeHtml(exercise.draftKey)}" aria-label="Propriedades de ${escapeHtml(exercise.name)}">
+    <header><div><span class="eyebrow">Exercício selecionado</span><h3>${escapeHtml(exercise.name)}</h3></div><button class="icon-button training-details__close" type="button" data-close-training-details aria-label="Fechar propriedades do exercício">×</button></header>
     <div class="training-details__grid">
       <label>Cadência<input value="${escapeHtml(exercise.tempo)}" data-draft-exercise-field="tempo" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" /></label>
       <label>Carga/alvo<input value="${escapeHtml(exercise.load)}" data-draft-exercise-field="load" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" /></label>
@@ -1720,19 +1742,23 @@ const renderWorkoutPreview = () => {
     previewList.innerHTML = `<article class="empty-state"><strong>Comece pela entrada rápida.</strong><small>Cole várias linhas ou adicione o primeiro exercício diretamente.</small>${renderWorkoutInsertSlot(0)}</article>`;
     return;
   }
-  if (!draft.exercises.some((exercise) => exercise.draftKey === selectedDraftExerciseKey)) selectedDraftExerciseKey = draft.exercises[0].draftKey;
+  if (!draft.exercises.some((exercise) => exercise.draftKey === selectedDraftExerciseKey)) {
+    selectedDraftExerciseKey = draft.exercises[0].draftKey;
+    workoutDetailsOpen = wideTrainingEditorQuery.matches;
+  }
   const definitions = programmingRepository.listDefinitions();
   const definitionOptions = definitions.map((item) => `<option value="${escapeHtml(item.name)}"></option>`).join("");
   const rows = draft.exercises.map((exercise, index) => `
     <div class="workout-preview__entry training-grid__row ${exercise.draftKey === selectedDraftExerciseKey ? "is-selected" : ""}" role="row" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}">
       <button class="workout-exercise-drag-handle" type="button" data-draft-drag-handle="${escapeHtml(exercise.draftKey)}" aria-label="Mover ${escapeHtml(exercise.name)}"><span class="workout-exercise-drag-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
-      <button class="training-grid__index" type="button" data-select-draft-exercise="${escapeHtml(exercise.draftKey)}" aria-label="Abrir detalhes de ${escapeHtml(exercise.name)}">${String(index + 1).padStart(2, "0")}</button>
+      <button class="training-grid__index" type="button" data-select-draft-exercise="${escapeHtml(exercise.draftKey)}" aria-label="Abrir detalhes de ${escapeHtml(exercise.name)}" aria-controls="training-exercise-properties" aria-expanded="${exercise.draftKey === selectedDraftExerciseKey && workoutDetailsOpen}">${String(index + 1).padStart(2, "0")}</button>
       <input class="training-grid__name" value="${escapeHtml(exercise.name)}" list="training-exercise-definitions" data-draft-exercise-field="name" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" aria-label="Exercício ${index + 1}" />
+      <small class="training-grid__summary">${escapeHtml(exerciseGridSummary(exercise))}</small>
       <input type="number" min="1" max="99" value="${escapeHtml(exercise.sets)}" data-draft-exercise-field="sets" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" aria-label="Séries de ${escapeHtml(exercise.name)}" />
       <input value="${escapeHtml(exercise.reps)}" data-draft-exercise-field="reps" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" aria-label="Repetições de ${escapeHtml(exercise.name)}" />
       <input value="${escapeHtml(exercise.rir)}" data-draft-exercise-field="rir" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" aria-label="RIR de ${escapeHtml(exercise.name)}" />
       <input value="${escapeHtml(exercise.rest)}" data-draft-exercise-field="rest" data-draft-exercise-key="${escapeHtml(exercise.draftKey)}" aria-label="Descanso de ${escapeHtml(exercise.name)}" />
-      <button class="training-grid__details" type="button" data-select-draft-exercise="${escapeHtml(exercise.draftKey)}" aria-label="Mais detalhes de ${escapeHtml(exercise.name)}">${exercise.blockType !== "standard" ? escapeHtml(exercise.blockLabel || blockTypeLabel(exercise.blockType)) : "•••"}</button>
+      <button class="training-grid__details" type="button" data-select-draft-exercise="${escapeHtml(exercise.draftKey)}" aria-label="Mais detalhes de ${escapeHtml(exercise.name)}" aria-controls="training-exercise-properties" aria-expanded="${exercise.draftKey === selectedDraftExerciseKey && workoutDetailsOpen}">${exercise.blockType !== "standard" ? escapeHtml(exercise.blockLabel || blockTypeLabel(exercise.blockType)) : "Detalhes"}</button>
       <details class="action-menu workout-exercise-menu"><summary class="icon-button" aria-label="Ações para ${escapeHtml(exercise.name)}">•••</summary><div class="action-menu__popover action-menu__popover--end">
         <button type="button" data-duplicate-draft-exercise="${escapeHtml(exercise.draftKey)}">Duplicar</button><button class="is-danger" type="button" data-delete-draft-exercise="${escapeHtml(exercise.draftKey)}">Excluir</button>
       </div></details>
@@ -1927,6 +1953,8 @@ const updateDraftExerciseField = (input) => {
     const prescription = input.closest(".workout-preview__entry")?.querySelector("[data-preview-exercise-prescription]");
     if (prescription) prescription.textContent = `${exercise.prescription} - ${exercise.rest} descanso`;
   }
+  const summary = input.closest(".workout-preview__entry")?.querySelector(".training-grid__summary");
+  if (summary) summary.textContent = exerciseGridSummary(exercise);
   markWorkoutDraftChanged();
 };
 
@@ -2103,9 +2131,19 @@ document.addEventListener("pointercancel", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key !== "Escape" || !activeWorkoutDrag?.moved) return;
-  event.preventDefault();
-  finalizeWorkoutDrag({ cancel: true });
+  if (event.key !== "Escape") return;
+  if (activeWorkoutDrag?.moved) {
+    event.preventDefault();
+    finalizeWorkoutDrag({ cancel: true });
+    return;
+  }
+  if (workoutDetailsOpen && !wideTrainingEditorQuery.matches && !document.querySelector("dialog[open]")) {
+    event.preventDefault();
+    const draftKey = selectedDraftExerciseKey;
+    workoutDetailsOpen = false;
+    renderWorkoutPreview();
+    window.setTimeout(() => previewList?.querySelector(`[data-select-draft-exercise="${CSS.escape(draftKey)}"]`)?.focus(), 0);
+  }
 });
 
 previewList?.addEventListener("keydown", (event) => {
@@ -2127,6 +2165,7 @@ previewList?.addEventListener("keydown", (event) => {
     workoutRedoStack = [];
     workoutDraftExercises.splice(index + 1, 0, exercise);
     selectedDraftExerciseKey = exercise.draftKey;
+    workoutDetailsOpen = wideTrainingEditorQuery.matches;
     commitWorkoutDraftMutation();
     window.setTimeout(() => previewList.querySelector(`[data-draft-exercise-key="${CSS.escape(exercise.draftKey)}"] .training-grid__name`)?.select(), 0);
     return;
@@ -2147,13 +2186,16 @@ previewList?.addEventListener("click", (event) => {
   const selectExercise = event.target.closest("[data-select-draft-exercise]");
   if (selectExercise) {
     selectedDraftExerciseKey = selectExercise.dataset.selectDraftExercise;
+    workoutDetailsOpen = true;
     renderWorkoutPreview();
     window.setTimeout(() => previewList.querySelector(".training-details input, .training-details textarea")?.focus(), 0);
     return;
   }
   if (event.target.closest("[data-close-training-details]")) {
-    selectedDraftExerciseKey = "";
-    previewList.querySelector(".training-details")?.classList.add("is-closed");
+    const draftKey = selectedDraftExerciseKey;
+    workoutDetailsOpen = false;
+    renderWorkoutPreview();
+    window.setTimeout(() => previewList?.querySelector(`[data-select-draft-exercise="${CSS.escape(draftKey)}"]`)?.focus(), 0);
     return;
   }
   const openRepdb = event.target.closest("[data-open-repdb-picker]");
@@ -3090,6 +3132,7 @@ workoutForm?.addEventListener("submit", async (event) => {
 });
 
 workoutForm?.addEventListener("input", (event) => {
+  if (previewList?.contains(event.target)) return;
   const detailInput = event.target.closest("[data-draft-exercise-field]");
   if (detailInput) {
     updateDraftExerciseField(detailInput);
@@ -3102,10 +3145,21 @@ workoutForm?.addEventListener("input", (event) => {
   markWorkoutDraftChanged();
 });
 workoutForm?.addEventListener("change", (event) => {
+  if (previewList?.contains(event.target)) return;
   const detailInput = event.target.closest("[data-draft-exercise-field]");
   if (detailInput) updateDraftExerciseField(detailInput);
   else markWorkoutDraftChanged();
 });
+
+const handleWideTrainingEditorChange = (event) => {
+  workoutDetailsOpen = Boolean(event.matches && selectedDraftExerciseKey);
+  renderWorkoutPreview();
+};
+if (wideTrainingEditorQuery.addEventListener) {
+  wideTrainingEditorQuery.addEventListener("change", handleWideTrainingEditorChange);
+} else {
+  wideTrainingEditorQuery.addListener(handleWideTrainingEditorChange);
+}
 
 workoutForm?.elements.namedItem("templateSource")?.addEventListener("change", (event) => {
   const template = programmingRepository.listTemplates().find((item) => item.id === event.currentTarget.value);

@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-professor-v82";
+const CACHE_NAME = "flowfit-professor-v83";
 const REPDB_CACHE_NAME = "flowfit-repdb-2026.8.0-v1";
 const REPDB_ORIGIN = "https://cdn.jsdelivr.net";
 const REPDB_PATH_PREFIX = "/npm/@repdb/exercises@2026.8.0/";
@@ -7,8 +7,8 @@ const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./css/app.css?v=build-20260823-2",
-  "./js/app.js?v=build-20260823-4",
+  "./css/app.css?v=build-20260824-1",
+  "./js/app.js?v=build-20260824-1",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/core/navigation.js?v=build-20260816-1",
   "./js/screens/dashboard/dashboard-screen.js?v=build-20260822-1",
