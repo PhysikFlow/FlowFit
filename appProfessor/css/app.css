@@ -1009,6 +1009,37 @@ body:not([data-current-page="dashboard"]) .topbar__actions [data-nav-jump] {
   resize: vertical;
 }
 
+.student-create-fields,
+.student-invite-success {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.student-create-fields[hidden],
+.student-invite-success[hidden] {
+  display: none;
+}
+
+.student-invite-success__student {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.student-invite-success__student h3,
+.student-invite-success > p {
+  margin: 0;
+}
+
+.student-invite-success textarea {
+  min-height: 8rem;
+  resize: none;
+}
+
+.student-invite-success > .text-button {
+  justify-self: start;
+}
+
 .button-group--inline {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -4524,13 +4555,121 @@ body { color: var(--text-primary); font-weight: var(--type-weight-body); }
 }
 .programming-card > span { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .programming-card > label { min-width: min(18rem, 100%); }
-.programming-card--program { align-items: start; }
-.programming-card__controls { display: grid; width: min(100%, 32rem); gap: var(--space-2); }
-.programming-card__controls form {
+.programming-card--program {
   display: grid;
-  grid-template-columns: minmax(10rem, 1fr) minmax(8rem, .65fr) auto;
+  min-width: 0;
+  gap: var(--space-4);
+  align-items: stretch;
+}
+.program-card__head,
+.program-week__head,
+.program-application__fields,
+.program-preview__item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.program-weeks-control {
+  width: min(8rem, 100%);
+}
+.program-schedule,
+.program-week,
+.program-week__sessions,
+.program-application,
+.program-preview,
+.program-preview__week,
+.program-preview__week > div {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-2);
+}
+.program-week {
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-page);
+}
+.program-week__head > div:first-child,
+.program-application > header {
+  display: grid;
+  gap: .15rem;
+}
+.program-week__head label { width: min(22rem, 100%); }
+.program-week__empty,
+.program-preview__empty,
+.program-card__notice {
+  margin: 0;
+  padding: var(--space-3);
+  color: var(--text-supporting);
+  text-align: center;
+}
+.program-session {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(8rem, 11rem) minmax(8rem, auto);
+  min-width: 0;
   gap: var(--space-2);
   align-items: end;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+.program-session__identity,
+.program-session__day {
+  display: grid;
+  min-width: 0;
+  gap: .2rem;
+}
+.program-session__identity strong,
+.program-session__identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.program-session__identity small,
+.program-session__day > span,
+.program-preview__item small,
+.program-preview__item time {
+  color: var(--text-supporting);
+  font-size: var(--text-xs);
+}
+.program-session__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+.program-session__actions .button { min-height: 2.5rem; }
+.program-session__menu .action-menu__popover { min-width: 12rem; }
+.program-application {
+  padding: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+.program-application h4,
+.program-preview__week h5 { margin: 0; }
+.program-application__fields > label { width: 100%; }
+.program-preview__week {
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-page);
+}
+.program-preview__item {
+  justify-content: flex-start;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+.program-preview__item time { width: 10.5rem; flex: 0 0 auto; }
+.program-preview__item span { display: grid; min-width: 0; }
+.workout-student-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--selection-soft);
 }
 .program-inline-form {
   display: grid;
@@ -4685,6 +4824,13 @@ body { color: var(--text-primary); font-weight: var(--type-weight-body); }
 .training-grid .workout-preview__placeholder { grid-column: 1 / -1; }
 
 @media (max-width: 1180px) {
+  .program-session {
+    grid-template-columns: minmax(0, 1fr) minmax(8rem, 11rem);
+  }
+  .program-session__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
   .workout-builder { grid-template-columns: 1fr; }
   .workout-builder > form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
   .workout-builder > form > :is(.quick-entry, .workout-form-actions) { grid-column: 1 / -1; }
@@ -4694,8 +4840,16 @@ body { color: var(--text-primary); font-weight: var(--type-weight-body); }
 @media (max-width: 760px) {
   .programming-library__head,
   .programming-card { align-items: stretch; flex-direction: column; }
-  .programming-card__controls { width: 100%; }
-  .programming-card__controls form { grid-template-columns: 1fr; }
+  .program-card__head,
+  .program-week__head,
+  .program-application__fields,
+  .program-preview__item { align-items: stretch; flex-direction: column; }
+  .program-weeks-control,
+  .program-week__head label { width: 100%; }
+  .program-session { grid-template-columns: minmax(0, 1fr); }
+  .program-session__actions { justify-content: flex-end; }
+  .program-preview__item time { width: auto; }
+  .workout-student-context { align-items: stretch; flex-direction: column; }
   .program-inline-form { grid-template-columns: 1fr; }
   .workout-builder { padding: var(--space-3); }
   .workout-builder > form { display: grid; grid-template-columns: 1fr; }

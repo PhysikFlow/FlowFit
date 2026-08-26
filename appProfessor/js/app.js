@@ -2,11 +2,11 @@ import { hydrateIcons, svgIcon } from "../../appAluno/js/core/icons.js?v=build-2
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260813-1";
 import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260818-1";
 import { InstallManager } from "../../appAluno/js/core/install.js?v=build-20260816-2";
-import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260822-1";
+import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260825-1";
 import { applyStudentProfile, effectiveStudentName, studentProfileRepository } from "../../appAluno/js/data/repositories/student-profile-repository.js?v=build-20260822-1";
 import { authRepository } from "../../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6";
 import { themeRepository } from "../../appAluno/js/data/repositories/theme-repository.js?v=build-20260823-1";
-import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260823-2";
+import { PUBLISHED_WORKOUTS_KEY, createWorkoutFromProfessorForm, parseExerciseLine, workoutDateInputValue, workoutRepository, workoutStartTimestamp } from "../../appAluno/js/data/repositories/workout-repository.js?v=build-20260825-1";
 import { WORKOUT_SESSIONS_KEY, sessionRepository } from "../../appAluno/js/data/repositories/session-repository.js?v=build-20260823-2";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "../../appAluno/js/components/custom-select.js?v=build-20260816-1";
@@ -15,17 +15,20 @@ import { createNavigation } from "./core/navigation.js?v=build-20260816-1";
 import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v=build-20260822-1";
 import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260818-1";
 import { initAgendaPlanner } from "./screens/agenda/agenda-planner.js?v=build-20260821-2";
-import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=build-20260816-1";
+import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=build-20260825-1";
 import { createRepdbPicker } from "./screens/workouts/repdb-picker.js?v=build-20260823-1";
-import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260822-1";
+import { createStudentsScreen } from "./screens/students/students-screen.js?v=build-20260825-2";
 import { createWorkoutPdfExporter } from "./pdf/workout-pdf-exporter.js?v=build-20260820-2";
 import { escapeHtml, formatUpdatedAt, formatVolume, initialsFromName, normalizeEmail, normalizeSearch } from "./utils/formatters.js?v=build-20260816-1";
-import { createProfessorViewState } from "./state/view-state.js?v=build-20260816-1";
+import { createProfessorViewState } from "./state/view-state.js?v=build-20260825-1";
 import { createRefreshCoordinator } from "../../appAluno/js/core/refresh-coordinator.js?v=build-20260820-1";
 import { installFrozenBackdrop } from "../../appAluno/js/core/frozen-backdrop.js?v=build-20260821-3";
 import { getRepdbPoseUrls, getRepdbPosterUrl, normalizeRepdbMetadata } from "../../appAluno/js/data/repdb/repdb-catalog.js?v=build-20260823-1";
-import { programmingRepository } from "../../appAluno/js/data/repositories/programming-repository.js?v=build-20260823-2";
+import { programmingRepository } from "../../appAluno/js/data/repositories/programming-repository.js?v=build-20260825-2";
+import { buildProgramSchedule, compareProgramSessions } from "../../appAluno/js/data/program-schedule.js?v=build-20260825-1";
+import { createProgramAssignmentId, createProgramWorkoutCode, createProgramWorkoutId, processProgramApplicationOperation } from "../../appAluno/js/data/program-application.js?v=build-20260825-1";
 import { cloneTrainingDocument, formatPrescription, normalizePrescription as normalizeStructuredPrescription, parseQuickEntry } from "../../appAluno/js/data/training-domain.js?v=build-20260823-2";
+import { WORKOUT_DRAFT_CONTEXT, canMutatePrimaryWorkoutDraft } from "./state/workout-draft-policy.js?v=build-20260825-1";
 
 initCustomSelects();
 initAllDatePickers();
@@ -64,6 +67,14 @@ const assetCropZoom = document.querySelector("[data-asset-crop-zoom]");
 const assetCropConfirm = document.querySelector("[data-asset-crop-confirm]");
 const themeStatus = document.querySelector("[data-theme-status]");
 const studentSyncStatus = document.querySelector("[data-student-sync-status]");
+const studentFormFields = document.querySelector("[data-student-form-fields]");
+const studentInviteSuccess = document.querySelector("[data-student-invite-success]");
+const studentInviteSuccessName = document.querySelector("[data-student-invite-success-name]");
+const studentInviteSuccessAvatar = document.querySelector("[data-student-invite-success-avatar]");
+const studentInviteSuccessMessage = document.querySelector("[data-student-invite-success-message]");
+const studentInviteSuccessCopy = document.querySelector("[data-student-invite-success-copy]");
+const studentInviteSuccessWhatsapp = document.querySelector("[data-student-invite-success-whatsapp]");
+const studentInviteSuccessStatus = document.querySelector("[data-student-invite-success-status]");
 const workoutForm = document.querySelector("[data-workout-form]");
 const workoutSettings = document.querySelector("[data-workout-settings]");
 const workoutBuilderMode = document.querySelector("[data-workout-builder-mode]");
@@ -279,12 +290,14 @@ let workoutDraftExercises = [];
 let workoutDraftTextSignature = "";
 let workoutDraftDirty = false;
 let workoutDraftSaveTimer;
+let workoutDraftContext = WORKOUT_DRAFT_CONTEXT.PRIMARY;
 let repdbPicker;
 let selectedDraftExerciseKey = "";
 const wideTrainingEditorQuery = window.matchMedia("(min-width: 1600px)");
 let workoutDetailsOpen = wideTrainingEditorQuery.matches;
 let currentTemplateId = "";
 let workoutDomain = "students";
+let studentInviteSuccessStudentId = "";
 let workoutUndoStack = [];
 let workoutRedoStack = [];
 let draftFieldSnapshot = null;
@@ -960,11 +973,31 @@ const { navigate } = createNavigation({
 
 const setStudentFormOpen = (open, { focus = true } = {}) => {
   if (!studentFormPanel) return;
+  const wasOpen = studentFormPanel.open;
   if (open) setStudentSessionOpen(false, { focus: false });
-  if (open && !studentFormPanel.open) studentFormPanel.showModal();
+  if (open && !wasOpen) {
+    resetStudentCreateDialog();
+    studentFormPanel.showModal();
+  }
   if (!open && studentFormPanel.open) studentFormPanel.close();
+  if (!open) resetStudentCreateDialog();
   if (open && focus) window.setTimeout(() => studentFormPanel.querySelector("input, select, textarea")?.focus(), 80);
 };
+
+function resetStudentCreateDialog() {
+  studentInviteSuccessStudentId = "";
+  if (studentFormFields) studentFormFields.hidden = false;
+  if (studentInviteSuccess) studentInviteSuccess.hidden = true;
+  if (studentInviteSuccessMessage) studentInviteSuccessMessage.value = "";
+  if (studentInviteSuccessWhatsapp) {
+    studentInviteSuccessWhatsapp.href = "#";
+    studentInviteSuccessWhatsapp.classList.add("is-disabled");
+    studentInviteSuccessWhatsapp.setAttribute("aria-disabled", "true");
+  }
+  studentFormPanel?.querySelector("[data-student-form]")?.reset();
+  setStudentSyncStatus("Mesmo email atualiza este vínculo; outros personais não são afetados.", "");
+  refreshCustomSelects(studentFormPanel);
+}
 
 const setWorkoutBuilderOpen = (open, { focus = true } = {}) => {
   if (!workoutBuilder) return;
@@ -1063,6 +1096,9 @@ const getWorkoutBlocks = (workout) => {
 const getPublishedWorkoutForStudent = (student) => workouts.find((workout) => workout.studentId === student.id)
   || workouts.find((workout) => workout.studentKey === student.studentKey);
 
+const getPublishedWorkoutsForStudent = (student) => workouts.filter((workout) => workout.studentId === student.id
+  || (student.studentKey && workout.studentKey === student.studentKey));
+
 const syncStudentWorkout = (workout) => {
   students = students.map((student) => {
     const matchesStudent = workout.studentId
@@ -1135,6 +1171,35 @@ const refreshStudents = async ({ silent = false } = {}) => {
     result.synced ? "synced" : "warning"
   );
   return { ...result, students: enrichedStudents, profilesSynced: profileResult.synced };
+};
+
+let pendingStudentSyncPromise = null;
+const syncPendingStudents = ({ silent = true } = {}) => {
+  if (pendingStudentSyncPromise) return pendingStudentSyncPromise;
+  pendingStudentSyncPromise = (async () => {
+    const pending = studentRepository.listStudents().filter((student) => (
+      ["pending", "syncing", "failed"].includes(student.syncStatus)
+      && (!authContext?.coachId || student.coachId === authContext.coachId)
+    ));
+    if (!pending.length) return { synced: true, total: 0 };
+    if (!silent) setStudentSyncStatus(`Sincronizando ${pending.length} aluno(s)...`, "");
+    let synced = 0;
+    for (const student of pending) {
+      const result = await studentRepository.syncStudent(student);
+      if (result.synced) synced += 1;
+    }
+    applyStudents(studentRepository.listStudents());
+    if (!silent) {
+      setStudentSyncStatus(
+        synced === pending.length ? "Alunos sincronizados." : `${pending.length - synced} aluno(s) aguardando conexão.`,
+        synced === pending.length ? "synced" : "warning"
+      );
+    }
+    return { synced: synced === pending.length, total: pending.length, completed: synced };
+  })().finally(() => {
+    pendingStudentSyncPromise = null;
+  });
+  return pendingStudentSyncPromise;
 };
 
 const refreshPublishedWorkouts = async ({ silent = false } = {}) => {
@@ -1267,7 +1332,7 @@ const {
 const renderInviteTools = () => {
   if (!inviteStudentOptions || !inviteMessage || !whatsappInvite) return;
   const previousValue = inviteStudentOptions.value;
-  const hasStudents = students.some((student) => student.inviteToken);
+  const hasStudents = students.length > 0;
 
   inviteStudentOptions.disabled = !hasStudents;
   copyInviteButton?.toggleAttribute("disabled", !hasStudents);
@@ -1290,22 +1355,95 @@ const renderInviteTools = () => {
   }).join("");
   if (students.some((student) => student.id === previousValue)) inviteStudentOptions.value = previousValue;
 
-  const selected = students.find((student) => student.id === inviteStudentOptions.value && student.inviteToken)
-    || students.find((student) => student.inviteToken);
+  const selected = students.find((student) => student.id === inviteStudentOptions.value) || students[0];
   if (selected) inviteStudentOptions.value = selected.id;
   const message = buildInviteMessage(selected);
-  const expired = isInviteExpired(selected);
+  const expired = !selected?.inviteToken || isInviteExpired(selected);
   inviteMessage.value = message;
   whatsappInvite.href = expired ? "#" : `https://wa.me/?text=${encodeURIComponent(message)}`;
   whatsappInvite.classList.toggle("is-disabled", expired);
   whatsappInvite.setAttribute("aria-disabled", String(expired));
   if (copyInviteButton) copyInviteButton.textContent = expired ? "Gerar novo convite" : "Copiar convite";
   const selectedName = effectiveStudentName(selected);
-  if (expired) setInviteStatus(`O convite de ${selectedName} expirou. Gere um novo link.`, "warning");
+  if (!selected?.inviteToken) setInviteStatus(`O cadastro de ${selectedName} está salvo. Gere o convite quando houver conexão.`, "warning");
+  else if (expired) setInviteStatus(`O convite de ${selectedName} expirou. Gere um novo link.`, "warning");
   else if (selected.inviteStatus === "accepted") setInviteStatus(`${selectedName} já ativou o acesso.`, "synced");
   else if (selected.email) setInviteStatus(`Link opcional: ${selectedName} também pode entrar diretamente com o email cadastrado.`, "synced");
   else setInviteStatus(`Convite necessário: o email será definido no primeiro acesso de ${selectedName}.`, "warning");
   refreshCustomSelects(inviteStudentOptions);
+};
+
+const ensureFreshStudentInvite = async (student, setFeedback) => {
+  if (!student) return { ready: false, student: null };
+  if (student.inviteToken && !isInviteExpired(student)) return { ready: true, student };
+  setFeedback?.("Gerando um novo convite pessoal...", "");
+  const renewal = await studentRepository.renewInvite(student);
+  if (!renewal.renewed) {
+    setFeedback?.("Aluno cadastrado, mas o convite não pôde ser gerado. Tente novamente quando houver conexão.", "warning");
+    return { ready: false, student };
+  }
+  const renewedStudent = renewal.student;
+  applyStudents([renewedStudent, ...students.filter((item) => item.id !== renewedStudent.id)]);
+  return { ready: true, student: renewedStudent };
+};
+
+const copyStudentInvite = async (student, { setFeedback, messageElement, onReady } = {}) => {
+  const prepared = await ensureFreshStudentInvite(student, setFeedback);
+  if (!prepared.ready) return prepared;
+  const message = buildInviteMessage(prepared.student);
+  if (!message) {
+    setFeedback?.("Aluno cadastrado, mas o convite ainda não está disponível.", "warning");
+    return { ready: false, student: prepared.student };
+  }
+  onReady?.(prepared.student, message);
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(message);
+    copied = true;
+    setFeedback?.("Convite copiado para a área de transferência.", "synced");
+    showToast("Convite copiado.");
+  } catch {
+    if (messageElement) {
+      messageElement.value = message;
+      messageElement.focus();
+      messageElement.select();
+    }
+    setFeedback?.("Não consegui copiar automaticamente. Selecione o texto e copie manualmente.", "warning");
+  }
+  return { ready: true, copied, student: prepared.student, message };
+};
+
+const syncStudentInviteSuccess = (student, statusMessage = "") => {
+  if (!studentInviteSuccess || !student) return;
+  const name = effectiveStudentName(student);
+  const message = buildInviteMessage(student);
+  studentInviteSuccessStudentId = student.id;
+  if (studentInviteSuccessName) studentInviteSuccessName.textContent = name;
+  if (studentInviteSuccessAvatar) {
+    studentInviteSuccessAvatar.innerHTML = student.photoUrl
+      ? `<img src="${escapeHtml(student.photoUrl)}" alt="Foto de ${escapeHtml(name)}">`
+      : escapeHtml(initialsFromName(name));
+  }
+  if (studentInviteSuccessMessage) studentInviteSuccessMessage.value = message;
+  if (studentInviteSuccessCopy) studentInviteSuccessCopy.textContent = message ? "Copiar convite" : "Tentar gerar convite";
+  if (studentInviteSuccessWhatsapp) {
+    studentInviteSuccessWhatsapp.href = message ? `https://wa.me/?text=${encodeURIComponent(message)}` : "#";
+    studentInviteSuccessWhatsapp.classList.toggle("is-disabled", !message);
+    studentInviteSuccessWhatsapp.setAttribute("aria-disabled", String(!message));
+  }
+  setStatus(
+    studentInviteSuccessStatus,
+    statusMessage || (message ? "Convite pronto para enviar." : "O aluno foi criado. Gere o convite quando a conexão estiver disponível."),
+    message ? "synced" : "warning"
+  );
+};
+
+const showStudentInviteSuccess = (student) => {
+  if (!studentInviteSuccess || !studentFormFields) return;
+  studentFormFields.hidden = true;
+  studentInviteSuccess.hidden = false;
+  syncStudentInviteSuccess(student);
+  window.setTimeout(() => studentInviteSuccessCopy?.focus(), 80);
 };
 
 const renderStudentOptions = () => {
@@ -1324,6 +1462,7 @@ const renderStudentOptions = () => {
     select.disabled = false;
     if (submitButton) submitButton.disabled = true;
     renderInviteTools();
+    syncWorkoutSubmitLabel();
     return;
   }
 
@@ -1336,7 +1475,23 @@ const renderStudentOptions = () => {
   }).join("");
   if (students.some((student) => student.id === previousValue)) select.value = previousValue;
   renderInviteTools();
+  syncWorkoutSubmitLabel();
 };
+
+function syncWorkoutSubmitLabel() {
+  if (!workoutSubmit || !workoutForm) return;
+  const selectedId = String(workoutForm.elements.namedItem("student")?.value || "");
+  const student = students.find((item) => item.id === selectedId);
+  workoutSubmit.disabled = !student;
+  if (!student) {
+    workoutSubmit.textContent = "Escolha o aluno para publicar";
+    return;
+  }
+  const name = effectiveStudentName(student);
+  workoutSubmit.textContent = editingWorkoutId
+    ? `Salvar e republicar para ${name}`
+    : `Publicar treino para ${name}`;
+}
 
 const createDraftExerciseKey = () => globalThis.crypto?.randomUUID?.()
   || `draft-exercise-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -1447,6 +1602,7 @@ const serializeWorkoutDraft = ({ builderOpen = !workoutBuilder?.hidden } = {}) =
 
 const saveWorkoutDraftLocally = ({ builderOpen = !workoutBuilder?.hidden, notify = false } = {}) => {
   clearTimeout(workoutDraftSaveTimer);
+  if (!canMutatePrimaryWorkoutDraft(workoutDraftContext)) return false;
   const draft = serializeWorkoutDraft({ builderOpen });
   if (!draft) return false;
   const hasContent = draft.exercises.length || String(draft.fields?.title || "").trim();
@@ -1462,13 +1618,16 @@ const saveWorkoutDraftLocally = ({ builderOpen = !workoutBuilder?.hidden, notify
 
 const scheduleWorkoutDraftSave = () => {
   clearTimeout(workoutDraftSaveTimer);
+  if (!canMutatePrimaryWorkoutDraft(workoutDraftContext)) return;
   workoutDraftSaveTimer = window.setTimeout(() => saveWorkoutDraftLocally(), WORKOUT_DRAFT_SAVE_DELAY_MS);
 };
 
 const clearStoredWorkoutDraft = () => {
   clearTimeout(workoutDraftSaveTimer);
+  if (!canMutatePrimaryWorkoutDraft(workoutDraftContext)) return false;
   Platform.storage.remove(getWorkoutDraftStorageKey());
   restoredWorkoutDraftSavedAt = "";
+  return true;
 };
 
 const markWorkoutDraftChanged = () => {
@@ -1478,6 +1637,7 @@ const markWorkoutDraftChanged = () => {
 
 const restoreStoredWorkoutDraft = ({ open = false } = {}) => {
   if (!workoutForm) return false;
+  workoutDraftContext = WORKOUT_DRAFT_CONTEXT.PRIMARY;
   const saved = Platform.storage.get(getWorkoutDraftStorageKey(), null);
   if (!saved?.fields || !Array.isArray(saved.exercises)) return false;
   if (saved.savedAt && saved.savedAt === restoredWorkoutDraftSavedAt && workoutDraftExercises.length) {
@@ -1516,8 +1676,8 @@ const setWorkoutEditingMode = (workout = null) => {
       ? "Salvar alterações republica o treino para o mesmo aluno. Ele recebe na próxima abertura ou atualização do app."
       : "Ao publicar, o aluno recebe esse treino no app na próxima abertura ou atualização.";
   }
-  if (workoutSubmit) workoutSubmit.textContent = workout ? "Salvar alterações e republicar" : "Publicar treino para o aluno";
   cancelWorkoutEditButton?.toggleAttribute("hidden", !workout);
+  syncWorkoutSubmitLabel();
 };
 
 const workoutToEditableTitle = (workout) => workout.title || "Novo treino";
@@ -1528,6 +1688,7 @@ const workoutToEditableBlocks = (workout) => (workout.exercises || [])
 
 const loadWorkoutForEditing = (workout) => {
   if (!workoutForm || !workout) return;
+  workoutDraftContext = WORKOUT_DRAFT_CONTEXT.ISOLATED;
   clearStoredWorkoutDraft();
   currentTemplateId = workout.templateId || "";
   const studentSelect = workoutForm.querySelector("[name='student']");
@@ -1537,7 +1698,9 @@ const loadWorkoutForEditing = (workout) => {
   const startsAtInput = workoutForm.querySelector("[name='startsAt']");
   const blocksInput = workoutForm.querySelector("[name='blocks']");
 
-  if (studentSelect && students.some((student) => student.id === workout.studentId)) studentSelect.value = workout.studentId;
+  const linkedStudent = students.find((student) => student.id === workout.studentId)
+    || students.find((student) => workout.studentKey && student.studentKey === workout.studentKey);
+  if (studentSelect) studentSelect.value = linkedStudent?.id || "";
   if (titleInput) titleInput.value = workoutToEditableTitle(workout);
   if (objectiveInput) objectiveInput.value = workout.focus || "";
   if (levelInput) levelInput.value = workout.level || "";
@@ -1573,13 +1736,15 @@ const resetWorkoutFormMode = ({ resetForm = false, clearStored = false } = {}) =
   if (clearStored) clearStoredWorkoutDraft();
   setWorkoutEditingMode(null);
   renderWorkoutPreview();
+  workoutDraftContext = WORKOUT_DRAFT_CONTEXT.PRIMARY;
 };
 
-const loadTemplateForEditing = (template, { asCopy = false } = {}) => {
+const loadTemplateForEditing = (template, { asCopy = false, studentId = "" } = {}) => {
   if (!workoutForm || !template) return;
-  resetWorkoutFormMode({ resetForm: true, clearStored: true });
+  resetWorkoutFormMode({ resetForm: true });
+  workoutDraftContext = WORKOUT_DRAFT_CONTEXT.ISOLATED;
   currentTemplateId = asCopy ? "" : template.id;
-  workoutForm.elements.namedItem("student").value = "";
+  workoutForm.elements.namedItem("student").value = students.some((student) => student.id === studentId) ? studentId : "";
   workoutForm.elements.namedItem("title").value = asCopy ? `${template.name} - cópia` : template.name;
   workoutForm.elements.namedItem("objective").value = template.objective || "";
   workoutForm.elements.namedItem("level").value = template.level || "";
@@ -1594,6 +1759,8 @@ const loadTemplateForEditing = (template, { asCopy = false } = {}) => {
   if (workoutBuilderTitle) workoutBuilderTitle.textContent = asCopy ? "Criar modelo a partir de uma cópia" : `Editando modelo “${template.name}”`;
   if (workoutBuilderCopy) workoutBuilderCopy.textContent = "Modelos não dependem de aluno e só afetam atribuições futuras quando você decidir usá-los.";
   setWorkoutBuilderOpen(true, { focus: false });
+  refreshCustomSelects(workoutForm);
+  syncWorkoutSubmitLabel();
   renderWorkoutPreview();
 };
 
@@ -1605,6 +1772,7 @@ const {
   viewState,
   getSessionsForStudent,
   getPublishedWorkoutForStudent,
+  getPublishedWorkoutsForStudent,
   isInviteExpired,
   effortLabel,
   painLabel,
@@ -2289,6 +2457,8 @@ const { render: renderWorkouts } = createWorkoutsScreen({
   getWorkouts: () => workouts,
   getSearchQuery: () => viewState.workoutSearchQuery,
   getFilter: () => viewState.workoutFilter,
+  getStudentId: () => viewState.workoutStudentId,
+  getStudentById: (studentId) => students.find((student) => student.id === studentId),
   getWorkoutStage,
   getWorkoutBlocks,
   getWorkoutSyncLabel,
@@ -2301,11 +2471,110 @@ const renderProgramStudentOptions = () => students.map((student) => {
   return `<option value="${escapeHtml(student.id)}"${student.email ? ` data-description="${escapeHtml(student.email)}"` : ""}>${escapeHtml(name)}</option>`;
 }).join("");
 
+const createProgramSessionId = () => `program-session-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`}`;
+const programDayOptions = (selectedDay) => Array.from({ length: 7 }, (_, index) => index + 1)
+  .map((day) => `<option value="${day}"${day === Number(selectedDay) ? " selected" : ""}>Dia ${day}</option>`).join("");
+const orderedProgramSessions = (program) => [...program.sessions].sort(compareProgramSessions);
+const programSessionTemplate = (session, templates) => templates.find((template) => template.id === session.templateId) || null;
+const nextProgramDay = (program, week) => {
+  const used = new Set(program.sessions.filter((session) => Number(session.week) === Number(week)).map((session) => Number(session.day)));
+  return Array.from({ length: 7 }, (_, index) => index + 1).find((day) => !used.has(day)) || 7;
+};
+const nextProgramPosition = (sessions, week, day) => sessions
+  .filter((session) => Number(session.week) === Number(week) && Number(session.day) === Number(day))
+  .reduce((maximum, session) => Math.max(maximum, Number(session.position || 0)), -1) + 1;
+
+const persistProgramDefinition = (program, changes, message = "Programa atualizado.") => {
+  programmingRepository.saveProgram({
+    ...program,
+    ...changes,
+    syncStatus: "pending",
+    updatedAt: new Date().toISOString()
+  });
+  programmingRepository.syncLibraries();
+  renderProgrammingWorkspace();
+  if (message) showToast(message);
+};
+
+const formatProgramPreviewDate = (date) => new Intl.DateTimeFormat("pt-BR", {
+  weekday: "short", day: "2-digit", month: "short", year: "numeric"
+}).format(date).replace(".", "");
+
+const getProgramApplicationState = (form) => {
+  const program = programmingRepository.listPrograms().find((item) => item.id === form?.dataset.assignProgram);
+  const student = students.find((item) => item.id === form?.elements.namedItem("student")?.value);
+  const startsAt = String(form?.elements.namedItem("startsAt")?.value || "");
+  const schedule = program && startsAt ? buildProgramSchedule(program, startsAt) : [];
+  const hasValidDates = schedule.every((session) => session.startsAt instanceof Date && Number.isFinite(session.startsAt.getTime()));
+  const templates = programmingRepository.listTemplates();
+  const missingTemplates = schedule.filter((session) => !programSessionTemplate(session, templates));
+  return { program, student, startsAt, schedule, templates, missingTemplates, hasValidDates };
+};
+
+const renderProgramAssignmentPreview = (form) => {
+  if (!form) return;
+  const preview = form.querySelector("[data-program-preview]");
+  const submit = form.querySelector("button[type='submit']");
+  const { student, startsAt, schedule, templates, missingTemplates, hasValidDates } = getProgramApplicationState(form);
+  if (submit) {
+    submit.disabled = !student || !startsAt || !schedule.length || !hasValidDates || Boolean(missingTemplates.length);
+    submit.textContent = student && schedule.length
+      ? `Programar ${schedule.length} ${schedule.length === 1 ? "sessão" : "sessões"} para ${effectiveStudentName(student)}`
+      : "Escolha o aluno para programar";
+  }
+  if (!preview) return;
+  if (!startsAt) {
+    preview.innerHTML = `<div class="program-preview__empty">Escolha a data inicial para ver as datas reais.</div>`;
+    return;
+  }
+  if (!schedule.length) {
+    preview.innerHTML = `<div class="program-preview__empty">Adicione ao menos uma sessão antes de aplicar.</div>`;
+    return;
+  }
+  if (!hasValidDates) {
+    preview.innerHTML = `<div class="program-preview__empty">Informe uma data inicial válida.</div>`;
+    return;
+  }
+  const weeks = [...new Set(schedule.map((session) => session.week))];
+  preview.innerHTML = `${missingTemplates.length ? `<p class="form-status is-warning">${missingTemplates.length} sessão(ões) usam um modelo indisponível. Corrija antes de publicar.</p>` : ""}${weeks.map((week) => {
+    const sessions = schedule.filter((session) => session.week === week);
+    return `<section class="program-preview__week"><h5>Semana ${week}</h5><div>${sessions.map((session) => {
+      const template = programSessionTemplate(session, templates);
+      return `<article class="program-preview__item"><time datetime="${session.startsAt.toISOString()}">${escapeHtml(formatProgramPreviewDate(session.startsAt))}</time><span><strong>${escapeHtml(template?.name || session.title || "Modelo indisponível")}</strong><small>Dia ${session.day}${sessions.filter((item) => item.day === session.day).length > 1 ? ` · ordem ${sessions.filter((item) => item.day === session.day).findIndex((item) => item.id === session.id) + 1}` : ""}</small></span></article>`;
+    }).join("")}</div></section>`;
+  }).join("")}`;
+};
+
 const renderProgramCard = (program, templates) => {
   const assignments = programmingRepository.listAssignments().filter((item) => item.programId === program.id && item.status !== "cancelled");
-  return `<article class="programming-card programming-card--program"><div><span class="eyebrow">${program.weeks} semanas</span><h3>${escapeHtml(program.name)}</h3><p>${program.sessions.length} sessões programadas · ${assignments.length} atribuição(ões)</p></div>
-    <div class="programming-card__controls">${templates.length ? `<label>Adicionar modelo<select data-program-template="${escapeHtml(program.id)}"><option value="">Escolha...</option>${templates.map((template) => `<option value="${escapeHtml(template.id)}">${escapeHtml(template.name)}</option>`).join("")}</select></label>` : ""}
-    ${students.length && program.sessions.length ? `<form data-assign-program="${escapeHtml(program.id)}"><label>Aplicar ao aluno<select name="student" data-avatar="true" data-show-description="true" required><option value="">Escolha...</option>${renderProgramStudentOptions()}</select></label><label>Início<input type="date" name="startsAt" value="${workoutDateInputValue(new Date())}" required></label><button class="button" type="submit">Programar</button></form>` : `<small>${students.length ? "Adicione ao menos uma sessão para aplicar." : "Cadastre um aluno para aplicar o programa."}</small>`}</div></article>`;
+  const ordered = orderedProgramSessions(program);
+  const weekSections = Array.from({ length: program.weeks }, (_, index) => index + 1).map((week) => {
+    const weekSessions = ordered.filter((session) => session.week === week);
+    const rows = weekSessions.map((session) => {
+      const template = programSessionTemplate(session, templates);
+      const sameDay = weekSessions.filter((item) => item.day === session.day);
+      const order = sameDay.findIndex((item) => item.id === session.id);
+      return `<article class="program-session" data-program-session="${escapeHtml(session.id)}">
+        <div class="program-session__identity"><strong>${escapeHtml(template?.name || session.title || "Modelo indisponível")}</strong><small>Semana ${week} · Dia ${session.day}${sameDay.length > 1 ? ` · ordem ${order + 1} de ${sameDay.length}` : ""}</small></div>
+        <label class="program-session__day"><span>Dia relativo</span><select data-program-session-day="${escapeHtml(session.id)}" data-program-id="${escapeHtml(program.id)}">${programDayOptions(session.day)}</select></label>
+        <div class="program-session__actions" aria-label="Organizar ${escapeHtml(template?.name || session.title || "sessão")}">
+          <button class="icon-button" type="button" data-program-session-order="${escapeHtml(session.id)}" data-program-id="${escapeHtml(program.id)}" data-direction="-1"${order <= 0 ? " disabled" : ""} aria-label="Mover antes no mesmo dia">↑</button>
+          <button class="icon-button" type="button" data-program-session-order="${escapeHtml(session.id)}" data-program-id="${escapeHtml(program.id)}" data-direction="1"${order < 0 || order >= sameDay.length - 1 ? " disabled" : ""} aria-label="Mover depois no mesmo dia">↓</button>
+          <details class="action-menu entity-menu program-session__menu"><summary class="icon-button" aria-label="Mais ações para ${escapeHtml(template?.name || session.title || "sessão")}">•••</summary><div class="action-menu__popover action-menu__popover--end">
+            <button type="button" data-program-session-week="${escapeHtml(session.id)}" data-program-id="${escapeHtml(program.id)}" data-direction="-1"${week <= 1 ? " disabled" : ""}>Semana anterior</button>
+            <button type="button" data-program-session-week="${escapeHtml(session.id)}" data-program-id="${escapeHtml(program.id)}" data-direction="1"${week >= program.weeks ? " disabled" : ""}>Próxima semana</button>
+            <button type="button" data-program-session-duplicate="${escapeHtml(session.id)}" data-program-id="${escapeHtml(program.id)}">Duplicar sessão</button>
+            <button class="is-danger" type="button" data-program-session-remove="${escapeHtml(session.id)}" data-program-id="${escapeHtml(program.id)}">Remover sessão</button>
+          </div></details>
+        </div>
+      </article>`;
+    }).join("");
+    return `<section class="program-week"><header class="program-week__head"><div><span class="eyebrow">Semana ${week}</span><small>${weekSessions.length} ${weekSessions.length === 1 ? "sessão" : "sessões"}</small></div>${templates.length ? `<label>Adicionar sessão<select data-program-add-session="${escapeHtml(program.id)}" data-program-week="${week}"><option value="">Escolha um modelo...</option>${templates.map((template) => `<option value="${escapeHtml(template.id)}">${escapeHtml(template.name)}</option>`).join("")}</select></label>` : ""}</header><div class="program-week__sessions">${rows || `<div class="program-week__empty">Nenhuma sessão nesta semana.</div>`}</div></section>`;
+  }).join("");
+  const application = students.length && program.sessions.length
+    ? `<form class="program-application" data-assign-program="${escapeHtml(program.id)}"><header><span class="eyebrow">Aplicar ao aluno</span><h4>Confira as datas antes de publicar</h4></header><div class="program-application__fields"><label>Aluno<select name="student" data-avatar="true" data-show-description="true" required><option value="">Escolha o aluno...</option>${renderProgramStudentOptions()}</select></label><label>Data inicial<input type="date" name="startsAt" value="${workoutDateInputValue(new Date())}" required></label></div><div class="program-preview" data-program-preview aria-live="polite"></div><button class="button" type="submit" disabled>Escolha o aluno para programar</button></form>`
+    : `<p class="program-card__notice">${students.length ? "Adicione ao menos uma sessão para aplicar." : "Cadastre um aluno para aplicar o programa."}</p>`;
+  return `<article class="programming-card programming-card--program"><header class="program-card__head"><div><span class="eyebrow">Programa</span><h3>${escapeHtml(program.name)}</h3><p>${program.sessions.length} sessões · ${assignments.length} atribuição(ões)</p></div><label class="program-weeks-control">Semanas<input type="number" min="1" max="104" value="${program.weeks}" data-program-weeks="${escapeHtml(program.id)}"></label></header><div class="program-schedule">${weekSections}</div>${application}</article>`;
 };
 
 previewList?.addEventListener("focusin", (event) => {
@@ -2340,6 +2609,52 @@ const renderProgrammingWorkspace = () => {
     programmingLibrary.innerHTML = `<header class="programming-library__head"><div><h2>Rascunhos</h2><p>Conteúdo editorial ainda não publicado.</p></div></header>${stored ? `<article class="programming-card"><div><span class="eyebrow">Salvo ${formatUpdatedAt(stored.savedAt)}</span><h3>${escapeHtml(stored.fields?.title || "Treino sem nome")}</h3><p>${stored.exercises?.length || 0} exercícios</p></div><button class="button" type="button" data-open-stored-draft>Continuar</button></article>` : `<article class="empty-state"><strong>Nenhum rascunho.</strong><small>Falhas de rede aparecem como publicação pendente, não aqui.</small></article>`}`;
   }
   refreshCustomSelects(programmingLibrary);
+  programmingLibrary.querySelectorAll("[data-assign-program]").forEach((form) => {
+    const startsAt = form.elements.namedItem("startsAt");
+    if (startsAt) refreshDatePicker(startsAt);
+    renderProgramAssignmentPreview(form);
+  });
+};
+
+const openStudentProgramming = (student) => {
+  if (!student) return;
+  const candidates = getPublishedWorkoutsForStudent(student);
+  if (!candidates.length) {
+    if (workoutDraftDirty) saveWorkoutDraftLocally({ builderOpen: false });
+    const hasDraft = workoutDraftDirty || Boolean(Platform.storage.get(getWorkoutDraftStorageKey(), null));
+    navigate("workouts");
+    workoutDomain = "students";
+    viewState.workoutStudentId = student.id;
+    renderProgrammingWorkspace();
+    renderWorkouts();
+    if (hasDraft) {
+      setWorkoutBuilderOpen(false, { focus: false });
+      showToast("Rascunho preservado. Feche ou publique-o antes de criar outra programação.");
+      return;
+    }
+    resetWorkoutFormMode();
+    const studentSelect = workoutForm?.elements.namedItem("student");
+    if (studentSelect) studentSelect.value = student.id;
+    refreshCustomSelects(workoutForm);
+    syncWorkoutSubmitLabel();
+    focusWorkoutForm();
+    return;
+  }
+  if (workoutDraftDirty) saveWorkoutDraftLocally({ builderOpen: false });
+  const hasDraft = workoutDraftDirty || Boolean(Platform.storage.get(getWorkoutDraftStorageKey(), null));
+  navigate("workouts");
+  workoutDomain = "students";
+  viewState.workoutStudentId = student.id;
+  renderProgrammingWorkspace();
+  renderWorkouts();
+  if (candidates.length === 1 && !hasDraft) {
+    loadWorkoutForEditing(candidates[0]);
+    return;
+  }
+  setWorkoutBuilderOpen(false, { focus: false });
+  showToast(hasDraft
+    ? `Rascunho preservado. Escolha a programação de ${effectiveStudentName(student)} na lista.`
+    : `Escolha qual programação de ${effectiveStudentName(student)} deseja abrir.`);
 };
 
 const renderDuplicateWorkoutStudents = (selectedStudentId = "") => {
@@ -2706,41 +3021,53 @@ document.querySelector("[data-student-form]")?.addEventListener("submit", async 
     result.synced && !limitExceeded ? "synced" : "warning"
   );
   if (result.synced) showToast(existingStudent ? "Aluno atualizado." : "Aluno cadastrado.");
+  else if (!existingStudent && !String(draft.email || "").trim()) {
+    showToast("Aluno salvo neste aparelho. O convite depende de conexão.");
+  }
   event.currentTarget.reset();
+  if (result.synced && !existingStudent && !String(draft.email || "").trim()) {
+    showStudentInviteSuccess(result.student || savedStudent);
+    return;
+  }
   setStudentFormOpen(false, { focus: false });
 });
 
 inviteStudentOptions?.addEventListener("change", renderInviteTools);
 
 copyInviteButton?.addEventListener("click", async () => {
-  let selected = students.find((student) => student.id === inviteStudentOptions?.value);
-  if (selected && isInviteExpired(selected)) {
-    setInviteStatus("Gerando um novo convite pessoal...", "");
-    const renewal = await studentRepository.renewInvite(selected);
-    if (!renewal.renewed) {
-      setInviteStatus("Não foi possível renovar o convite. Tente novamente.", "warning");
-      return;
-    }
-    selected = renewal.student;
-    applyStudents([selected, ...students.filter((student) => student.id !== selected.id)]);
-    renderInviteTools();
-  }
-
-  const message = selected ? buildInviteMessage(selected) : inviteMessage?.value || "";
-  if (!message) {
+  const selected = students.find((student) => student.id === inviteStudentOptions?.value);
+  if (!selected) {
     setInviteStatus("Cadastre e selecione um aluno antes de copiar.", "warning");
     return;
   }
+  await copyStudentInvite(selected, {
+    setFeedback: setInviteStatus,
+    messageElement: inviteMessage,
+    onReady: () => renderInviteTools()
+  });
+});
 
-  try {
-    await navigator.clipboard.writeText(message);
-    setInviteStatus("Convite copiado para a área de transferência.", "synced");
-    showToast("Convite copiado.");
-  } catch {
-    inviteMessage?.focus();
-    inviteMessage?.select();
-    setInviteStatus("Não consegui copiar automaticamente. Selecione o texto e copie manualmente.", "warning");
+studentInviteSuccessCopy?.addEventListener("click", async () => {
+  const student = students.find((item) => item.id === studentInviteSuccessStudentId);
+  if (!student) {
+    setStatus(studentInviteSuccessStatus, "O aluno foi criado, mas não encontrei o vínculo local para gerar o convite.", "warning");
+    return;
   }
+  const result = await copyStudentInvite(student, {
+    setFeedback: (message, state) => setStatus(studentInviteSuccessStatus, message, state),
+    messageElement: studentInviteSuccessMessage,
+    onReady: (renewedStudent) => syncStudentInviteSuccess(renewedStudent)
+  });
+  if (result.copied) syncStudentInviteSuccess(result.student, "Convite copiado para a área de transferência.");
+});
+
+studentInviteSuccessWhatsapp?.addEventListener("click", (event) => {
+  if (studentInviteSuccessWhatsapp.getAttribute("aria-disabled") === "true") event.preventDefault();
+});
+
+document.querySelector("[data-student-invite-success-later]")?.addEventListener("click", () => {
+  setStudentFormOpen(false, { focus: false });
+  showToast("Aluno mantido. O convite continua disponível na lista de alunos.");
 });
 
 studentImportInput?.addEventListener("change", () => {
@@ -2866,6 +3193,49 @@ const syncPendingWorkoutPublishes = () => {
     return syncedCount;
   })().finally(() => { publishQueueSyncPromise = null; });
   return publishQueueSyncPromise;
+};
+
+let programApplicationSyncPromise = null;
+const syncPendingProgramApplications = () => {
+  if (programApplicationSyncPromise) return programApplicationSyncPromise;
+  programApplicationSyncPromise = (async () => {
+    const queue = programmingRepository.listProgramApplications();
+    const results = [];
+    for (const operation of queue) {
+      const result = await processProgramApplicationOperation(operation, {
+        syncAssignment: async (assignment) => {
+          programmingRepository.saveAssignment({ ...assignment, syncStatus: "pending" });
+          const syncResult = await programmingRepository.syncLibraries();
+          const current = programmingRepository.listAssignments().find((item) => item.id === assignment.id);
+          return { ...syncResult, synced: Boolean(syncResult.synced && current?.syncStatus === "synced") };
+        },
+        publishWorkout: async (workout) => {
+          const linkedStudent = students.find((student) => student.id === workout.studentId);
+          const publishResult = await workoutRepository.syncPublishedWorkout(workout, linkedStudent);
+          if (publishResult.workout) {
+            applyPublishedWorkouts([publishResult.workout, ...workouts.filter((item) => item.id !== publishResult.workout.id)]);
+          }
+          return publishResult;
+        },
+        onProgress: (nextOperation) => programmingRepository.updateQueuedProgramApplication(nextOperation)
+      });
+      if (result.synced) programmingRepository.removeQueuedProgramApplication(operation.id);
+      else programmingRepository.updateQueuedProgramApplication(result.operation);
+      results.push({ id: operation.id, ...result });
+    }
+    if (queue.length) {
+      const completed = results.reduce((total, result) => total + result.completed, 0);
+      const total = results.reduce((sum, result) => sum + result.total, 0);
+      setWorkoutSyncStatus(
+        results.every((result) => result.synced)
+          ? "Programações pendentes sincronizadas."
+          : `${completed} de ${total} sessões confirmadas; o restante será retomado automaticamente.`,
+        results.every((result) => result.synced) ? "synced" : "warning"
+      );
+    }
+    return results;
+  })().finally(() => { programApplicationSyncPromise = null; });
+  return programApplicationSyncPromise;
 };
 
 duplicateWorkoutForm?.addEventListener("submit", async (event) => {
@@ -3148,7 +3518,10 @@ workoutForm?.addEventListener("change", (event) => {
   if (previewList?.contains(event.target)) return;
   const detailInput = event.target.closest("[data-draft-exercise-field]");
   if (detailInput) updateDraftExerciseField(detailInput);
-  else markWorkoutDraftChanged();
+  else {
+    if (event.target.matches("[name='student']")) syncWorkoutSubmitLabel();
+    markWorkoutDraftChanged();
+  }
 });
 
 const handleWideTrainingEditorChange = (event) => {
@@ -3169,7 +3542,8 @@ workoutForm?.elements.namedItem("templateSource")?.addEventListener("change", (e
     refreshCustomSelects(event.currentTarget);
     return;
   }
-  loadTemplateForEditing(template);
+  const studentId = String(workoutForm.elements.namedItem("student")?.value || "");
+  loadTemplateForEditing(template, { studentId });
 });
 
 previewList?.addEventListener("input", (event) => {
@@ -3390,8 +3764,10 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (event.target.closest("[data-new-template]")) {
-    resetWorkoutFormMode({ resetForm: true, clearStored: true });
+    resetWorkoutFormMode({ resetForm: true });
+    workoutDraftContext = WORKOUT_DRAFT_CONTEXT.ISOLATED;
     workoutForm.elements.namedItem("student").value = "";
+    syncWorkoutSubmitLabel();
     if (workoutBuilderMode) workoutBuilderMode.textContent = "Novo modelo";
     if (workoutBuilderTitle) workoutBuilderTitle.textContent = "Criar modelo reutilizável";
     setWorkoutBuilderOpen(true, { focus: false });
@@ -3403,11 +3779,14 @@ document.addEventListener("click", async (event) => {
     const id = templateAction.dataset.useTemplate || templateAction.dataset.editTemplate || templateAction.dataset.duplicateTemplate;
     const template = programmingRepository.listTemplates().find((item) => item.id === id);
     if (!template) return;
-    loadTemplateForEditing(template, { asCopy: Boolean(templateAction.dataset.duplicateTemplate) });
-    if (templateAction.dataset.useTemplate && students[0]) {
-      workoutForm.elements.namedItem("student").value = students[0].id;
-      refreshCustomSelects(workoutForm);
-    }
+    const activeStudents = students.filter((student) => student.status === "Ativo");
+    const contextualStudentId = templateAction.dataset.useTemplate && activeStudents.length === 1
+      ? activeStudents[0].id
+      : "";
+    loadTemplateForEditing(template, {
+      asCopy: Boolean(templateAction.dataset.duplicateTemplate),
+      studentId: contextualStudentId
+    });
     return;
   }
   if (event.target.closest("[data-open-stored-draft]")) {
@@ -3450,7 +3829,11 @@ document.addEventListener("click", async (event) => {
     }
 
     if (action === "new-workout") {
-      resetWorkoutFormMode({ resetForm: true, clearStored: true });
+      if (restoreStoredWorkoutDraft({ open: true })) {
+        showToast("Rascunho preservado e reaberto.");
+        return;
+      }
+      resetWorkoutFormMode({ resetForm: true });
       const studentSelect = document.querySelector("[data-student-options]");
       if (studentSelect && student) studentSelect.value = student.id;
       refreshCustomSelects(studentSelect);
@@ -3498,23 +3881,36 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const retryStudentSync = event.target.closest("[data-student-retry-sync]");
+  if (retryStudentSync) {
+    retryStudentSync.closest("details")?.removeAttribute("open");
+    const student = students.find((item) => item.id === retryStudentSync.dataset.studentRetrySync);
+    if (student) {
+      studentRepository.saveStudent({ ...student, syncStatus: "pending", syncError: "" });
+      await syncPendingStudents({ silent: false });
+    }
+    return;
+  }
+
+  const clearWorkoutStudentContext = event.target.closest("[data-clear-workout-student-context]");
+  if (clearWorkoutStudentContext) {
+    viewState.workoutStudentId = "";
+    renderWorkouts();
+    return;
+  }
+
+  const openStudentProgrammingButton = event.target.closest("[data-open-student-programming]");
+  if (openStudentProgrammingButton) {
+    const student = students.find((item) => item.id === openStudentProgrammingButton.dataset.openStudentProgramming);
+    openStudentProgramming(student);
+    return;
+  }
+
   const studentAction = event.target.closest("[data-student-action]");
   if (studentAction) {
     const student = students.find((item) => item.id === studentAction.dataset.studentAction);
-    navigate("workouts");
-    if (student) {
-      const publishedWorkout = getPublishedWorkoutForStudent(student);
-      if (publishedWorkout) {
-        loadWorkoutForEditing(publishedWorkout);
-        return;
-      }
-      const studentSelect = document.querySelector("[data-student-options]");
-      if (studentSelect) studentSelect.value = student.id;
-      refreshCustomSelects(studentSelect);
-      resetWorkoutFormMode({ clearStored: true });
-      renderWorkoutPreview();
-    }
-    focusWorkoutForm();
+    openStudentProgramming(student);
+    return;
   }
 
   const workoutAction = event.target.closest("[data-workout-action]");
@@ -3569,42 +3965,57 @@ programmingLibrary?.addEventListener("submit", async (event) => {
   const assignmentForm = event.target.closest("[data-assign-program]");
   if (assignmentForm) {
     event.preventDefault();
-    const program = programmingRepository.listPrograms().find((item) => item.id === assignmentForm.dataset.assignProgram);
-    const data = new FormData(assignmentForm);
-    const student = students.find((item) => item.id === data.get("student"));
-    if (!program || !student) return;
-    const submit = assignmentForm.querySelector("button[type='submit']");
-    submit.disabled = true;
-    const base = new Date(`${data.get("startsAt")}T00:00:00`);
-    const assignment = programmingRepository.saveAssignment({
-      studentId: student.id, programId: program.id, programRevision: 1,
-      startsAt: base.toISOString(), status: "active", syncStatus: "pending"
-    });
-    const librarySync = await programmingRepository.syncLibraries();
-    if (!librarySync.synced) {
-      submit.disabled = false;
-      showToast("Programa preservado localmente; não foi possível confirmar a atribuição.");
+    const { program, student, startsAt, schedule, templates, missingTemplates, hasValidDates } = getProgramApplicationState(assignmentForm);
+    if (!program || !student || !startsAt || !schedule.length || !hasValidDates || missingTemplates.length) {
+      renderProgramAssignmentPreview(assignmentForm);
+      showToast("Escolha aluno e data e corrija as sessões antes de programar.");
       return;
     }
-    let published = 0;
-    for (const session of program.sessions) {
-      const template = programmingRepository.listTemplates().find((item) => item.id === session.templateId);
-      if (!template) continue;
-      const startsAt = new Date(base);
-      startsAt.setDate(startsAt.getDate() + ((Number(session.week || 1) - 1) * 7) + (Number(session.day || 1) - 1));
+    const submit = assignmentForm.querySelector("button[type='submit']");
+    submit.disabled = true;
+    const assignmentStartsAt = new Date(`${startsAt}T00:00:00`).toISOString();
+    const assignmentId = createProgramAssignmentId({ programId: program.id, studentId: student.id, startsAt });
+    const assignment = programmingRepository.saveAssignment({
+      id: assignmentId,
+      studentId: student.id, programId: program.id, programRevision: 1,
+      startsAt: assignmentStartsAt, status: "active", syncStatus: "pending"
+    });
+    const programWorkouts = schedule.flatMap((session) => {
+      const template = templates.find((item) => item.id === session.templateId);
+      if (!template) return [];
       const document = programmingRepository.instantiateTemplate(template, { programAssignmentId: assignment.id });
-      const workout = createWorkoutFromProfessorForm({
+      return [createWorkoutFromProfessorForm({
         student, coachId: authContext.coachId, title: document.title, template: document.objective,
-        level: document.level, exercises: document.exercises.map(toPublishedExercise), startsAt,
+        level: document.level, exercises: document.exercises.map(toPublishedExercise), startsAt: session.startsAt,
+        code: createProgramWorkoutCode({ ...session, occurrenceId: session.id }),
+        workoutId: createProgramWorkoutId({ assignmentId, occurrenceId: session.id }),
         version: 1, templateId: template.id, programAssignmentId: assignment.id
+      })];
+    });
+    const previousApplication = programmingRepository.listProgramApplications()
+      .find((operation) => operation.assignment?.id === assignmentId);
+    const previouslyCompleted = new Set(previousApplication?.completedWorkoutIds || []);
+    programWorkouts.forEach((workout) => {
+      const existing = workouts.find((item) => item.id === workout.id);
+      workoutRepository.savePublishedWorkout(previouslyCompleted.has(workout.id) && existing ? existing : workout);
+    });
+    if (programWorkouts.length) {
+      studentRepository.saveStudent({
+        ...student,
+        workout: programWorkouts[0].title,
+        nextAction: "Ver treino publicado",
+        updatedAt: new Date().toISOString()
       });
-      const result = await saveAndPublishWorkout(workout, { pendingMessage: `Programando ${document.title}...` });
-      if (result.synced) published += 1;
     }
+    applyPublishedWorkouts(workoutRepository.listPublishedWorkouts());
+    const queued = programmingRepository.enqueueProgramApplication({ assignment, workouts: programWorkouts });
+    setWorkoutSyncStatus(`Programação salva localmente; confirmando ${programWorkouts.length} sessões...`, "");
+    const results = await syncPendingProgramApplications();
+    const result = results.find((item) => item.id === queued.id);
     renderProgrammingWorkspace();
-    showToast(published === program.sessions.length
+    showToast(result?.synced
       ? `Programa aplicado a ${effectiveStudentName(student)}.`
-      : `${published} de ${program.sessions.length} sessões publicadas; as demais ficaram pendentes.`);
+      : `${result?.completed || 0} de ${programWorkouts.length} sessões confirmadas; as demais serão retomadas automaticamente.`);
     return;
   }
   const form = event.target.closest("[data-create-program]");
@@ -3618,17 +4029,92 @@ programmingLibrary?.addEventListener("submit", async (event) => {
 });
 
 programmingLibrary?.addEventListener("change", (event) => {
-  const select = event.target.closest("[data-program-template]");
-  if (!select?.value) return;
-  const program = programmingRepository.listPrograms().find((item) => item.id === select.dataset.programTemplate);
-  const template = programmingRepository.listTemplates().find((item) => item.id === select.value);
-  if (!program || !template) return;
-  programmingRepository.saveProgram({ ...program, sessions: [...program.sessions, {
-    week: 1, day: program.sessions.length + 1, templateId: template.id, title: template.name
-  }], syncStatus: "pending" });
-  programmingRepository.syncLibraries();
-  renderProgrammingWorkspace();
-  showToast("Sessão adicionada ao programa.");
+  const assignmentForm = event.target.closest("[data-assign-program]");
+  if (assignmentForm) {
+    renderProgramAssignmentPreview(assignmentForm);
+    return;
+  }
+  const weeksInput = event.target.closest("[data-program-weeks]");
+  if (weeksInput) {
+    const program = programmingRepository.listPrograms().find((item) => item.id === weeksInput.dataset.programWeeks);
+    if (!program) return;
+    const weeks = Math.max(1, Math.min(104, Number(weeksInput.value || 1)));
+    const occupiedRemovedWeek = program.sessions.some((session) => Number(session.week) > weeks);
+    if (occupiedRemovedWeek) {
+      weeksInput.value = program.weeks;
+      showToast("Mova ou remova as sessões das semanas finais antes de reduzir o programa.");
+      return;
+    }
+    persistProgramDefinition(program, { weeks }, weeks > program.weeks ? "Semana adicionada ao programa." : "Quantidade de semanas atualizada.");
+    return;
+  }
+  const addSelect = event.target.closest("[data-program-add-session]");
+  if (addSelect?.value) {
+    const program = programmingRepository.listPrograms().find((item) => item.id === addSelect.dataset.programAddSession);
+    const template = programmingRepository.listTemplates().find((item) => item.id === addSelect.value);
+    const week = Number(addSelect.dataset.programWeek || 1);
+    if (!program || !template) return;
+    const day = nextProgramDay(program, week);
+    persistProgramDefinition(program, { sessions: [...program.sessions, {
+      id: createProgramSessionId(), week, day,
+      position: nextProgramPosition(program.sessions, week, day),
+      templateId: template.id, title: template.name
+    }] }, `Sessão adicionada à semana ${week}.`);
+    return;
+  }
+  const daySelect = event.target.closest("[data-program-session-day]");
+  if (daySelect) {
+    const program = programmingRepository.listPrograms().find((item) => item.id === daySelect.dataset.programId);
+    const session = program?.sessions.find((item) => item.id === daySelect.dataset.programSessionDay);
+    if (!program || !session) return;
+    const day = Number(daySelect.value);
+    const sessions = program.sessions.map((item) => item.id === session.id
+      ? { ...item, day, position: nextProgramPosition(program.sessions.filter((candidate) => candidate.id !== item.id), item.week, day) }
+      : item);
+    persistProgramDefinition(program, { sessions }, "Dia da sessão atualizado.");
+  }
+});
+
+programmingLibrary?.addEventListener("input", (event) => {
+  const assignmentForm = event.target.closest("[data-assign-program]");
+  if (assignmentForm && event.target.matches("[name='startsAt']")) renderProgramAssignmentPreview(assignmentForm);
+});
+
+programmingLibrary?.addEventListener("click", (event) => {
+  const action = event.target.closest("[data-program-session-order], [data-program-session-week], [data-program-session-duplicate], [data-program-session-remove]");
+  if (!action) return;
+  const program = programmingRepository.listPrograms().find((item) => item.id === action.dataset.programId);
+  const sessionId = action.dataset.programSessionOrder || action.dataset.programSessionWeek
+    || action.dataset.programSessionDuplicate || action.dataset.programSessionRemove;
+  const session = program?.sessions.find((item) => item.id === sessionId);
+  if (!program || !session) return;
+  if (action.hasAttribute("data-program-session-remove")) {
+    persistProgramDefinition(program, { sessions: program.sessions.filter((item) => item.id !== session.id) }, "Sessão removida do programa.");
+    return;
+  }
+  if (action.hasAttribute("data-program-session-duplicate")) {
+    const position = nextProgramPosition(program.sessions, session.week, session.day);
+    persistProgramDefinition(program, { sessions: [...program.sessions, { ...session, id: createProgramSessionId(), position }] }, "Ocorrência duplicada.");
+    return;
+  }
+  if (action.hasAttribute("data-program-session-week")) {
+    const week = Number(session.week) + Number(action.dataset.direction || 0);
+    if (week < 1 || week > program.weeks) return;
+    const position = nextProgramPosition(program.sessions.filter((item) => item.id !== session.id), week, session.day);
+    persistProgramDefinition(program, { sessions: program.sessions.map((item) => item.id === session.id ? { ...item, week, position } : item) }, `Sessão movida para a semana ${week}.`);
+    return;
+  }
+  const sameDay = orderedProgramSessions(program).filter((item) => item.week === session.week && item.day === session.day);
+  const currentIndex = sameDay.findIndex((item) => item.id === session.id);
+  const targetIndex = currentIndex + Number(action.dataset.direction || 0);
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= sameDay.length) return;
+  const target = sameDay[targetIndex];
+  const sessions = program.sessions.map((item) => {
+    if (item.id === session.id) return { ...item, position: target.position };
+    if (item.id === target.id) return { ...item, position: session.position };
+    return item;
+  });
+  persistProgramDefinition(program, { sessions }, "Ordem das sessões atualizada.");
 });
 
 // ── Close action menus on outside click ──────────────────────
@@ -3929,6 +4415,9 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
     renderAll();
   }
 
+  await syncPendingStudents({ silent: true });
+  if (isStale()) return false;
+
   const refreshResults = await refreshPanelData({ force: !isRevalidate });
   if (isStale()) return false;
   refreshResults.forEach((result, index) => {
@@ -3941,6 +4430,7 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
     const libraries = await programmingRepository.fetchLibraries();
     if (libraries.synced) renderProgrammingWorkspace();
     syncPendingWorkoutPublishes();
+    syncPendingProgramApplications();
   }
 
   if (!isRevalidate) {
@@ -4074,8 +4564,10 @@ const revalidateCoachAccess = () => {
 window.addEventListener("focus", () => revalidateCoachAccess());
 window.addEventListener("online", () => {
   panelRefresh.invalidate();
+  syncPendingStudents({ silent: false });
   programmingRepository.syncLibraries().then(() => programmingRepository.fetchLibraries()).then(renderProgrammingWorkspace);
   syncPendingWorkoutPublishes();
+  syncPendingProgramApplications();
   revalidateCoachAccess();
 });
 document.addEventListener("visibilitychange", () => {

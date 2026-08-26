@@ -2,7 +2,7 @@ import { DEMO_COACH_ID } from "../../config.js?v=build-20260809-6";
 import { Platform } from "../../core/platform.js?v=build-20260813-1";
 import { getSupabase } from "../../core/supabase.js?v=build-20260823-3";
 import { authRepository } from "./auth-repository.js?v=build-20260812-5";
-import { studentKeyFromName } from "./workout-repository.js?v=build-20260813-2";
+import { studentKeyFromName } from "./workout-repository.js?v=build-20260825-1";
 
 export const STUDENTS_KEY = "flowfit.students";
 
@@ -99,6 +99,8 @@ const normalizeStudent = (student) => {
     photoUrl: "",
     coachName: normalizeText(student?.coachName, "Personal"),
     coachHeadline: normalizeText(student?.coachHeadline, "Acompanhamento personalizado"),
+    syncStatus: normalizeText(student?.syncStatus, "synced"),
+    syncError: normalizeText(student?.syncError, ""),
     createdAt: normalizeText(student?.createdAt, updatedAt),
     updatedAt
   };
@@ -155,9 +157,28 @@ const toAppStudent = (row) => {
     inviteClaimedAt: row.invite_claimed_at,
     photoPath: "",
     photoUrl: "",
+    syncStatus: "synced",
+    syncError: "",
     createdAt: row.created_at,
     updatedAt: row.updated_at
   });
+};
+
+const NEEDS_SYNC = new Set(["pending", "syncing", "failed"]);
+
+export const reconcileStudentSnapshots = (cloudStudents = [], localStudents = [], { coachId = "" } = {}) => {
+  const scopedLocal = localStudents.map(normalizeStudent).filter((student) => !coachId || student.coachId === coachId);
+  const unrelatedLocal = localStudents.map(normalizeStudent).filter((student) => coachId && student.coachId !== coachId);
+  const cloud = cloudStudents.map((student) => normalizeStudent({ ...student, syncStatus: "synced", syncError: "" }));
+
+  // Uma resposta vazia e sem erro pode ser RLS/acesso temporariamente inconsistente.
+  // Ela nunca é evidência suficiente para apagar a única cópia local dos alunos.
+  if (!cloud.length && scopedLocal.length) {
+    return { students: mergeStudents(unrelatedLocal, scopedLocal), preservedLocal: true };
+  }
+
+  const pendingLocal = scopedLocal.filter((student) => NEEDS_SYNC.has(student.syncStatus));
+  return { students: mergeStudents(unrelatedLocal, pendingLocal, cloud), preservedLocal: false };
 };
 
 export const createStudentFromProfessorForm = ({ name, email, goal, status }) => {
@@ -177,6 +198,7 @@ export const createStudentFromProfessorForm = ({ name, email, goal, status }) =>
     workout: "Sem treino atribuído",
     adherence: 0,
     nextAction: "Criar primeiro treino",
+    syncStatus: "pending",
     createdAt: now,
     updatedAt: now
   });
@@ -196,10 +218,16 @@ export const studentRepository = {
 
   async syncStudent(student) {
     const authContext = await authRepository.getAuthContext();
-    const normalized = this.saveStudent({ ...student, coachId: authContext?.coachId || student?.coachId });
+    const normalized = this.saveStudent({
+      ...student,
+      coachId: authContext?.coachId || student?.coachId,
+      syncStatus: "syncing",
+      syncError: ""
+    });
     const client = await getSupabase();
     if (!client || !authContext?.user || !authRepository.canWriteAsCoach(authContext)) {
-      return { synced: false, reason: "not-authenticated-as-coach", student: normalized };
+      const pendingStudent = this.saveStudent({ ...normalized, syncStatus: "pending" });
+      return { synced: false, reason: "not-authenticated-as-coach", student: pendingStudent };
     }
 
     try {
@@ -208,11 +236,16 @@ export const studentRepository = {
         .upsert(toRow(normalized, authContext), { onConflict: "id" })
         .select(CLOUD_STUDENT_SELECT)
         .maybeSingle();
-      const syncedStudent = data ? toAppStudent(data) : normalized;
+      if (error) {
+        const failedStudent = this.saveStudent({ ...normalized, syncStatus: "failed", syncError: error.message || "sync-failed" });
+        return { synced: false, error, student: failedStudent };
+      }
+      const syncedStudent = data ? toAppStudent(data) : this.saveStudent({ ...normalized, syncStatus: "synced", syncError: "" });
       if (data) this.saveStudent(syncedStudent);
-      return { synced: !error, error, student: syncedStudent };
+      return { synced: true, student: syncedStudent };
     } catch (error) {
-      return { synced: false, error, student: normalized };
+      const failedStudent = this.saveStudent({ ...normalized, syncStatus: "failed", syncError: error?.message || "sync-failed" });
+      return { synced: false, error, student: failedStudent };
     }
   },
 
@@ -233,8 +266,9 @@ export const studentRepository = {
       if (error) return { synced: false, error, students: localStudents };
 
       const cloudStudents = (data || []).map(toAppStudent);
-      writeStudents(cloudStudents);
-      return { synced: true, students: cloudStudents };
+      const reconciled = reconcileStudentSnapshots(cloudStudents, localStudents, { coachId: authContext.coachId });
+      writeStudents(reconciled.students);
+      return { synced: true, students: reconciled.students, preservedLocal: reconciled.preservedLocal };
     } catch (error) {
       return { synced: false, error, students: localStudents };
     }

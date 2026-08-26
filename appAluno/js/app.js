@@ -4,10 +4,10 @@ import { Theme } from "./core/theme.js?v=build-20260818-1";
 import { hydrateIcons, svgIcon } from "./core/icons.js?v=build-20260822-1";
 import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260818-1";
 import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260812-6";
-import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260822-1";
+import { studentRepository } from "./data/repositories/student-repository.js?v=build-20260825-1";
 import { applyStudentProfile, effectiveStudentName, studentProfileRepository } from "./data/repositories/student-profile-repository.js?v=build-20260822-1";
 import { themeRepository } from "./data/repositories/theme-repository.js?v=build-20260823-1";
-import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260823-2";
+import { PUBLISHED_WORKOUTS_KEY, workoutDateInputValue, workoutRepository } from "./data/repositories/workout-repository.js?v=build-20260825-1";
 import { sessionRepository } from "./data/repositories/session-repository.js?v=build-20260823-2";
 import { createFeedback } from "./components/feedback.js?v=build-20260816-1";
 import { initCustomSelects, refreshCustomSelects } from "./components/custom-select.js?v=build-20260816-1";
@@ -30,6 +30,7 @@ import {
 } from "./utils/formatters.js?v=build-20260816-1";
 import { installFrozenBackdrop } from "./core/frozen-backdrop.js?v=build-20260821-3";
 import { getRepdbPoseUrls, normalizeRepdbMetadata } from "./data/repdb/repdb-catalog.js?v=build-20260823-1";
+import { isRunnerSystemEdgeStart, runnerSwipeActionForDelta, runnerSwipeDirectedDistance, runnerSwipeTranslation } from "./interaction/runner-swipe.js?v=build-20260825-1";
 
 initCustomSelects();
 hydrateIcons();
@@ -1170,14 +1171,14 @@ const getRunnerPrimaryCopy = (session = getActiveSession()) => session?.phase ==
       action: "skip-rest",
       button: "Pular descanso",
       aria: "Pular descanso atual",
-      swipeHint: "pular descanso →",
+      swipeHint: "← pular descanso",
       release: "Solte para pular o descanso"
     }
   : {
       action: "complete-set",
       button: "Concluir série",
       aria: "Concluir série atual",
-      swipeHint: "concluir →",
+      swipeHint: "← concluir",
       release: "Solte para concluir a série"
     };
 
@@ -1196,8 +1197,8 @@ const updateRunnerPrimaryAction = (session = getActiveSession()) => {
   button.textContent = copy.button;
   button.disabled = !isAvailable;
   if (hint) {
-    const correctionHint = getSessionEntries(session).length ? "← corrigir · " : "";
-    hint.textContent = `${correctionHint}${copy.swipeHint}`;
+    const correctionHint = getSessionEntries(session).length ? " · corrigir →" : "";
+    hint.textContent = `${copy.swipeHint}${correctionHint}`;
   }
 
   if (isResting) {
@@ -2498,6 +2499,7 @@ workoutRunner?.addEventListener("contextmenu", (event) => {
 
 workoutRunner?.addEventListener("pointerdown", (event) => {
   if (!event.isPrimary || event.pointerType === "mouse") return;
+  if (isRunnerSystemEdgeStart(event.clientX, window.innerWidth)) return;
   const session = getActiveSession();
   if (!session || !isRunnerPrimaryPhase(session.phase)) return;
   if (event.target.closest("input, textarea, select, iframe, video, dialog, [contenteditable], [data-adjust-runner]")) return;
@@ -2531,7 +2533,7 @@ workoutRunner?.addEventListener("pointermove", (event) => {
     }
     if (horizontalDistance <= verticalDistance * 1.25) return;
     runnerSwipe.axis = "horizontal";
-    runnerSwipe.direction = deltaX > 0 ? "correct" : "primary";
+    runnerSwipe.direction = runnerSwipeActionForDelta(deltaX);
     runnerSwipe.threshold = runnerSwipe.direction === "correct"
       ? runnerSwipe.correctionThreshold
       : runnerSwipe.primaryThreshold;
@@ -2541,7 +2543,7 @@ workoutRunner?.addEventListener("pointermove", (event) => {
   if (runnerSwipe.axis !== "horizontal") return;
   event.preventDefault();
   const isCorrection = runnerSwipe.direction === "correct";
-  const directedDistance = isCorrection ? deltaX : -deltaX;
+  const directedDistance = runnerSwipeDirectedDistance(deltaX, runnerSwipe.direction);
   const progress = Math.min(1, Math.max(0, directedDistance / runnerSwipe.threshold));
   const armed = progress >= 1 && (!isCorrection || runnerSwipe.canCorrect);
   if (armed && !runnerSwipe.armed) Platform.vibrate(12);
@@ -2550,7 +2552,7 @@ workoutRunner?.addEventListener("pointermove", (event) => {
   runnerActionBar?.classList.toggle("is-armed", armed);
   runnerActionBar?.classList.toggle("is-correcting", isCorrection);
   runnerActionBar?.style.setProperty("--swipe-progress", String(progress));
-  runnerActionBar?.style.setProperty("--swipe-translation", `${(isCorrection ? 1 : -1) * progress * 5.5}rem`);
+  runnerActionBar?.style.setProperty("--swipe-translation", runnerSwipeTranslation(progress, runnerSwipe.direction));
   const feedbackIcon = runnerSwipeFeedback?.querySelector("span");
   if (feedbackIcon) feedbackIcon.textContent = isCorrection ? "↶" : "✓";
   const feedbackLabel = runnerSwipeFeedback?.querySelector("strong");

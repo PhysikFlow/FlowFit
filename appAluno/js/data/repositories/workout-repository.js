@@ -4,6 +4,7 @@ import { DEMO_COACH_ID } from "../../config.js?v=build-20260809-6";
 import { authRepository } from "./auth-repository.js?v=build-20260812-5";
 import { normalizeRepdbMetadata } from "../repdb/repdb-catalog.js?v=build-20260823-1";
 import { formatPrescription, normalizePrescription as normalizeStructuredPrescription } from "../training-domain.js?v=build-20260823-2";
+import { compareProgramWorkoutCodes } from "../program-application.js?v=build-20260825-1";
 
 export const PUBLISHED_WORKOUTS_KEY = "flowfit.published-workouts";
 const MAX_LOCAL_PUBLISHED_WORKOUTS = 120;
@@ -303,6 +304,14 @@ const mergeWorkoutLists = (...lists) => {
     .slice(0, MAX_LOCAL_PUBLISHED_WORKOUTS);
 };
 
+export const compareWorkoutScheduleOrder = (a, b) => {
+  const programOrder = compareProgramWorkoutCodes(a?.code, b?.code);
+  if (programOrder !== null && programOrder !== 0) return programOrder;
+  return String(a?.code || "").localeCompare(String(b?.code || ""), "pt-BR", { numeric: true })
+    || String(a?.title || "").localeCompare(String(b?.title || ""), "pt-BR")
+    || new Date(b?.publishedAt || b?.updatedAt || 0) - new Date(a?.publishedAt || a?.updatedAt || 0);
+};
+
 export const parseExerciseLine = (line, index = 0, workoutId = "workout") => {
   const raw = normalizeText(line);
   const match = raw.match(/^(.*?)\s+(\d+)\s*x\s*(.+)$/i);
@@ -327,7 +336,7 @@ const readPublishedWorkouts = () => {
 
 const writePublishedWorkouts = (items) => Platform.storage.set(PUBLISHED_WORKOUTS_KEY, items);
 
-export const createWorkoutFromProfessorForm = ({ student, studentName, studentId, studentKey, coachId, title, template, level = "", blocks, exercises: providedExercises, workoutId, startsAt, version = 1, templateId = "", programAssignmentId = "" }) => {
+export const createWorkoutFromProfessorForm = ({ student, studentName, studentId, studentKey, coachId, title, code = "", template, level = "", blocks, exercises: providedExercises, workoutId, startsAt, version = 1, templateId = "", programAssignmentId = "" }) => {
   const owner = normalizeText(student?.name || studentName, "Aluno");
   const resolvedStudentKey = normalizeText(student?.studentKey || studentKey, studentKeyFromName(owner));
   const resolvedStudentId = normalizeText(student?.id || studentId, fallbackStudentIdFromKey(resolvedStudentKey));
@@ -351,7 +360,7 @@ export const createWorkoutFromProfessorForm = ({ student, studentName, studentId
   return {
     id,
     coachId: normalizeText(student?.coachId || coachId, DEMO_COACH_ID),
-    code: workoutTitle.match(/\bTreino\s+([A-Z0-9])/i)?.[1]?.toUpperCase() || "A",
+    code: normalizeText(code, workoutTitle.match(/\bTreino\s+([A-Z0-9])/i)?.[1]?.toUpperCase() || "A"),
     title: workoutTitle,
     focus: normalizeText(template, "Prescrição personalizada"),
     level: normalizeText(level),
@@ -810,12 +819,11 @@ export const workoutRepository = {
       .filter((item) => item.status === "published");
     const workouts = publishedWorkouts
       .filter((item) => workoutStartTimestamp(item.startsAt || item.updatedAt) <= now)
-      .sort((a, b) => a.code.localeCompare(b.code, "pt-BR", { numeric: true })
-        || a.title.localeCompare(b.title, "pt-BR")
-        || new Date(b.publishedAt || b.updatedAt || 0) - new Date(a.publishedAt || a.updatedAt || 0));
+      .sort(compareWorkoutScheduleOrder);
     const upcomingWorkouts = publishedWorkouts
       .filter((item) => workoutStartTimestamp(item.startsAt || item.updatedAt) > now)
-      .sort((a, b) => workoutStartTimestamp(a.startsAt || a.updatedAt) - workoutStartTimestamp(b.startsAt || b.updatedAt));
+      .sort((a, b) => workoutStartTimestamp(a.startsAt || a.updatedAt) - workoutStartTimestamp(b.startsAt || b.updatedAt)
+        || compareWorkoutScheduleOrder(a, b));
     return { ...result, workouts, upcomingWorkouts };
   },
 
@@ -829,12 +837,11 @@ export const workoutRepository = {
     ));
     const workouts = publishedWorkouts
       .filter((item) => workoutStartTimestamp(item.startsAt || item.updatedAt) <= now)
-      .sort((a, b) => a.code.localeCompare(b.code, "pt-BR", { numeric: true })
-        || a.title.localeCompare(b.title, "pt-BR")
-        || new Date(b.publishedAt || b.updatedAt || 0) - new Date(a.publishedAt || a.updatedAt || 0));
+      .sort(compareWorkoutScheduleOrder);
     const upcomingWorkouts = publishedWorkouts
       .filter((item) => workoutStartTimestamp(item.startsAt || item.updatedAt) > now)
-      .sort((a, b) => workoutStartTimestamp(a.startsAt || a.updatedAt) - workoutStartTimestamp(b.startsAt || b.updatedAt));
+      .sort((a, b) => workoutStartTimestamp(a.startsAt || a.updatedAt) - workoutStartTimestamp(b.startsAt || b.updatedAt)
+        || compareWorkoutScheduleOrder(a, b));
     return { synced: false, source: "cache", workouts, upcomingWorkouts };
   },
 

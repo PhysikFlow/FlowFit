@@ -6,6 +6,7 @@ export const createStudentsScreen = ({
   viewState,
   getSessionsForStudent,
   getPublishedWorkoutForStudent,
+  getPublishedWorkoutsForStudent,
   isInviteExpired,
   effortLabel,
   painLabel,
@@ -59,6 +60,7 @@ export const createStudentsScreen = ({
     const averageSets = totalSessions
       ? Math.round(sessions.reduce((sum, session) => sum + Number(session.completedSets || 0), 0) / totalSessions)
       : 0;
+    const publishedWorkouts = getPublishedWorkoutsForStudent(selectedStudent);
   
     const sessionCards = sessions.slice(0, 5).map((session) => {
       const setRows = aggregateSessionLogs(session.setLogs || []).slice(0, 8).map((log) => {
@@ -104,6 +106,7 @@ export const createStudentsScreen = ({
           ${contactLine ? `<p>${escapeHtml(contactLine)}</p>` : ""}
         </div>
         <div class="student-session-panel__actions">
+          ${publishedWorkouts.length ? `<button class="button button--quiet" type="button" data-open-student-programming="${escapeHtml(selectedStudent.id)}">Abrir programação</button>` : ""}
           <button class="button button--quiet" type="button" data-refresh-sessions>Atualizar</button>
         </div>
       </div>
@@ -175,6 +178,8 @@ export const createStudentsScreen = ({
       const accessLabel = accessState === "active" ? "Acesso ativo" : accessState === "expired" ? "Convite expirado" : "Convite pendente";
       const accessEmail = student.email || "Sem email de acesso";
       const contactLine = [accessEmail, student.phone].filter(Boolean).join(" · ");
+      const localSyncPending = ["pending", "syncing", "failed"].includes(student.syncStatus);
+      const localSyncLabel = student.syncStatus === "failed" ? "Falha ao sincronizar cadastro" : "Cadastro aguardando sincronização";
       const statusIsException = student.status && student.status !== "Ativo";
       const studentName = displayName(student);
       return `
@@ -189,6 +194,7 @@ export const createStudentsScreen = ({
             <small>Status e acesso</small>
             <span class="status-text${statusIsException ? " is-exception" : ""}">${escapeHtml(student.status)}</span>
             <span class="status-text${accessState === "active" ? "" : " is-exception"}" data-access-state="${accessState}">${escapeHtml(accessLabel)}</span>
+            ${localSyncPending ? `<span class="status-text is-exception">${escapeHtml(localSyncLabel)}</span>` : ""}
           </div>
           <div class="entity-row__field"><small>Última sessão</small><span>${escapeHtml(followupLabel)}</span></div>
           <div class="entity-row__actions">
@@ -199,6 +205,7 @@ export const createStudentsScreen = ({
               <summary class="icon-button" aria-label="Mais ações para ${escapeHtml(studentName)}">•••</summary>
               <div class="action-menu__popover">
                 <button type="button" data-student-invite="${escapeHtml(student.id)}">Enviar convite</button>
+                ${localSyncPending ? `<button type="button" data-student-retry-sync="${escapeHtml(student.id)}">Tentar sincronizar cadastro</button>` : ""}
                 ${publishedWorkout ? `<button type="button" data-student-action="${escapeHtml(student.id)}">Editar programação</button>` : ""}
               </div>
             </details>

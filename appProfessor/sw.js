@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-professor-v83";
+const CACHE_NAME = "flowfit-professor-v85";
 const REPDB_CACHE_NAME = "flowfit-repdb-2026.8.0-v1";
 const REPDB_ORIGIN = "https://cdn.jsdelivr.net";
 const REPDB_PATH_PREFIX = "/npm/@repdb/exercises@2026.8.0/";
@@ -7,18 +7,19 @@ const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./css/app.css?v=build-20260824-1",
-  "./js/app.js?v=build-20260824-1",
+  "./css/app.css?v=build-20260825-2",
+  "./js/app.js?v=build-20260825-2",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/core/navigation.js?v=build-20260816-1",
   "./js/screens/dashboard/dashboard-screen.js?v=build-20260822-1",
   "./js/screens/appearance/local-assets-editor.js?v=build-20260818-1",
-  "./js/screens/workouts/workouts-screen.js?v=build-20260816-1",
+  "./js/screens/workouts/workouts-screen.js?v=build-20260825-1",
   "./js/screens/workouts/repdb-picker.js?v=build-20260823-1",
   "./js/pdf/workout-pdf-exporter.js?v=build-20260820-2",
   "./js/pdf/workout-pdf-generator.js?v=build-20260820-2",
-  "./js/screens/students/students-screen.js?v=build-20260822-1",
-  "./js/state/view-state.js?v=build-20260816-1",
+  "./js/screens/students/students-screen.js?v=build-20260825-2",
+  "./js/state/view-state.js?v=build-20260825-1",
+  "./js/state/workout-draft-policy.js?v=build-20260825-1",
   "./js/utils/formatters.js?v=build-20260816-1",
   "./vendor/cropperjs/cropper.min.css?v=1.6.2",
   "./vendor/cropperjs/cropper.min.js?v=1.6.2",
@@ -72,11 +73,14 @@ const APP_SHELL = [
   "../appAluno/vendor/supabase/buffer.mjs",
   "../appAluno/js/data/repositories/auth-repository.js?v=build-20260812-6",
   "../appAluno/js/data/training-domain.js?v=build-20260823-2",
-  "../appAluno/js/data/repositories/programming-repository.js?v=build-20260823-2",
-  "../appAluno/js/data/repositories/student-repository.js?v=build-20260822-1",
+  "../appAluno/js/data/repositories/programming-repository.js?v=build-20260825-2",
+  "../appAluno/js/data/causal-sync.js?v=build-20260825-1",
+  "../appAluno/js/data/program-application.js?v=build-20260825-1",
+  "../appAluno/js/data/program-schedule.js?v=build-20260825-1",
+  "../appAluno/js/data/repositories/student-repository.js?v=build-20260825-1",
   "../appAluno/js/data/repositories/student-profile-repository.js?v=build-20260822-1",
   "../appAluno/js/data/repositories/theme-repository.js?v=build-20260823-1",
-  "../appAluno/js/data/repositories/workout-repository.js?v=build-20260823-2",
+  "../appAluno/js/data/repositories/workout-repository.js?v=build-20260825-1",
   "../appAluno/js/data/repdb/repdb-catalog.js?v=build-20260823-1",
   "../appAluno/js/data/repositories/session-repository.js?v=build-20260823-2",
   "./js/screens/agenda/agenda-planner.js?v=build-20260821-2"

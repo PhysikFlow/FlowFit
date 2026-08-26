@@ -5,6 +5,8 @@ export const createWorkoutsScreen = ({
   getWorkouts,
   getSearchQuery,
   getFilter,
+  getStudentId,
+  getStudentById,
   getWorkoutStage,
   getWorkoutBlocks,
   getWorkoutSyncLabel,
@@ -17,6 +19,9 @@ export const createWorkoutsScreen = ({
     const workouts = getWorkouts();
     const query = normalizeSearch(getSearchQuery());
     const filter = getFilter();
+    const studentId = String(getStudentId?.() || "");
+    const selectedStudent = studentId ? getStudentById?.(studentId) : null;
+    const effectiveStudentId = selectedStudent ? studentId : "";
     const visibleWorkouts = workouts.filter((workout) => {
       const stage = getWorkoutStage(workout);
       const matchesSearch = !query
@@ -24,10 +29,13 @@ export const createWorkoutsScreen = ({
       const matchesFilter = filter === "all"
         || (filter === "active" && stage.label === "Ativo")
         || (filter === "scheduled" && stage.label === "Agendado");
-      return matchesSearch && matchesFilter;
+      const matchesStudent = !effectiveStudentId
+        || workout.studentId === effectiveStudentId
+        || (selectedStudent?.studentKey && workout.studentKey === selectedStudent.studentKey);
+      return matchesSearch && matchesFilter && matchesStudent;
     });
 
-    setCount(query || filter !== "all"
+    setCount(query || filter !== "all" || effectiveStudentId
       ? `${visibleWorkouts.length} de ${workouts.length}`
       : `${workouts.length} ${workouts.length === 1 ? "publicado" : "publicados"}`);
     if (!list) return;
@@ -35,8 +43,9 @@ export const createWorkoutsScreen = ({
       list.innerHTML = `<article class="empty-state empty-state--action"><strong>Nenhum treino publicado</strong><small>Crie o primeiro treino para um aluno cadastrado.</small><button class="button" type="button" data-open-workout-form>Novo treino</button></article>`;
       return;
     }
+    const context = selectedStudent ? `<div class="workout-student-context" role="status"><span>Programação de <strong>${escapeHtml(selectedStudent.displayName || selectedStudent.name || "Aluno")}</strong></span><button class="button button--quiet" type="button" data-clear-workout-student-context>Ver todos</button></div>` : "";
     if (!visibleWorkouts.length) {
-      list.innerHTML = `<article class="empty-state"><strong>Nenhum treino encontrado</strong><small>Ajuste a busca ou o filtro selecionado.</small></article>`;
+      list.innerHTML = `${context}<article class="empty-state"><strong>Nenhum treino encontrado</strong><small>Ajuste a busca ou o filtro selecionado.</small></article>`;
       return;
     }
 
@@ -70,7 +79,7 @@ export const createWorkoutsScreen = ({
         </article>
       `;
     }).join("");
-    list.innerHTML = `
+    list.innerHTML = `${context}
       <div class="entity-list__header entity-list__header--workouts" aria-hidden="true">
         <span>Treino</span><span>Aluno</span><span>Estágio</span><span>Resumo</span><span>Atualização</span><span>Ações</span>
       </div>

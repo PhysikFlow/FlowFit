@@ -2,6 +2,9 @@ import { Platform } from "../../core/platform.js?v=build-20260813-1";
 import { getSupabase } from "../../core/supabase.js?v=build-20260823-3";
 import { authRepository } from "./auth-repository.js?v=build-20260812-5";
 import { cloneTrainingDocument, createRevisionSnapshot, normalizeWorkoutDocument } from "../training-domain.js?v=build-20260823-2";
+import { normalizeProgramSessionSlot } from "../program-schedule.js?v=build-20260825-1";
+import { createCausalSyncRunner } from "../causal-sync.js?v=build-20260825-1";
+import { createProgramApplicationOperation } from "../program-application.js?v=build-20260825-1";
 
 export const PROGRAMMING_KEYS = Object.freeze({
   definitions: "flowfit.programming.exercise-definitions",
@@ -53,23 +56,27 @@ const normalizeTemplate = (template = {}) => {
   };
 };
 
-const normalizeProgram = (program = {}) => ({
-  id: String(program.id || uid("program")),
-  name: String(program.name || "Novo programa").trim(),
-  objective: String(program.objective || "").trim(),
-  level: String(program.level || "").trim(),
-  weeks: Math.max(1, Number(program.weeks || 1)),
-  sessions: (Array.isArray(program.sessions) ? program.sessions : []).map((session, index) => ({
-    id: String(session.id || uid("program-session")),
-    week: Math.max(1, Number(session.week || 1)),
-    day: Math.max(1, Number(session.day || index + 1)),
+const normalizeProgram = (program = {}) => {
+  const programId = String(program.id || uid("program"));
+  const sessions = (Array.isArray(program.sessions) ? program.sessions : []).map((session, index) => ({
+    id: String(session.id || `${programId}-session-${index + 1}`),
+    ...normalizeProgramSessionSlot(session, index),
     templateId: String(session.templateId || ""),
-    title: String(session.title || "Sessão").trim(),
-    position: index
-  })),
-  syncStatus: program.syncStatus || "local",
-  updatedAt: program.updatedAt || now()
-});
+    title: String(session.title || "Sessão").trim()
+  }));
+  const occupiedWeeks = sessions.reduce((maximum, session) => Math.max(maximum, session.week), 1);
+  const requestedWeeks = Math.max(1, Math.trunc(Number(program.weeks)) || 1);
+  return {
+    id: programId,
+    name: String(program.name || "Novo programa").trim(),
+    objective: String(program.objective || "").trim(),
+    level: String(program.level || "").trim(),
+    weeks: Math.max(occupiedWeeks, requestedWeeks),
+    sessions,
+    syncStatus: program.syncStatus || "local",
+    updatedAt: program.updatedAt || now()
+  };
+};
 
 const normalizeAssignment = (assignment = {}) => ({
   id: String(assignment.id || uid("assignment")),
@@ -130,12 +137,76 @@ const mergeCloud = (local, cloud, normalize) => {
   return [...items.values()].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
 };
 
+const hasPendingLibraries = (repository) => [
+  ...repository.listDefinitions(),
+  ...repository.listTemplates(),
+  ...repository.listPrograms(),
+  ...repository.listAssignments()
+].some((item) => item.syncStatus !== "synced");
+
+const markSyncedIfUnchanged = (repository, collection, row, save) => {
+  const current = collection.call(repository).find((item) => item.id === row.id);
+  if (!current || current.updatedAt !== row.updated_at) return;
+  save.call(repository, { ...current, syncStatus: "synced" });
+};
+
+const syncLibrariesOnce = async (repository) => {
+  const authContext = await authRepository.getAuthContext();
+  const client = await getSupabase();
+  if (!client || !authRepository.canWriteAsCoach(authContext)) return { synced: false, reason: "offline-or-unauthorized" };
+  const definitionRows = repository.listDefinitions().filter((item) => item.syncStatus !== "synced").map((item) => definitionCloudRow(item, authContext.coachId));
+  const templateRows = repository.listTemplates().filter((item) => item.syncStatus !== "synced").map((item) => templateCloudRow(item, authContext.coachId));
+  const programRows = repository.listPrograms().filter((item) => item.syncStatus !== "synced").map((item) => programCloudRow(item, authContext.coachId));
+  const assignmentRows = repository.listAssignments().filter((item) => item.syncStatus !== "synced").map((item) => ({
+    id: item.id, coach_id: authContext.coachId, student_id: item.studentId, program_id: item.programId,
+    program_revision: item.programRevision, starts_at: item.startsAt, status: item.status, updated_at: item.updatedAt
+  }));
+  try {
+    if (definitionRows.length) {
+      const { error } = await client.from("exercise_definitions").upsert(definitionRows, { onConflict: "id" });
+      if (error) throw error;
+      definitionRows.forEach((row) => markSyncedIfUnchanged(repository, repository.listDefinitions, row, repository.saveDefinition));
+    }
+    if (templateRows.length) {
+      const { error } = await client.from("workout_templates").upsert(templateRows, { onConflict: "id" });
+      if (error) throw error;
+      const revisionRows = templateRows.map((row) => ({
+        id: `${row.id}-revision-${row.current_revision}`,
+        template_id: row.id,
+        coach_id: authContext.coachId,
+        revision: row.current_revision,
+        content: row.content
+      }));
+      const { error: revisionError } = await client.from("workout_template_revisions")
+        .upsert(revisionRows, { onConflict: "template_id,revision", ignoreDuplicates: true });
+      if (revisionError) throw revisionError;
+      templateRows.forEach((row) => markSyncedIfUnchanged(repository, repository.listTemplates, row, repository.saveTemplate));
+    }
+    if (programRows.length) {
+      const { error } = await client.from("program_templates").upsert(programRows, { onConflict: "id" });
+      if (error) throw error;
+      programRows.forEach((row) => markSyncedIfUnchanged(repository, repository.listPrograms, row, repository.saveProgram));
+    }
+    if (assignmentRows.length) {
+      const { error } = await client.from("program_assignments").upsert(assignmentRows, { onConflict: "id" });
+      if (error) throw error;
+      assignmentRows.forEach((row) => markSyncedIfUnchanged(repository, repository.listAssignments, row, repository.saveAssignment));
+    }
+    return { synced: true };
+  } catch (error) {
+    return { synced: false, error };
+  }
+};
+
+let librarySyncRunner = null;
+
 export const programmingRepository = {
   listDefinitions() { return read(PROGRAMMING_KEYS.definitions).map(normalizeDefinition); },
   listTemplates() { return read(PROGRAMMING_KEYS.templates).map(normalizeTemplate); },
   listPrograms() { return read(PROGRAMMING_KEYS.programs).map(normalizeProgram); },
   listAssignments() { return read(PROGRAMMING_KEYS.assignments).map(normalizeAssignment); },
-  listPublishQueue() { return read(PROGRAMMING_KEYS.queue); },
+  listPublishQueue() { return read(PROGRAMMING_KEYS.queue).filter((item) => item.intent !== "apply-program"); },
+  listProgramApplications() { return read(PROGRAMMING_KEYS.queue).filter((item) => item.intent === "apply-program"); },
 
   saveDefinition(value) { return upsertLocal(PROGRAMMING_KEYS.definitions, normalizeDefinition(value)); },
   saveTemplate(value) { return upsertLocal(PROGRAMMING_KEYS.templates, normalizeTemplate(value)); },
@@ -175,6 +246,22 @@ export const programmingRepository = {
     return operation;
   },
 
+  enqueueProgramApplication({ assignment, workouts }) {
+    const provisional = createProgramApplicationOperation({ assignment, workouts });
+    const previous = this.listProgramApplications().find((item) => item.id === provisional.id);
+    const operation = createProgramApplicationOperation({ assignment, workouts, previous });
+    return upsertLocal(PROGRAMMING_KEYS.queue, operation);
+  },
+
+  updateQueuedProgramApplication(operation) {
+    if (!operation?.id) return null;
+    return upsertLocal(PROGRAMMING_KEYS.queue, operation);
+  },
+
+  removeQueuedProgramApplication(id) {
+    write(PROGRAMMING_KEYS.queue, read(PROGRAMMING_KEYS.queue).filter((item) => item.id !== id));
+  },
+
   removeQueuedPublish(id) {
     write(PROGRAMMING_KEYS.queue, read(PROGRAMMING_KEYS.queue).filter((item) => item.id !== id));
   },
@@ -186,52 +273,13 @@ export const programmingRepository = {
   },
 
   async syncLibraries() {
-    const authContext = await authRepository.getAuthContext();
-    const client = await getSupabase();
-    if (!client || !authRepository.canWriteAsCoach(authContext)) return { synced: false, reason: "offline-or-unauthorized" };
-    const definitions = this.listDefinitions();
-    const definitionRows = definitions.filter((item) => item.syncStatus !== "synced").map((item) => definitionCloudRow(item, authContext.coachId));
-    const templateRows = this.listTemplates().filter((item) => item.syncStatus !== "synced").map((item) => templateCloudRow(item, authContext.coachId));
-    const programRows = this.listPrograms().filter((item) => item.syncStatus !== "synced").map((item) => programCloudRow(item, authContext.coachId));
-    const assignmentRows = this.listAssignments().filter((item) => item.syncStatus !== "synced").map((item) => ({
-      id: item.id, coach_id: authContext.coachId, student_id: item.studentId, program_id: item.programId,
-      program_revision: item.programRevision, starts_at: item.startsAt, status: item.status, updated_at: item.updatedAt
-    }));
-    try {
-      if (definitionRows.length) {
-        const { error } = await client.from("exercise_definitions").upsert(definitionRows, { onConflict: "id" });
-        if (error) throw error;
-        definitionRows.forEach((row) => this.saveDefinition({ ...this.listDefinitions().find((item) => item.id === row.id), syncStatus: "synced" }));
-      }
-      if (templateRows.length) {
-        const { error } = await client.from("workout_templates").upsert(templateRows, { onConflict: "id" });
-        if (error) throw error;
-        const revisionRows = templateRows.map((row) => ({
-          id: `${row.id}-revision-${row.current_revision}`,
-          template_id: row.id,
-          coach_id: authContext.coachId,
-          revision: row.current_revision,
-          content: row.content
-        }));
-        const { error: revisionError } = await client.from("workout_template_revisions")
-          .upsert(revisionRows, { onConflict: "template_id,revision", ignoreDuplicates: true });
-        if (revisionError) throw revisionError;
-        templateRows.forEach((row) => this.saveTemplate({ ...this.listTemplates().find((item) => item.id === row.id), syncStatus: "synced" }));
-      }
-      if (programRows.length) {
-        const { error } = await client.from("program_templates").upsert(programRows, { onConflict: "id" });
-        if (error) throw error;
-        programRows.forEach((row) => this.saveProgram({ ...this.listPrograms().find((item) => item.id === row.id), syncStatus: "synced" }));
-      }
-      if (assignmentRows.length) {
-        const { error } = await client.from("program_assignments").upsert(assignmentRows, { onConflict: "id" });
-        if (error) throw error;
-        assignmentRows.forEach((row) => this.saveAssignment({ ...this.listAssignments().find((item) => item.id === row.id), syncStatus: "synced" }));
-      }
-      return { synced: true };
-    } catch (error) {
-      return { synced: false, error };
+    if (!librarySyncRunner) {
+      librarySyncRunner = createCausalSyncRunner({
+        syncOnce: () => syncLibrariesOnce(this),
+        hasPending: () => hasPendingLibraries(this)
+      });
     }
+    return librarySyncRunner.run();
   },
 
   async fetchLibraries() {

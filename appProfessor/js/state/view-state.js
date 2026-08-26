@@ -5,5 +5,6 @@ export const createProfessorViewState = () => ({
   studentFilter: "all",
   workoutSearchQuery: "",
   workoutFilter: "all",
+  workoutStudentId: "",
   studentSessionOpen: false
 });
