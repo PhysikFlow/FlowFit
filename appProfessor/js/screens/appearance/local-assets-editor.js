@@ -12,6 +12,7 @@ export const createLocalAssetsEditor = ({
   uploadBrandAsset,
   removeBrandAsset,
   onRemoteBrandAssetChanged,
+  onBrandAssetsRendered,
   setBrandMark
 }) => {
   const brandInput = document.querySelector("[data-brand-input]");
@@ -97,6 +98,7 @@ export const createLocalAssetsEditor = ({
   
     setText("[data-logo-file-name]", assets.logoName || remote.logoPath?.split("/").pop() || "Nenhum arquivo selecionado");
     setText("[data-photo-file-name]", assets.photoName || remote.photoPath?.split("/").pop() || "Nenhum arquivo selecionado");
+    onBrandAssetsRendered?.({ logoSource, photoSource, logoFrameEnabled });
   };
   
   const LOCAL_ASSET_OUTPUT = Object.freeze({

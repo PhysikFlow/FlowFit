@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-aluno-v115";
+const CACHE_NAME = "flowfit-aluno-v116";
 const REPDB_CACHE_NAME = "flowfit-repdb-2026.8.0-v1";
 const REPDB_ORIGIN = "https://cdn.jsdelivr.net";
 const REPDB_PATH_PREFIX = "/npm/@repdb/exercises@2026.8.0/";
@@ -14,7 +14,7 @@ const APP_SHELL = [
   "./assets/icons/phosphor/icons.svg",
   "./assets/pwa/screenshots/login.png",
   "./css/tokens.css?v=build-20260816-1",
-  "./css/components.css?v=build-20260822-1",
+  "./css/components.css?v=build-20260827-1",
   "./css/fonts.css?v=build-20260817-1",
   "./assets/fonts/anton-400.woff2",
   "./assets/fonts/barlow-condensed-400.woff2",
@@ -41,7 +41,7 @@ const APP_SHELL = [
   "./vendor/cropperjs/cropper.min.css?v=1.6.2",
   "./vendor/cropperjs/cropper.min.js?v=1.6.2",
   "./css/app.css?v=build-20260823-2",
-  "./js/app.js?v=build-20260825-2",
+  "./js/app.js?v=build-20260827-1",
   "./js/components/custom-select.js?v=build-20260816-1",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/components/install-ui.js?v=build-20260816-3",
@@ -70,6 +70,8 @@ const APP_SHELL = [
   "./js/data/repositories/session-repository.js?v=build-20260823-2",
   "./js/config.js?v=build-20260809-6",
   "./js/core/brand-theme.js?v=build-20260818-1",
+  "./js/core/startup-bootstrap.js?v=build-20260827-1",
+  "./js/core/startup-brand.js?v=build-20260827-1",
   "./js/core/install.js?v=build-20260816-2",
   "./js/core/icons.js?v=build-20260822-1",
   "./js/core/date-picker.js?v=build-20260822-1",

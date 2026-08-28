@@ -1,6 +1,7 @@
 import { Platform } from "./core/platform.js?v=build-20260813-1";
 import { SESSION_PHASE, Store } from "./core/store.js?v=build-20260813-1";
 import { Theme } from "./core/theme.js?v=build-20260818-1";
+import { cacheStartupBrand, finishStartupSplash, getStartupBrand, hasStartupBrand } from "./core/startup-brand.js?v=build-20260827-1";
 import { hydrateIcons, svgIcon } from "./core/icons.js?v=build-20260822-1";
 import { LEGACY_REMOTE_THEME_KEY, LOCAL_BRAND_ASSETS_KEY, REMOTE_THEME_KEY } from "./core/brand-theme.js?v=build-20260818-1";
 import { authRepository } from "./data/repositories/auth-repository.js?v=build-20260812-6";
@@ -396,6 +397,7 @@ const setAuthChecking = (checking) => {
   if (authSessionCheck) authSessionCheck.hidden = !checking;
   if (authContent) authContent.hidden = checking;
   onboarding?.setAttribute("aria-busy", String(checking));
+  if (!checking) finishStartupSplash();
 };
 
 const getAuthRedirectUrl = () => {
@@ -504,6 +506,7 @@ const syncBrandAssets = () => {
   if (activeOptionPhoto) {
     setImageOrText(activeOptionPhoto, assets.photoDataUrl, getCoachInitials(appState.currentStudent?.coach), `Foto de ${appState.currentStudent?.coach || "Personal"}`);
   }
+  cacheStartupBrand(Theme.value, { logoSource: assets.logoDataUrl });
 };
 
 const applyPublishedBrandTheme = async () => {
@@ -512,8 +515,7 @@ const applyPublishedBrandTheme = async () => {
       authContext: runtimeAuthContext
     });
     if (!remote?.accent || !remote?.brandName) {
-      Theme.reset();
-      syncThemeControls();
+      // Uma leitura vazia/transitória nunca apaga a última identidade válida.
       return remote;
     }
     Theme.apply(remote);
@@ -1686,12 +1688,12 @@ const refreshStudentSessionHistory = async () => {
   return result;
 };
 
-const refreshStudentRemoteData = ({ force = false } = {}) => Promise.allSettled([
-  studentRefresh.run("theme", applyPublishedBrandTheme, {
+const refreshStudentRemoteData = ({ force = false, includeTheme = true } = {}) => Promise.allSettled([
+  ...(includeTheme ? [studentRefresh.run("theme", applyPublishedBrandTheme, {
     force,
     maxAgeMs: STUDENT_REFRESH_MAX_AGE.theme,
     isSuccess: (value) => value !== undefined
-  }),
+  })] : []),
   studentRefresh.run("workouts", () => refreshPublishedWorkout({ silent: true }), {
     force,
     maxAgeMs: STUDENT_REFRESH_MAX_AGE.workouts
@@ -1843,6 +1845,12 @@ const startAuthenticatedApp = async () => {
   appState.previousSessions = Store.state.sessions || [];
   studentRefresh.invalidate();
   await applyCachedBrandTheme();
+  let themeResolvedDuringBootstrap = false;
+  if (!hasStartupBrand()) {
+    await applyPublishedBrandTheme();
+    studentRefresh.markFresh("theme");
+    themeResolvedDuringBootstrap = true;
+  }
   hydratePublishedWorkoutFromCache();
   renderAll();
   syncOnboarding();
@@ -1857,7 +1865,7 @@ const startAuthenticatedApp = async () => {
     applyAccountProfile(profileResult.profile);
   });
 
-  await refreshStudentRemoteData({ force: true });
+  await refreshStudentRemoteData({ force: true, includeTheme: !themeResolvedDuringBootstrap });
   const retriedSessions = await retryPendingSessions();
   renderAll();
 
@@ -2633,7 +2641,6 @@ const signOut = async () => {
   foregroundRefreshPromise = null;
   studentRefresh.invalidate();
   activateAnonymousStore();
-  Theme.reset();
   appState.currentStudent = emptyStudent;
   appState.currentWorkout = emptyWorkout;
   appState.studentAccesses = [];
@@ -2743,7 +2750,13 @@ document.addEventListener("visibilitychange", () => {
 });
 
 syncAuthMode(getInviteToken() ? "signup" : "signin");
-Theme.reset();
+const startupBrand = getStartupBrand();
+Theme.apply(startupBrand?.theme
+  ? {
+    ...startupBrand.theme,
+    logoUrl: startupBrand.logoDataUrl || startupBrand.logoRemoteUrl || startupBrand.theme.logoUrl
+  }
+  : Theme.value);
 syncThemeControls();
 renderAll();
 navigate(location.hash.slice(1) || "home", false);

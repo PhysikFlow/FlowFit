@@ -1,4 +1,4 @@
-const CACHE_NAME = "flowfit-professor-v85";
+const CACHE_NAME = "flowfit-professor-v86";
 const REPDB_CACHE_NAME = "flowfit-repdb-2026.8.0-v1";
 const REPDB_ORIGIN = "https://cdn.jsdelivr.net";
 const REPDB_PATH_PREFIX = "/npm/@repdb/exercises@2026.8.0/";
@@ -8,11 +8,11 @@ const APP_SHELL = [
   "./index.html",
   "./manifest.webmanifest",
   "./css/app.css?v=build-20260825-2",
-  "./js/app.js?v=build-20260825-2",
+  "./js/app.js?v=build-20260827-1",
   "./js/components/feedback.js?v=build-20260816-1",
   "./js/core/navigation.js?v=build-20260816-1",
   "./js/screens/dashboard/dashboard-screen.js?v=build-20260822-1",
-  "./js/screens/appearance/local-assets-editor.js?v=build-20260818-1",
+  "./js/screens/appearance/local-assets-editor.js?v=build-20260827-1",
   "./js/screens/workouts/workouts-screen.js?v=build-20260825-1",
   "./js/screens/workouts/repdb-picker.js?v=build-20260823-1",
   "./js/pdf/workout-pdf-exporter.js?v=build-20260820-2",
@@ -29,11 +29,10 @@ const APP_SHELL = [
   "../appAluno/assets/icons/icon-512.png",
   "../appAluno/assets/icons/icon-1024.png",
   "../appAluno/assets/icons/icon-maskable-512.png",
-  "../appAluno/assets/icons/startup-logo-512.png",
   "../appAluno/assets/icons/phosphor/icons.svg",
   "./assets/pwa/screenshots/login.png",
   "../appAluno/css/tokens.css?v=build-20260816-1",
-  "../appAluno/css/components.css?v=build-20260822-1",
+  "../appAluno/css/components.css?v=build-20260827-1",
   "../appAluno/css/fonts.css?v=build-20260817-1",
   "../appAluno/css/date-picker.css?v=build-20260819-1",
   "../appAluno/assets/fonts/anton-400.woff2",
@@ -61,6 +60,8 @@ const APP_SHELL = [
   "../appAluno/js/components/custom-select.js?v=build-20260816-1",
   "../appAluno/js/config.js?v=build-20260809-6",
   "../appAluno/js/core/brand-theme.js?v=build-20260818-1",
+  "../appAluno/js/core/startup-bootstrap.js?v=build-20260827-1",
+  "../appAluno/js/core/startup-brand.js?v=build-20260827-1",
   "../appAluno/js/core/install.js?v=build-20260816-2",
   "../appAluno/js/core/icons.js?v=build-20260822-1",
   "../appAluno/js/core/platform.js?v=build-20260813-1",

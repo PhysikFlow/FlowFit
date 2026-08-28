@@ -13,16 +13,30 @@
     <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
+    <script src="js/core/startup-bootstrap.js?v=build-20260827-1"></script>
     <link rel="stylesheet" href="css/tokens.css?v=build-20260816-1" />
-    <link rel="stylesheet" href="css/components.css?v=build-20260822-1" />
+    <link rel="stylesheet" href="css/components.css?v=build-20260827-1" />
     <link rel="stylesheet" href="css/fonts.css?v=build-20260817-1" />
     <link rel="stylesheet" href="vendor/cropperjs/cropper.min.css?v=1.6.2" />
     <link rel="stylesheet" href="css/date-picker.css?v=build-20260819-1" />
     <link rel="stylesheet" href="css/app.css?v=build-20260823-2" />
     <script defer src="vendor/cropperjs/cropper.min.js?v=1.6.2"></script>
-    <script type="module" src="js/app.js?v=build-20260825-2"></script>
+    <script type="module" src="js/app.js?v=build-20260827-1"></script>
   </head>
-  <body>
+  <body class="has-startup-splash">
+    <section class="app-startup-splash" data-app-startup-splash role="status" aria-live="polite" aria-label="Preparando o aplicativo">
+      <div class="app-startup-splash__stage" aria-hidden="true">
+        <div class="app-startup-splash__halo"></div>
+        <div class="app-startup-splash__mark">
+          <img class="app-startup-splash__logo" data-startup-logo-image alt="" hidden />
+          <img class="app-startup-splash__logo app-startup-splash__logo--shine" data-startup-logo-image alt="" hidden />
+          <span class="app-startup-splash__monogram" data-startup-monogram hidden></span>
+        </div>
+        <span class="app-startup-splash__orbit"></span>
+      </div>
+      <span class="sr-only">Preparando seu aplicativo.</span>
+    </section>
+    <script>window.FlowFitStartup?.paint(document.querySelector("[data-app-startup-splash]"));</script>
     <section class="onboarding" data-onboarding aria-labelledby="onboarding-title" aria-busy="true">
       <div class="auth-session-check auth-session-check--minimal" data-auth-session-check role="status" aria-live="polite">
         <span class="auth-session-spinner auth-session-spinner--orbit" aria-hidden="true"></span>

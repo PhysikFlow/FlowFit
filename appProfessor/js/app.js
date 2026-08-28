@@ -1,6 +1,7 @@
 import { hydrateIcons, svgIcon } from "../../appAluno/js/core/icons.js?v=build-20260822-1";
 import { Platform } from "../../appAluno/js/core/platform.js?v=build-20260813-1";
 import { DEFAULT_BRAND_THEME, LOCAL_BRAND_ASSETS_KEY, applyThemeTokens, contrastRatio, inferModeFromColor, normalizeBrandTheme } from "../../appAluno/js/core/brand-theme.js?v=build-20260818-1";
+import { cacheStartupBrand, finishStartupSplash, getStartupBrand, hasStartupBrand } from "../../appAluno/js/core/startup-brand.js?v=build-20260827-1";
 import { InstallManager } from "../../appAluno/js/core/install.js?v=build-20260816-2";
 import { STUDENTS_KEY, createStudentFromProfessorForm, studentRepository } from "../../appAluno/js/data/repositories/student-repository.js?v=build-20260825-1";
 import { applyStudentProfile, effectiveStudentName, studentProfileRepository } from "../../appAluno/js/data/repositories/student-profile-repository.js?v=build-20260822-1";
@@ -13,7 +14,7 @@ import { initCustomSelects, refreshCustomSelects } from "../../appAluno/js/compo
 import { initAllDatePickers, refreshDatePicker } from "../../appAluno/js/core/date-picker.js?v=build-20260822-1";
 import { createNavigation } from "./core/navigation.js?v=build-20260816-1";
 import { createDashboardScreen } from "./screens/dashboard/dashboard-screen.js?v=build-20260822-1";
-import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260818-1";
+import { createLocalAssetsEditor } from "./screens/appearance/local-assets-editor.js?v=build-20260827-1";
 import { initAgendaPlanner } from "./screens/agenda/agenda-planner.js?v=build-20260821-2";
 import { createWorkoutsScreen } from "./screens/workouts/workouts-screen.js?v=build-20260825-1";
 import { createRepdbPicker } from "./screens/workouts/repdb-picker.js?v=build-20260823-1";
@@ -804,6 +805,7 @@ const setAuthChecking = (checking) => {
   if (authSessionCheck) authSessionCheck.hidden = !checking;
   if (authContent) authContent.hidden = checking;
   authGate?.setAttribute("aria-busy", String(checking));
+  if (!checking) finishStartupSplash();
 };
 
 const {
@@ -829,8 +831,15 @@ const {
   removeBrandAsset: (type) => themeRepository.removeBrandAsset(type),
   onRemoteBrandAssetChanged: (type, theme) => {
     publishedTheme = { ...(publishedTheme || {}), ...(theme || {}) };
-    if (type === "logo" && theme?.logoUrl) publishedTheme.logoUrl = theme.logoUrl;
-    if (type === "photo" && theme?.photoUrl) publishedTheme.photoUrl = theme.photoUrl;
+    if (type === "logo") publishedTheme.logoUrl = theme?.logoUrl || "";
+    if (type === "photo") publishedTheme.photoUrl = theme?.photoUrl || "";
+  },
+  onBrandAssetsRendered: ({ logoSource, logoFrameEnabled }) => {
+    cacheStartupBrand({
+      ...readTheme(),
+      logoUrl: publishedTheme?.logoUrl || "",
+      logoFrameEnabled
+    }, { logoSource });
   },
   setBrandMark: (source, frameEnabled) => {
     document.querySelectorAll("[data-brand-icon], [data-brand-icon-mobile]").forEach((target) => {
@@ -4280,6 +4289,7 @@ const startAuthenticatedPanel = async ({ mode = "bootstrap" } = {}) => {
 
 const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
   const isRevalidate = mode === "revalidate";
+  let themeResolvedBeforeReveal = false;
   if (isSigningOut) return false;
   const stateVersion = authStateVersion;
   const isStale = () => isSigningOut || stateVersion !== authStateVersion;
@@ -4398,6 +4408,23 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
     return;
   }
 
+  // Na primeira abertura sem identidade local, resolva a marca antes de revelar
+  // o painel. Nas próximas, o cache já pinta o primeiro frame e esta consulta
+  // continua acontecendo em segundo plano no mesmo bootstrap.
+  if (!isRevalidate && !hasStartupBrand()) {
+    try {
+      const initialTheme = await themeRepository.fetchBrandTheme("", { authContext });
+      if (initialTheme) {
+        publishedTheme = initialTheme;
+        fillThemeInputs(initialTheme);
+        applyTheme({ mode: initialTheme.mode });
+      }
+    } catch (error) {
+      warnOptionalFeature("tema inicial", error);
+    }
+    themeResolvedBeforeReveal = true;
+  }
+
   setAuthLocked(false);
   setAuthChecking(false);
   setAuthGateSignOutVisible(false);
@@ -4442,6 +4469,19 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
 
   if (isRevalidate) return true;
 
+  if (themeResolvedBeforeReveal) {
+    const migrated = await syncLegacyBrandAssets();
+    setThemeStatus(
+      migrated.some((result) => result?.synced)
+        ? "Aparência carregada; imagens locais pendentes foram publicadas."
+        : publishedTheme
+          ? "Aparência publicada carregada."
+          : "Nenhuma aparência publicada. Ajuste as opções e publique.",
+      publishedTheme ? "synced" : ""
+    );
+    return true;
+  }
+
   let remote = null;
   try {
     remote = await themeRepository.fetchBrandTheme("", { authContext });
@@ -4485,6 +4525,15 @@ const startAuthenticatedPanelInternal = async ({ mode = "bootstrap" } = {}) => {
 
 const boot = async () => {
   syncAuthMode("signin", { preserveStatus: true });
+  const startupBrand = getStartupBrand();
+  if (startupBrand?.theme) {
+    publishedTheme = {
+      ...startupBrand.theme,
+      logoUrl: startupBrand.logoDataUrl || startupBrand.logoRemoteUrl || startupBrand.theme.logoUrl
+    };
+    fillThemeInputs(publishedTheme);
+    applyTheme({ mode: publishedTheme.mode });
+  }
   renderAll();
   navigate(location.hash.slice(1) || "dashboard", false);
   window.FlowFitProfessorReady = true;
