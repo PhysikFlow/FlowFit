@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#09110f">
+    <meta name="description" content="Central de leitura dos relatórios, checklists e decisões de produto do FlowFit.">
+    <title>FlowFit · Central de produto</title>
+    <link rel="stylesheet" href="reader.css">
+    <script src="content.generated.js" defer></script>
+    <script src="reader.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#document-content">Pular para o conteúdo</a>
+
+    <div class="reading-progress" aria-hidden="true">
+      <span data-reading-progress></span>
+    </div>
+
+    <header class="topbar">
+      <div class="topbar__inner">
+        <button class="icon-button mobile-only" type="button" data-open-library aria-label="Abrir biblioteca" aria-controls="library" aria-expanded="false">
+          <span aria-hidden="true">☰</span>
+        </button>
+
+        <a class="brand" href="#" data-home-link aria-label="FlowFit Central de produto">
+          <span class="brand__mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="brand__copy">
+            <strong>FlowFit</strong>
+            <small>Central de produto</small>
+          </span>
+        </a>
+
+        <div class="topbar__actions">
+          <button class="search-trigger" type="button" data-open-search aria-keyshortcuts="Control+K /">
+            <span aria-hidden="true">⌕</span>
+            <span>Buscar nos documentos</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+          <button class="icon-button" type="button" data-toggle-focus aria-label="Ativar modo de foco" aria-pressed="false">
+            <span aria-hidden="true">◫</span>
+          </button>
+          <button class="icon-button" type="button" data-toggle-theme aria-label="Alternar tema">
+            <span data-theme-icon aria-hidden="true">☾</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="app-shell">
+      <aside class="library" id="library" data-library aria-label="Biblioteca de documentos">
+        <div class="library__header">
+          <div>
+            <span class="overline">Base de conhecimento</span>
+            <h2>Documentos TODO</h2>
+          </div>
+          <button class="icon-button mobile-only" type="button" data-close-library aria-label="Fechar biblioteca">×</button>
+        </div>
+
+        <p class="library__intro">Leitura organizada dos diagnósticos, contratos e próximos passos do FlowFit.</p>
+
+        <nav class="document-nav" data-document-nav aria-label="Documentos">
+          <div class="nav-skeleton" aria-hidden="true"></div>
+          <div class="nav-skeleton" aria-hidden="true"></div>
+          <div class="nav-skeleton" aria-hidden="true"></div>
+        </nav>
+
+        <div class="library__footer">
+          <div class="library-stat">
+            <span data-library-count>—</span>
+            <small>documentos</small>
+          </div>
+          <div class="library-stat">
+            <span data-library-tasks>—</span>
+            <small>itens de checklist</small>
+          </div>
+        </div>
+      </aside>
+
+      <button class="drawer-backdrop" type="button" data-close-library aria-label="Fechar biblioteca"></button>
+
+      <main class="reader" data-reader>
+        <div class="reader__toolbar" aria-label="Ferramentas de leitura">
+          <nav class="breadcrumbs" aria-label="Localização">
+            <span>TODO</span>
+            <span aria-hidden="true">/</span>
+            <strong data-current-short-title>Carregando…</strong>
+          </nav>
+
+          <div class="reader__tools">
+            <button class="text-button" type="button" data-copy-link>Copiar link</button>
+            <button class="text-button" type="button" data-print>Imprimir</button>
+            <button class="icon-button outline-mobile-trigger" type="button" data-toggle-outline aria-label="Abrir índice do documento" aria-expanded="false">≡</button>
+          </div>
+        </div>
+
+        <section class="document-hero" data-document-hero aria-busy="true">
+          <div class="document-hero__text">
+            <span class="document-kicker" data-document-kicker>Documento</span>
+            <h1 data-document-title>Preparando a leitura…</h1>
+            <p data-document-description>Carregando o conteúdo dos arquivos Markdown.</p>
+          </div>
+
+          <dl class="document-stats" aria-label="Informações do documento">
+            <div><dt>Leitura</dt><dd data-read-time>—</dd></div>
+            <div><dt>Seções</dt><dd data-section-count>—</dd></div>
+            <div><dt>Checklist</dt><dd data-task-count>—</dd></div>
+          </dl>
+        </section>
+
+        <section class="task-controls" data-task-controls hidden aria-label="Controles do checklist">
+          <div>
+            <strong data-task-progress-label>0 de 0 revisados</strong>
+            <div class="task-progress" aria-hidden="true"><span data-task-progress></span></div>
+          </div>
+          <div class="segmented-control" role="group" aria-label="Filtrar checklist">
+            <button type="button" data-task-filter="all" aria-pressed="true">Todos</button>
+            <button type="button" data-task-filter="pending" aria-pressed="false">Pendentes</button>
+            <button type="button" data-task-filter="done" aria-pressed="false">Revisados</button>
+          </div>
+        </section>
+
+        <article class="markdown-body" id="document-content" data-document-content tabindex="-1">
+          <div class="content-skeleton" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i>
+          </div>
+        </article>
+
+        <nav class="document-pager" aria-label="Navegação entre documentos">
+          <button type="button" data-prev-document>
+            <span>Documento anterior</span>
+            <strong>—</strong>
+          </button>
+          <button type="button" data-next-document>
+            <span>Próximo documento</span>
+            <strong>—</strong>
+          </button>
+        </nav>
+      </main>
+
+      <aside class="outline" data-outline aria-label="Índice do documento">
+        <div class="outline__header">
+          <div>
+            <span class="overline">Neste documento</span>
+            <h2>Índice</h2>
+          </div>
+          <button class="icon-button outline-mobile-trigger" type="button" data-toggle-outline aria-label="Fechar índice">×</button>
+        </div>
+        <nav data-table-of-contents></nav>
+        <div class="outline__hint"><kbd>/</kbd><span>abre a busca global</span></div>
+      </aside>
+    </div>
+
+    <dialog class="search-dialog" data-search-dialog aria-labelledby="search-title">
+      <div class="search-dialog__panel">
+        <header>
+          <span aria-hidden="true">⌕</span>
+          <label class="visually-hidden" for="global-search">Buscar nos documentos</label>
+          <input id="global-search" type="search" autocomplete="off" placeholder="Busque por fluxo, SQL, treino, hierarquia…" data-global-search>
+          <button class="key-button" type="button" data-close-search aria-label="Fechar busca">Esc</button>
+        </header>
+        <div class="search-dialog__summary" data-search-summary>Digite para pesquisar nos quatro documentos.</div>
+        <div class="search-results" data-search-results role="listbox" aria-label="Resultados da busca"></div>
+        <footer>
+          <span><kbd>↑</kbd><kbd>↓</kbd> navegar</span>
+          <span><kbd>Enter</kbd> abrir</span>
+          <span>Busca local, sem envio de dados</span>
+        </footer>
+      </div>
+    </dialog>
+
+    <div class="toast" role="status" aria-live="polite" data-toast></div>
+  </body>
+</html>
